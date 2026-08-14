@@ -1,0 +1,56 @@
+<template data-page-fragment="import-data">
+      <section class="data-workspace" id="dataWorkspace" aria-label="Personal data import and authorization workspace" aria-hidden="true">
+        <div class="data-space-ambient" aria-hidden="true"><i></i><i></i><i></i></div>
+        <header class="workspace-heading data-heading">
+          <div class="data-heading-copy">
+            <span><i></i>PRIVATE CONNECTIONS</span>
+            <h1>Import Data</h1>
+            <p>Choose what Weeple can access.</p>
+          </div>
+          <div class="data-heading-actions">
+            <button id="addSourceButton" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Add source</span></button>
+          </div>
+        </header>
+
+        <main class="data-main">
+          <header class="data-gallery-toolbar">
+            <nav class="data-category-rail" aria-label="Filter data sources">
+              <button class="active" type="button" data-source-filter="all"><span>All sources</span></button>
+              <button type="button" data-source-filter="device"><span>Devices</span></button>
+              <button type="button" data-source-filter="files"><span>Files</span></button>
+              <button type="button" data-source-filter="productivity"><span>Work</span></button>
+              <button type="button" data-source-filter="health"><span>Health</span></button>
+              <button type="button" data-source-filter="identity"><span>Identity</span></button>
+              <button type="button" data-source-filter="communication"><span>Social</span></button>
+            </nav>
+            <span class="adapter-count" id="sourceCount">12 sources</span>
+          </header>
+          <section class="source-grid" id="sourceGrid" aria-live="polite"></section>
+        </main>
+
+        <aside class="source-inspector" id="sourceInspector" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="sourceInspectorTitle">
+          <div class="source-inspector-backdrop" id="sourceInspectorBackdrop" aria-hidden="true"></div>
+          <section class="source-inspector-panel">
+            <button class="source-inspector-close" id="sourceInspectorClose" type="button" aria-label="Close authorization detail"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
+            <div id="sourceInspectorContent"></div>
+          </section>
+        </aside>
+
+        <section class="connection-wizard" id="connectionWizard" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="connectionWizardTitle">
+          <button class="wizard-close" id="connectionWizardClose" type="button" aria-label="Close source connection wizard"><svg viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
+          <span><i></i>MINIMUM-ACCESS CONNECTION</span>
+          <h2 id="connectionWizardTitle">Where should your AI learn from?</h2>
+          <p>Choose a source. Weeple will explain the minimum permission needed before anything is connected.</p>
+          <div class="wizard-source-types">
+            <button type="button" data-wizard-source="Device"><i>01</i><b>Personal device</b><small>USB · LAN · Bluetooth</small></button>
+            <button type="button" data-wizard-source="Files"><i>02</i><b>Files &amp; folders</b><small>Explicit local selection</small></button>
+            <button type="button" data-wizard-source="Account"><i>03</i><b>Account or API</b><small>Official authorization</small></button>
+            <button type="button" data-wizard-source="Identity"><i>04</i><b>Digital identity</b><small>Public candidates first</small></button>
+            <button type="button" data-wizard-source="Extension"><i>05</i><b>Plugin or MCP</b><small>Extended tools &amp; sources</small></button>
+            <button type="button" data-wizard-source="Relay"><i>06</i><b>Authorized relay</b><small>Adapter or virtual environment</small></button>
+          </div>
+          <div class="wizard-permission-preview" id="wizardPermissionPreview"><i></i><span><strong>Select a connection type</strong><small>The required scope and processing purpose will appear here.</small></span></div>
+          <footer><button id="wizardCancel" type="button">Cancel</button><button class="wizard-continue" id="wizardContinue" type="button" disabled>Review permissions</button></footer>
+        </section>
+      </section>
+</template>

@@ -1,6 +1,26 @@
 (() => {
   'use strict';
 
+  const sharedStore = window.WeepleStore;
+  const readPersisted = (name, key, fallback) => {
+    if (sharedStore) return sharedStore.read(name, fallback);
+    try {
+      const value = localStorage.getItem(key);
+      return value === null ? fallback : JSON.parse(value);
+    } catch (error) {
+      return fallback;
+    }
+  };
+  const writePersisted = (name, key, value) => {
+    if (sharedStore) return sharedStore.write(name, value);
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+      return true;
+    } catch (error) {
+      return false;
+    }
+  };
+
   const canvas = document.getElementById('topologyCanvas');
   const ctx = canvas.getContext('2d', { alpha: true });
   const topologyInputLayer = document.getElementById('topologyHitLayer') || canvas;
@@ -2190,56 +2210,40 @@
   let goalPlanTaskEditor = null;
   let goalPlanSubgoalEditor = null;
   let goalPlanFocusedTaskId = '';
-  try {
-    const savedDeletedGoals = JSON.parse(localStorage.getItem('weeple-deleted-goals') || '[]');
-    if (Array.isArray(savedDeletedGoals)) savedDeletedGoals.forEach(title => deletedGoalTitles.add(String(title)));
-  } catch (error) {
-    // Goal deletion still works for the current session when storage is unavailable.
-  }
+  const savedDeletedGoals = readPersisted('deletedGoals', 'weeple-deleted-goals', []);
+  if (Array.isArray(savedDeletedGoals)) savedDeletedGoals.forEach(title => deletedGoalTitles.add(String(title)));
   for (let index = goalProfiles.length - 1; index >= 0; index -= 1) {
     if (deletedGoalTitles.has(goalProfiles[index].title)) goalProfiles.splice(index, 1);
   }
   const pausedMonitoringGoalTitles = new Set();
-  try {
-    const savedPausedGoals = JSON.parse(localStorage.getItem('weeple-paused-goal-monitoring') || '[]');
-    if (Array.isArray(savedPausedGoals)) savedPausedGoals.forEach(title => pausedMonitoringGoalTitles.add(String(title)));
-  } catch (error) {
-    // Monitoring controls remain available for the current session.
-  }
+  const savedPausedGoals = readPersisted('pausedGoalMonitoring', 'weeple-paused-goal-monitoring', []);
+  if (Array.isArray(savedPausedGoals)) savedPausedGoals.forEach(title => pausedMonitoringGoalTitles.add(String(title)));
   goalProfiles.forEach(goal => { goal.monitoringPaused = pausedMonitoringGoalTitles.has(goal.title); });
-  try {
-    const savedGoals = JSON.parse(localStorage.getItem('weeple-custom-goals') || '[]');
-    if (Array.isArray(savedGoals)) savedGoals.filter(goal => goal && goal.title && Array.isArray(goal.subgoals)).forEach(goal => goalProfiles.push(goal));
-  } catch (error) {
-    // The workspace remains fully usable when device storage is unavailable.
-  }
-  try {
-    const savedPlanOverrides = JSON.parse(localStorage.getItem('weeple-goal-plan-overrides') || '{}');
-    goalProfiles.forEach(goal => {
-      const savedSubgoals = savedPlanOverrides?.[goal.title];
-      if (!goal.custom && Array.isArray(savedSubgoals) && savedSubgoals.length) goal.subgoals = savedSubgoals;
-    });
-  } catch (error) {
-    // Confirmed plan edits remain available for the current session.
-  }
+  const savedGoals = readPersisted('customGoals', 'weeple-custom-goals', []);
+  if (Array.isArray(savedGoals)) savedGoals.filter(goal => goal && goal.title && Array.isArray(goal.subgoals)).forEach(goal => goalProfiles.push(goal));
+  const savedPlanOverrides = readPersisted('goalPlanOverrides', 'weeple-goal-plan-overrides', {});
+  goalProfiles.forEach(goal => {
+    const savedSubgoals = savedPlanOverrides?.[goal.title];
+    if (!goal.custom && Array.isArray(savedSubgoals) && savedSubgoals.length) goal.subgoals = savedSubgoals;
+  });
 
   function persistCustomGoals() {
-    try { localStorage.setItem('weeple-custom-goals', JSON.stringify(goalProfiles.filter(goal => goal.custom))); } catch (error) { /* storage is optional */ }
+    writePersisted('customGoals', 'weeple-custom-goals', goalProfiles.filter(goal => goal.custom));
   }
 
   function persistGoalPlanOverrides() {
     try {
       const planOverrides = Object.fromEntries(goalProfiles.filter(goal => !goal.custom).map(goal => [goal.title, goal.subgoals]));
-      localStorage.setItem('weeple-goal-plan-overrides', JSON.stringify(planOverrides));
+      writePersisted('goalPlanOverrides', 'weeple-goal-plan-overrides', planOverrides);
     } catch (error) { /* storage is optional */ }
   }
 
   function persistDeletedGoals() {
-    try { localStorage.setItem('weeple-deleted-goals', JSON.stringify([...deletedGoalTitles])); } catch (error) { /* storage is optional */ }
+    writePersisted('deletedGoals', 'weeple-deleted-goals', [...deletedGoalTitles]);
   }
 
   function persistMonitoringPreferences() {
-    try { localStorage.setItem('weeple-paused-goal-monitoring', JSON.stringify([...pausedMonitoringGoalTitles])); } catch (error) { /* storage is optional */ }
+    writePersisted('pausedGoalMonitoring', 'weeple-paused-goal-monitoring', [...pausedMonitoringGoalTitles]);
   }
 
   const goalCategorySymbols = { Travel: 'TR', Wellbeing: 'WB', Learning: 'LN', Finance: 'FN', Relationships: 'FM', Project: 'PJ' };
@@ -4099,6 +4103,10 @@
   function closeUseWorkspace() { state.useWorkspaceActive = false; useWorkspace.classList.remove('visible'); useWorkspace.setAttribute('aria-hidden', 'true'); osShell.classList.remove('use-page'); closeMemoryDrawer(); closeMemoryProposal(); }
 
   function openPrimaryView(key, announce = true) {
+    if (announce && window.WeepleRouter?.navigateByLegacyKey) {
+      window.WeepleRouter.navigateByLegacyKey(key);
+      return;
+    }
     closeDataWorkspace();
     closeUseWorkspace();
     if (key === 'goals') {
@@ -5462,12 +5470,8 @@
   let calendarSuppressClick = false;
   let calendarTransitioning = false;
   let calendarUserTasks = [];
-  try {
-    const storedCalendarTasks = JSON.parse(localStorage.getItem('weeple-calendar-tasks') || '[]');
-    if (Array.isArray(storedCalendarTasks)) calendarUserTasks = storedCalendarTasks;
-  } catch (error) {
-    // Local persistence is optional; the task still works for this session.
-  }
+  const storedCalendarTasks = readPersisted('calendarTasks', 'weeple-calendar-tasks', []);
+  if (Array.isArray(storedCalendarTasks)) calendarUserTasks = storedCalendarTasks;
 
   const calendarAgendaSets = [
     [
@@ -5555,7 +5559,7 @@
   }
 
   function persistCalendarTasks() {
-    try { localStorage.setItem('weeple-calendar-tasks', JSON.stringify(calendarUserTasks)); } catch (error) { /* storage is optional */ }
+    writePersisted('calendarTasks', 'weeple-calendar-tasks', calendarUserTasks);
   }
 
   function openCalendarTaskModal() {
@@ -6138,10 +6142,18 @@
     else stopTopologyLoop(false);
   });
 
+  window.WeepleLegacy = Object.freeze({
+    openPrimaryView,
+    showToast,
+    refreshCalendar: () => renderCalendar('left', false),
+  });
+
   buildUniverse();
   applyAmbientTheme();
   resize();
-  const initialCluster = window.location.hash.slice(1);
+  const initialHash = window.location.hash.slice(1);
+  const routeAliases = { '/overview': 'overview', '/goals': 'goals', '/import-data': 'data', '/use-memory': 'memory' };
+  const initialCluster = routeAliases[initialHash] || initialHash;
   if (initialCluster === 'setup') openOnboarding();
   else if (initialCluster === 'new-goal') { openPrimaryView('goals', false); openGoalCreateSheet(); }
   else if (initialCluster === 'goal-plan') { openPrimaryView('goals', false); renderGoalResultDrawer('plan'); }

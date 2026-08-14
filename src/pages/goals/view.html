@@ -1,0 +1,272 @@
+<template data-page-fragment="goals">
+      <section class="goals-workspace" id="goalsWorkspace" aria-label="Goal management workspace" aria-hidden="true">
+        <div class="goal-space-glow" aria-hidden="true"></div>
+        <div class="reasoning-ambient" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <header class="reasoning-page-header">
+          <div>
+            <span><i></i>GOAL COMMAND CENTER</span>
+            <h1>Goals</h1>
+            <p>Advance what matters while Weeple monitors context, prepares options, and keeps you in control.</p>
+          </div>
+          <div class="reasoning-header-actions">
+            <span class="reasoning-loop-status"><i></i><b>AI monitoring active</b><small id="goalMonitoringStatus">Connected context is current</small></span>
+            <button class="reasoning-goal-add" id="reasoningGoalAdd" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Add Goal</span></button>
+          </div>
+        </header>
+
+        <aside class="goal-library" aria-label="Your goal collection">
+          <div class="goal-focus-switcher">
+            <span class="choose-goal-label"><i></i>CHOOSE GOAL</span>
+            <button class="goal-focus-arrow" id="goalFocusPrevious" type="button" aria-label="Previous goal">‹</button>
+            <button class="goal-focus-picker" id="goalFocusPicker" type="button" aria-expanded="false" aria-controls="goalPickerPanel"><small id="goalFocusPosition">Goal 1 of 5</small><b id="goalFocusTitle">Business Trip to Beijing Tomorrow</b><span id="goalFocusStatus">Waiting for you</span></button>
+            <button class="goal-focus-arrow" id="goalFocusNext" type="button" aria-label="Next goal">›</button>
+            <button class="goal-focus-add" id="goalLibraryAdd" type="button" aria-label="Add a new goal">+</button>
+          </div>
+          <section class="goal-picker-panel" id="goalPickerPanel" aria-hidden="true">
+            <header><span>Choose a goal</span><strong id="goalCollectionCount">5 goals</strong></header>
+            <label class="goal-library-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><input id="goalSearch" type="search" placeholder="Find a goal" autocomplete="off"></label>
+            <div class="goal-library-filters" role="group" aria-label="Filter goals"><button class="active" type="button" data-goal-filter="active">Active</button><button type="button" data-goal-filter="today">Today</button><button type="button" data-goal-filter="all">All</button></div>
+            <div class="goal-collection-list" id="goalCollectionList"></div>
+            <footer><span><i></i>Only authorized context is monitored</span></footer>
+          </section>
+        </aside>
+
+        <main class="reasoning-dashboard" aria-label="Goal command center">
+          <section class="goal-command-hero" aria-labelledby="goalCommandTitle">
+            <div class="goal-command-copy">
+              <div class="goal-command-eyebrow"><span id="goalCategoryLabel">TRAVEL</span><i></i><span id="goalUpdatedLabel">Updated now</span></div>
+              <div class="goal-title-row">
+                <h2 id="goalCommandTitle">Business Trip to Beijing Tomorrow</h2>
+              </div>
+              <p id="goalCommandOutcome">Arrive safely and protect the morning client meeting.</p>
+              <div class="goal-command-meta" id="goalCommandMeta"></div>
+            </div>
+            <div class="goal-motivation" id="goalMotivation">
+              <div class="goal-momentum-top"><span id="goalMomentumLabel">MOMENTUM</span><output class="goal-ai-state" id="goalAIState" data-state="monitoring"><i></i><b>Monitoring</b></output></div>
+              <strong id="goalMotivationMessage">You’re moving consistently.</strong>
+              <small id="goalMotivationDetail">Your next useful result is already being prepared.</small>
+              <div class="goal-trajectory" id="goalTrajectory" style="--trajectory:34" aria-label="34 percent of the goal journey complete">
+                <div class="goal-trajectory-track"><i></i><b></b><em></em></div>
+                <span>Started</span><span id="goalJourneyNow">Now</span><span>Outcome</span>
+              </div>
+            </div>
+            <div class="goal-command-progress">
+              <div class="command-progress-ring" id="goalCommandProgress" style="--progress:34"><strong>34<small>%</small></strong></div>
+              <span><small>OVERALL PROGRESS</small><strong id="goalCommandStatus">Time-sensitive</strong><em id="goalNextMilestone">Next: protect the client meeting</em></span>
+            </div>
+            <div class="goal-command-actions" aria-label="Goal controls">
+              <button class="goal-edit-button" id="goalMenuButton" type="button" aria-label="Edit selected goal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16-.7 4.2L7.5 19 18 8.5 14.5 5 4 15.5Z"/><path d="m13.5 6 3.5 3.5"/></svg><span>Edit</span></button>
+              <button class="goal-delete-button goal-delete-quick" id="goalDeleteButton" type="button" aria-label="Delete selected goal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5"/></svg><span>Delete</span></button>
+              <button class="goal-more-button" id="goalMoreButton" type="button" aria-label="More goal actions" aria-expanded="false" aria-controls="goalActionMenu"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button>
+            </div>
+            <div class="goal-action-menu" id="goalActionMenu" aria-hidden="true"></div>
+            <div class="goal-command-controls">
+              <button class="autonomy-chip" id="goalMonitoringButton" type="button" aria-expanded="false"><i></i><span><b id="goalMonitoringLabel">Safe work runs automatically</b><small id="goalMonitoringDescription">External actions always ask first</small></span></button>
+              <div class="goal-monitoring-popover" id="goalMonitoringPopover" aria-hidden="true"></div>
+              <button class="goal-next-action" id="goalNextAction" type="button">Review next decision <span>→</span></button>
+            </div>
+            <div class="goal-command-footer">
+              <ol class="goal-timeline" id="goalTimeline" aria-label="Goal activity timeline"></ol>
+              <div class="goal-hardware-state" id="goalHardwareState" data-state="ready" role="status" aria-live="polite"><i></i><span><b>Context current</b><small>All authorized sources are available</small></span></div>
+            </div>
+            <button class="goal-edge-cue previous" id="goalPreviousCue" type="button" aria-label="Previous goal"><span>‹</span><small></small></button>
+            <button class="goal-edge-cue next" id="goalNextCue" type="button" aria-label="Next goal"><small></small><span>›</span></button>
+          </section>
+
+          <section class="goal-game-board" id="goalGameBoard" aria-label="Interactive goal journey">
+            <div id="goalGameContent" aria-live="polite"></div>
+          </section>
+
+          <section class="goal-logic-surface goal-simple-surface" aria-labelledby="goalLogicTitle">
+            <header class="goal-logic-heading">
+              <span><small>FOR THIS GOAL</small><h2 id="goalLogicTitle">Here’s what matters now</h2></span>
+              <em><i></i>Weeple is watching the rest</em>
+            </header>
+
+            <div class="goal-simple-layout" id="goalLogicFlow">
+              <section class="goal-attention-card" aria-label="Current goal situation and next action">
+                <div class="goal-ai-brief">
+                  <div class="goal-ai-orb" aria-hidden="true"><i></i><b></b><em></em></div>
+                  <div class="goal-ai-brief-copy">
+                    <span><i></i>WEEPLE FOUND SOMETHING USEFUL</span>
+                    <h2 id="goalBriefHeadline">Your plan needs one small adjustment.</h2>
+                    <p id="goalBriefExplanation">A new signal may affect your next milestone. Weeple has prepared the safest next move.</p>
+                    <div class="goal-ai-brief-links">
+                      <button type="button" data-logic-detail="reasoning">Why this matters <span>→</span></button>
+                      <button type="button" data-logic-detail="plan"><b id="goalBriefSubgoalCount">3</b> View & edit subgoals <span>→</span></button>
+                    </div>
+                  </div>
+                </div>
+
+                <section class="goal-primary-action-panel" id="goalPrimaryActionPanel" aria-labelledby="goalPrimaryActionTitle">
+                  <header><span><i></i>READY FOR YOU</span><small id="goalDecisionState">Your approval</small></header>
+                  <div id="goalPrimaryAction"></div>
+                </section>
+              </section>
+
+              <aside class="goal-ai-now" aria-labelledby="goalResultsTitle">
+                <header class="results-panel-heading">
+                  <span><i></i><small>WEEPLE RIGHT NOW</small><h2 id="goalResultsTitle">You don’t need to manage this</h2></span>
+                  <div class="goal-ai-live-state" aria-label="Weeple AI is actively monitoring"><span aria-hidden="true"><i></i><i></i><i></i><i></i></span><b>AI ACTIVE</b><em id="goalResultsSummary">Updated now</em></div>
+                </header>
+                <section class="goal-results-panel">
+                  <div class="goal-result-stream" id="goalResultStream" aria-live="polite"></div>
+                </section>
+                <button class="goal-simple-details" type="button" data-logic-detail="reasoning">See why Weeple suggested this <span>→</span></button>
+              </aside>
+            </div>
+          </section>
+
+          <nav class="goal-disclosure-bar" id="goalDisclosureBar" aria-label="Goal details">
+            <button type="button" data-goal-detail="plan"><i></i><span><b>Subgoals</b><small id="goalPlanCount">3 AI-created · editable</small></span><em>›</em></button>
+            <button type="button" data-goal-detail="reasoning"><i></i><span><b>Why this?</b><small id="goalReasoningCount">3 observations</small></span><em>›</em></button>
+            <button type="button" data-goal-detail="activity"><i></i><span><b>AI activity</b><small>Completed and working</small></span><em>›</em></button>
+            <button type="button" data-goal-detail="sources"><i></i><span><b>Connected sources</b><small id="goalSourceCount">3 authorized</small></span><em>›</em></button>
+          </nav>
+
+          <section class="goal-result-drawer" id="goalResultDrawer" aria-hidden="true" aria-labelledby="goalResultDrawerTitle">
+            <header><span><small id="goalResultDrawerEyebrow">GOAL DETAILS</small><h2 id="goalResultDrawerTitle">Goal plan</h2></span><button id="goalResultDrawerClose" type="button" aria-label="Close goal details"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header>
+            <div class="goal-result-drawer-content" id="goalResultDrawerContent"></div>
+          </section>
+
+          <svg class="reasoning-flow-map" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="goalPredictionFlow" x1="0" x2="1"><stop offset="0" stop-color="#ff5e00"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient>
+              <linearGradient id="observationPredictionFlow" x1="0" x2="1"><stop offset="0" stop-color="#06b6d4"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient>
+              <linearGradient id="predictionSuggestionFlow" x1="0" x2="1"><stop offset="0" stop-color="#8b5cf6"/><stop offset="1" stop-color="#10b981"/></linearGradient>
+              <filter id="flowGlow"><feGaussianBlur stdDeviation="0.6" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            </defs>
+            <path class="flow-path goal-path" pathLength="1" d="M31 24 C36 24 35 45 40 48"/>
+            <path class="flow-path observation-path" pathLength="1" d="M31 76 C36 76 35 55 40 52"/>
+            <path class="flow-path suggestion-path" pathLength="1" d="M62 50 C67 50 69 50 73 50"/>
+            <circle class="flow-particle goal-particle" r=".65"><animateMotion dur="3.4s" repeatCount="indefinite" path="M31 24 C36 24 35 45 40 48"/></circle>
+            <circle class="flow-particle observation-particle" r=".65"><animateMotion dur="4s" begin="-1.4s" repeatCount="indefinite" path="M31 76 C36 76 35 55 40 52"/></circle>
+            <circle class="flow-particle suggestion-particle" r=".7"><animateMotion dur="3s" begin="-.7s" repeatCount="indefinite" path="M62 50 C67 50 69 50 73 50"/></circle>
+          </svg>
+
+          <section class="reasoning-panel goals-tier" aria-labelledby="goalsTierTitle">
+            <svg class="goal-canvas-links" viewBox="0 0 1000 600" preserveAspectRatio="none" aria-hidden="true">
+              <defs>
+                <linearGradient id="goalJourneySignal" x1="0" x2="1"><stop offset="0" stop-color="#ff5e00" stop-opacity=".18"/><stop offset=".48" stop-color="#ff8c42" stop-opacity=".5"/><stop offset="1" stop-color="#8b5cf6" stop-opacity=".16"/></linearGradient>
+                <linearGradient id="contextReasoningSignal" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#06b6d4" stop-opacity=".42"/><stop offset=".7" stop-color="#8b5cf6" stop-opacity=".4"/><stop offset="1" stop-color="#8b5cf6" stop-opacity=".12"/></linearGradient>
+                <linearGradient id="actionSignal" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8b5cf6" stop-opacity=".38"/><stop offset="1" stop-color="#10b981" stop-opacity=".25"/></linearGradient>
+              </defs>
+              <path id="goalJourneyA" class="goal-canvas-path journey" d="M245 300 C330 300 355 126 500 126"/>
+              <path id="goalJourneyB" class="goal-canvas-path journey" d="M245 300 C340 300 375 300 500 300"/>
+              <path id="goalJourneyC" class="goal-canvas-path journey" d="M245 300 C330 300 355 474 500 474"/>
+              <circle class="goal-canvas-packet orange" r="2.2"><animateMotion dur="4.2s" repeatCount="indefinite"><mpath href="#goalJourneyA"/></animateMotion></circle>
+              <circle class="goal-canvas-packet orange" r="2.2"><animateMotion dur="3.7s" begin="-1.3s" repeatCount="indefinite"><mpath href="#goalJourneyB"/></animateMotion></circle>
+              <circle class="goal-canvas-packet orange" r="2.2"><animateMotion dur="4.8s" begin="-2.1s" repeatCount="indefinite"><mpath href="#goalJourneyC"/></animateMotion></circle>
+            </svg>
+            <header class="tier-heading"><span class="tier-index">01</span><div><small>AI-CREATED PLAN</small><h2 id="goalsTierTitle">Direct subgoals</h2></div><button class="plan-view-label" id="goalPlanMore" type="button" aria-expanded="false">Details</button></header>
+            <article class="primary-goal-card">
+              <span><i></i>PRIMARY GOAL · USER SET</span>
+              <h3 id="activeGoalTitle">Business Trip to Beijing Tomorrow</h3>
+              <footer><small id="activeGoalStatus">Time-sensitive</small><strong id="goalCompletionSummary">1 of 3 ready</strong></footer>
+            </article>
+            <section class="goal-proposal-inbox" id="goalProposalInbox" aria-live="polite"></section>
+            <div class="reasoning-subgoal-list" id="reasoningSubgoalList" aria-label="AI-generated subgoals"></div>
+            <section class="goal-support-area">
+              <div class="goal-support-tabs" id="goalSupportTabs" role="tablist" aria-label="Goal supporting information">
+                <button class="active" type="button" role="tab" aria-selected="true" data-goal-support="activity">AI Activity</button>
+                <button type="button" role="tab" aria-selected="false" data-goal-support="related">Related Work</button>
+                <button type="button" role="tab" aria-selected="false" data-goal-support="collaboration">Collaboration</button>
+              </div>
+              <div class="goal-support-panel" id="goalSupportPanel" role="tabpanel"></div>
+            </section>
+          </section>
+
+          <div class="goal-intelligence-column">
+          <header class="ai-reasoning-header">
+            <div class="ai-reasoning-brand"><span class="ai-reasoning-core"><i></i><i></i><i></i><b>W</b></span><span><b>Weeple Reasoning</b><small id="aiReasoningMessage">Current context synthesized</small></span></div>
+            <small id="aiReasoningStatus">3 signals · 1 decision</small>
+          </header>
+          <section class="reasoning-panel observations-tier" aria-labelledby="observationsTierTitle">
+            <header class="tier-heading"><span class="tier-index">02</span><div><small>WHAT CHANGED</small><h2 id="observationsTierTitle">Observations</h2></div><span class="live-feed-label"><i></i>LIVE</span></header>
+            <div class="observation-list" id="reasoningObservationList"></div>
+          </section>
+
+          <div class="ai-reasoning-merge" aria-hidden="true">
+            <svg viewBox="0 0 300 56" preserveAspectRatio="none">
+              <defs><linearGradient id="reasoningMergeGradient" x1="0" x2="1"><stop offset="0" stop-color="#06B6D4" stop-opacity=".12"/><stop offset=".5" stop-color="#8B5CF6" stop-opacity=".7"/><stop offset="1" stop-color="#FF5E00" stop-opacity=".16"/></linearGradient></defs>
+              <path d="M50 0 C50 28 150 18 150 50"/><path d="M150 0 V50"/><path d="M250 0 C250 28 150 18 150 50"/>
+            </svg>
+            <span><i></i><b>AI</b><small>Context synthesized</small></span>
+          </div>
+
+          <section class="reasoning-panel predictions-tier" aria-labelledby="predictionsTierTitle">
+            <header class="tier-heading"><span class="tier-index">03</span><div><small>WHAT IT MEANS</small><h2 id="predictionsTierTitle">AI prediction</h2></div><span class="model-status"><i></i>Updated now</span></header>
+            <div id="reasoningPredictionContent"></div>
+          </section>
+
+          <section class="reasoning-panel suggestions-tier" aria-labelledby="suggestionsTierTitle">
+            <header class="tier-heading"><span class="tier-index">04</span><div><small>YOUR DECISION</small><h2 id="suggestionsTierTitle">Suggested next move</h2></div><span class="suggestion-count" id="suggestionCount">2 ready</span></header>
+            <div class="suggestion-list" id="reasoningSuggestionList"></div>
+            <footer class="suggestion-privacy"><i></i><span><b>Permission-aware execution</b><small>Safe preparation runs automatically. External changes require approval.</small></span></footer>
+          </section>
+          </div>
+        </main>
+        <header class="goal-page-heading">
+          <span><i></i>GOAL UNIVERSE · EXAMPLE PROFILE</span>
+          <strong>Intent <i>→</i> Direct subgoals <i>→</i> Execution</strong>
+          <small>AI suggestions remain proposals until you confirm them.</small>
+        </header>
+
+        <aside class="goal-rail" aria-label="Your goals">
+          <span class="goal-rail-title">GOALS</span>
+          <div class="goal-rail-list" id="goalRailList"></div>
+          <button class="goal-add" id="goalAdd" type="button" aria-label="Create a new goal">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+        </aside>
+
+        <aside class="goal-inspector" id="goalInspector" aria-label="Selected goal details">
+          <div id="goalInspectorContent"></div>
+        </aside>
+
+        <section class="goal-create-sheet" id="goalCreateSheet" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="goalCreateTitle">
+          <button class="goal-create-close" id="goalCreateClose" type="button" aria-label="Close goal setup"><svg viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
+          <span><i></i>CREATE A USER-CONTROLLED GOAL</span>
+          <h2 id="goalCreateTitle">Describe the outcome—not the hierarchy.</h2>
+          <p id="goalCreateDescription">Weeple may propose direct subgoals and execution tasks, but nothing is added until you confirm it.</p>
+          <form id="goalCreateForm">
+            <label><span>DESIRED OUTCOME</span><input id="newGoalOutcome" type="text" required placeholder="What do you want to achieve?"></label>
+            <label><span>CURRENT SITUATION</span><textarea id="newGoalSituation" rows="2" placeholder="Where are you now?"></textarea></label>
+            <label><span>CONSTRAINTS</span><textarea id="newGoalConstraints" rows="2" placeholder="Time, resources, privacy, or other limits"></textarea></label>
+            <div class="goal-schedule-fields">
+              <label><span>GOAL DATE <em>OPTIONAL</em></span><input id="newGoalDate" type="date"></label>
+              <label><span>GOAL TIME <em>OPTIONAL</em></span><input id="newGoalTime" type="time"></label>
+            </div>
+            <section class="goal-proposal-preview" id="goalProposalPreview" aria-live="polite"><i></i><span><strong>AI proposal not generated yet</strong><small>Your description stays editable until you confirm the goal.</small></span></section>
+            <footer><button id="goalCreateCancel" type="button">Cancel</button><button class="goal-propose" id="goalProposeButton" type="submit">Propose direct subgoals</button></footer>
+          </form>
+        </section>
+
+        <section class="collaboration-sheet" id="collaborationSheet" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="collaborationTitle">
+          <button class="collaboration-close" id="collaborationClose" type="button" aria-label="Close collaboration review">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg>
+          </button>
+          <span class="consent-eyebrow"><i></i>PRIVATE MATCHING REVIEW</span>
+          <h2 id="collaborationTitle">Open this subgoal to collaboration?</h2>
+          <p id="collaborationDescription">Review exactly what another potential collaborator may see before you opt in.</p>
+          <div class="consent-rules">
+            <span><i>01</i><b>De-identified first</b><small>Only the minimum goal summary and collaboration needs are shared.</small></span>
+            <span><i>02</i><b>Mutual interest</b><small>Your identity remains private until both people choose to continue.</small></span>
+            <span><i>03</i><b>You stay in control</b><small>Reject, leave, or close the request whenever you choose.</small></span>
+          </div>
+          <footer>
+            <button id="collaborationCancel" type="button">Keep private</button>
+            <button class="consent-confirm" id="collaborationConfirm" type="button">Review &amp; opt in</button>
+          </footer>
+        </section>
+
+        <section class="goal-delete-sheet" id="goalDeleteSheet" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="goalDeleteTitle">
+          <span><i></i>DELETE GOAL</span>
+          <h2 id="goalDeleteTitle">Delete this goal?</h2>
+          <p id="goalDeleteDescription">This removes the goal, its subgoals, tasks, and prepared outputs from this device.</p>
+          <div class="goal-delete-warning"><i>!</i><span><b>AI monitoring will stop</b><small>Connected sources remain available, but Weeple will no longer use them for this goal.</small></span></div>
+          <footer><button id="goalDeleteCancel" type="button">Keep goal</button><button class="goal-delete-confirm" id="goalDeleteConfirm" type="button">Delete goal</button></footer>
+        </section>
+        <aside class="goal-use-hint" id="goalUseHint" aria-hidden="true"><span><b>Goals stay simple</b><small>Select a goal · Expand a step · Review the AI action</small></span><button id="goalUseHintDismiss" type="button">Got it</button></aside>
+      </section>
+</template>

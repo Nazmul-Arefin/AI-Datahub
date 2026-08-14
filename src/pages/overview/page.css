@@ -1,0 +1,4 @@
+/* Overview-owned styles belong here. Legacy rules remain in shared/legacy.css during parity migration. */
+.page-outlet.page--overview {
+  --page-accent: var(--weeple-orange);
+}

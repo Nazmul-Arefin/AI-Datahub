@@ -1,0 +1,4 @@
+/* Goals-owned styles belong here. Scope new selectors beneath .page--goals. */
+.page-outlet.page--goals {
+  --page-accent: var(--weeple-orange);
+}

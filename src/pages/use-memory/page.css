@@ -1,0 +1,4 @@
+/* Use Memory-owned styles belong here. Scope new selectors beneath .page--use-memory. */
+.page-outlet.page--use-memory {
+  --page-accent: #8b5cf6;
+}

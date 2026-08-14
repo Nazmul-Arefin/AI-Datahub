@@ -1,0 +1,4 @@
+/* Import Data-owned styles belong here. Scope new selectors beneath .page--import-data. */
+.page-outlet.page--import-data {
+  --page-accent: var(--weeple-orange);
+}
