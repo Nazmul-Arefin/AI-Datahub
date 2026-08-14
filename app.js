@@ -74,6 +74,7 @@
   const goalJourneyNow = document.getElementById('goalJourneyNow');
   const goalResultsSummary = document.getElementById('goalResultsSummary');
   const goalLogicFlow = document.getElementById('goalLogicFlow');
+  const goalGameContent = document.getElementById('goalGameContent');
   const goalLogicGoalTitle = document.getElementById('goalLogicGoalTitle');
   const goalLogicObservationTitle = document.getElementById('goalLogicObservationTitle');
   const goalLogicObservationMeta = document.getElementById('goalLogicObservationMeta');
@@ -132,7 +133,10 @@
   const dataWorkspace = document.getElementById('dataWorkspace');
   const sourceGrid = document.getElementById('sourceGrid');
   const sourceCount = document.getElementById('sourceCount');
+  const sourceInspector = document.getElementById('sourceInspector');
   const sourceInspectorContent = document.getElementById('sourceInspectorContent');
+  const sourceInspectorBackdrop = document.getElementById('sourceInspectorBackdrop');
+  const sourceInspectorClose = document.getElementById('sourceInspectorClose');
   const addSourceButton = document.getElementById('addSourceButton');
   const connectionWizard = document.getElementById('connectionWizard');
   const connectionWizardClose = document.getElementById('connectionWizardClose');
@@ -205,6 +209,15 @@
     memory: { color: '#8b5cf6', rgb: '139,92,246', label: 'LONG-TERM MEMORY' },
     subgoal: { color: '#ff8c42', rgb: '255,140,66', label: 'DIRECT SUBGOAL' },
     execution: { color: '#8b5cf6', rgb: '139,92,246', label: 'AI EXECUTION' }
+  };
+
+  const overviewTopologyPalette = {
+    goals: { color: '#f39a76', rgb: '243,154,118', label: 'GOAL MANAGEMENT' },
+    data: { color: '#9a5b16', rgb: '154,91,22', label: 'PERSONAL DATA' },
+    memory: { color: '#7e3f46', rgb: '126,63,70', label: 'LONG-TERM MEMORY' },
+    subgoal: { color: '#fac69d', rgb: '250,198,157', label: 'DIRECT SUBGOAL' },
+    execution: { color: '#c9b5a5', rgb: '201,181,165', label: 'AI EXECUTION' },
+    ai: { color: '#ff5e00', rgb: '255,94,0', label: 'AI SYNTHESIS' }
   };
 
   const clusterConfig = [
@@ -310,23 +323,28 @@
     return from.map((value, index) => Math.round(value + (to[index] - value) * amount));
   }
 
+  function topologyStyle(key) {
+    const overviewSurface = !state.goalWorkspaceActive && !state.dataWorkspaceActive && !state.useWorkspaceActive;
+    return (overviewSurface ? overviewTopologyPalette : palette)[key] || palette[key] || palette.goals;
+  }
+
   function visualStyle(node) {
-    const base = palette[node.cluster];
+    const base = topologyStyle(node.cluster);
     if (state.goalWorkspaceActive && node.cluster === 'goals' && !node.core) {
       return node.goalRole === 'subgoal' ? palette.subgoal : palette.execution;
     }
     if (node.visualKind === 'ai-core') {
-      return { color: '#6d5dfc', rgb: '109,93,252', label: 'AI SYNTHESIS' };
+      return topologyStyle('ai');
     }
     if (!node.core || node.cluster !== 'goals') return base;
     const execution = getExecutionLevel();
-    const mixed = blendRgb([255, 94, 0], [139, 92, 246], execution);
+    const mixed = blendRgb(topologyStyle('goals').rgb.split(',').map(Number), topologyStyle('execution').rgb.split(',').map(Number), execution);
     return { color: `rgb(${mixed.join(',')})`, rgb: mixed.join(','), label: base.label };
   }
 
   function applyAmbientTheme() {
     const executionVisible = state.executionAmbient && (state.activeCluster === 'overview' || state.activeCluster === 'goals');
-    const style = executionVisible ? palette.execution : (palette[state.activeCluster] || palette.goals);
+    const style = executionVisible ? topologyStyle('execution') : topologyStyle(state.activeCluster);
     document.documentElement.style.setProperty('--active-rgb', style.rgb);
     document.documentElement.style.setProperty('--active-color', style.color);
   }
@@ -968,20 +986,29 @@
     }
 
     const coreRadius = radius * .9;
+    const brandedSynthesis = node.visualKind === 'ai-core' && !state.goalWorkspaceActive && !state.dataWorkspaceActive && !state.useWorkspaceActive;
     const halo = ctx.createRadialGradient(0, 0, 0, 0, 0, coreRadius * 2.8);
-    halo.addColorStop(0, `rgba(${style.rgb},.25)`);
-    halo.addColorStop(.3, `rgba(${style.rgb},.08)`);
+    halo.addColorStop(0, `rgba(${style.rgb},${brandedSynthesis ? .34 : .25})`);
+    halo.addColorStop(.3, `rgba(${style.rgb},${brandedSynthesis ? .12 : .08})`);
     halo.addColorStop(1, `rgba(${style.rgb},0)`);
     ctx.fillStyle = halo;
     ctx.beginPath();
     ctx.arc(0, 0, coreRadius * 2.8, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = 'rgba(255,255,255,.62)';
-    ctx.strokeStyle = `rgba(${style.rgb},.58)`;
+    if (brandedSynthesis) {
+      const synthesisFill = ctx.createRadialGradient(-coreRadius * .28, -coreRadius * .3, 0, 0, 0, coreRadius * 1.08);
+      synthesisFill.addColorStop(0, '#ffb24a');
+      synthesisFill.addColorStop(.42, '#ff7200');
+      synthesisFill.addColorStop(1, '#ed4300');
+      ctx.fillStyle = synthesisFill;
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,.62)';
+    }
+    ctx.strokeStyle = brandedSynthesis ? 'rgba(32,32,32,.72)' : `rgba(${style.rgb},.58)`;
     ctx.lineWidth = 1.1;
     ctx.shadowColor = style.color;
-    ctx.shadowBlur = 17;
+    ctx.shadowBlur = brandedSynthesis ? 28 : 17;
     ctx.beginPath();
     ctx.arc(0, 0, coreRadius, 0, Math.PI * 2);
     ctx.fill();
@@ -990,7 +1017,7 @@
 
     ctx.save();
     ctx.rotate(phase * .055 + node.phase);
-    ctx.strokeStyle = `rgba(${style.rgb},.72)`;
+    ctx.strokeStyle = brandedSynthesis ? 'rgba(25,27,28,.78)' : `rgba(${style.rgb},.72)`;
     ctx.lineWidth = 1.35;
     ctx.lineCap = 'round';
     for (let segment = 0; segment < 4; segment += 1) {
@@ -1003,7 +1030,7 @@
 
     ctx.save();
     ctx.rotate(Math.PI / 4 - phase * .018);
-    ctx.strokeStyle = `rgba(${style.rgb},.48)`;
+    ctx.strokeStyle = brandedSynthesis ? 'rgba(255,255,255,.58)' : `rgba(${style.rgb},.48)`;
     ctx.lineWidth = .85;
     ctx.strokeRect(-coreRadius * .34, -coreRadius * .34, coreRadius * .68, coreRadius * .68);
     ctx.restore();
@@ -1034,13 +1061,15 @@
     const goalCore = nodes.find(node => node.id === 'goals-core');
     if (!goalCore || !Number.isFinite(goalCore.screen.x)) return;
     const goalNodes = nodes.filter(node => node.role === 'goal');
+    const brainAccent = topologyStyle('ai').rgb;
+    const goalAccent = topologyStyle('goals').rgb;
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
     const radius = 104 * goalCore.screen.scale;
     const glow = ctx.createRadialGradient(goalCore.screen.x, goalCore.screen.y, 0, goalCore.screen.x, goalCore.screen.y, radius);
-    glow.addColorStop(0, 'rgba(109,93,252,.095)');
-    glow.addColorStop(.42, 'rgba(73,137,255,.028)');
-    glow.addColorStop(1, 'rgba(255,94,0,0)');
+    glow.addColorStop(0, `rgba(${brainAccent},.095)`);
+    glow.addColorStop(.42, `rgba(${goalAccent},.028)`);
+    glow.addColorStop(1, `rgba(${goalAccent},0)`);
     ctx.fillStyle = glow;
     ctx.beginPath();
     ctx.arc(goalCore.screen.x, goalCore.screen.y, radius, 0, Math.PI * 2);
@@ -1050,8 +1079,8 @@
       if (!Number.isFinite(goalNode.screen.x)) return;
       const branchGlow = ctx.createLinearGradient(goalNode.screen.x, goalNode.screen.y, goalCore.screen.x, goalCore.screen.y);
       branchGlow.addColorStop(0, 'rgba(255,255,255,0)');
-      branchGlow.addColorStop(.54, goalNode.isSelectedGoal ? 'rgba(255,94,0,.055)' : 'rgba(109,93,252,.012)');
-      branchGlow.addColorStop(1, goalNode.isSelectedGoal ? 'rgba(109,93,252,.075)' : 'rgba(109,93,252,.025)');
+      branchGlow.addColorStop(.54, goalNode.isSelectedGoal ? `rgba(${goalAccent},.055)` : `rgba(${brainAccent},.012)`);
+      branchGlow.addColorStop(1, goalNode.isSelectedGoal ? `rgba(${brainAccent},.075)` : `rgba(${brainAccent},.025)`);
       ctx.strokeStyle = branchGlow;
       ctx.lineWidth = (goalNode.isSelectedGoal ? 18 : 8) * Math.max(.7, goalNode.screen.scale);
       ctx.beginPath();
@@ -1065,7 +1094,7 @@
     });
 
     const contourRadius = 82 * goalCore.screen.scale;
-    ctx.strokeStyle = 'rgba(109,93,252,.11)';
+    ctx.strokeStyle = `rgba(${brainAccent},.11)`;
     ctx.lineWidth = .65;
     ctx.setLineDash([2, 9]);
     ctx.lineDashOffset = reduceMotion ? 0 : -state.elapsed * 2.5;
@@ -1075,9 +1104,9 @@
 
     const scanX = goalCore.screen.x + Math.sin(reduceMotion ? 0 : state.elapsed * .18) * contourRadius * .72;
     const scanGradient = ctx.createLinearGradient(scanX, goalCore.screen.y - contourRadius * .45, scanX, goalCore.screen.y + contourRadius * .45);
-    scanGradient.addColorStop(0, 'rgba(109,93,252,0)');
-    scanGradient.addColorStop(.5, 'rgba(109,93,252,.12)');
-    scanGradient.addColorStop(1, 'rgba(109,93,252,0)');
+    scanGradient.addColorStop(0, `rgba(${brainAccent},0)`);
+    scanGradient.addColorStop(.5, `rgba(${brainAccent},.12)`);
+    scanGradient.addColorStop(1, `rgba(${brainAccent},0)`);
     ctx.strokeStyle = scanGradient;
     ctx.lineWidth = .7;
     ctx.beginPath();
@@ -1251,7 +1280,7 @@
           const organic = .48 + .52 * Math.abs(Math.sin(bar * 1.73 + state.elapsed * 5.5));
           const length = (3 + state.voiceLevel * 24 * organic) * scale;
           const inner = voiceRadius + Math.sin(state.elapsed * 2.4 + bar * .45) * 1.5;
-          ctx.strokeStyle = `rgba(139,92,246,${.28 + state.voiceLevel * .55})`;
+          ctx.strokeStyle = `rgba(${topologyStyle('execution').rgb},${.28 + state.voiceLevel * .55})`;
           ctx.lineWidth = 1.3 + state.voiceLevel * 1.4;
           ctx.beginPath();
           ctx.moveTo(Math.cos(angle) * inner, Math.sin(angle) * inner);
@@ -1464,7 +1493,7 @@
         const response = .35 + .65 * Math.abs(Math.sin(bar * 1.73 + state.elapsed * 5.5));
         const length = 1.5 + state.voiceLevel * 13 * response;
         const inner = voiceRadius;
-        ctx.strokeStyle = `rgba(139,92,246,${.16 + state.voiceLevel * .48})`;
+        ctx.strokeStyle = `rgba(${topologyStyle('execution').rgb},${.16 + state.voiceLevel * .48})`;
         ctx.lineWidth = .8 + state.voiceLevel;
         ctx.beginPath();
         ctx.moveTo(screen.x + Math.cos(angle) * inner, screen.y + Math.sin(angle) * inner);
@@ -1579,7 +1608,7 @@
       const arrival = (progress - .82) / .18;
       const opacity = Math.pow(1 - arrival, 1.7);
       const target = edge.b.screen;
-      const style = palette[edge.evidenceType];
+      const style = topologyStyle(edge.evidenceType);
       const radius = (7 + arrival * 21) * Math.max(.75, target.scale);
       ctx.save();
       ctx.globalAlpha = opacity * state.clusterVisibility[edge.b.cluster];
@@ -1685,6 +1714,15 @@
         node.z = node.baseZ + tissueBreath;
       }
       node.screen = project(node);
+      if (
+        node.visualKind === 'ai-core' &&
+        !state.goalWorkspaceActive &&
+        !state.dataWorkspaceActive &&
+        !state.useWorkspaceActive
+      ) {
+        node.screen.x = state.width * (state.width < 700 ? .66 : .72);
+        node.screen.y = state.height * .465;
+      }
       node.screen.r = Math.max(node.core ? 10 : (node.showLabel ? 3.3 : 2), node.radius * node.screen.scale);
     });
 
@@ -1708,8 +1746,8 @@
       const controlY = (a.y + b.y) * .5 + (dx / distance) * bend;
       if (edge.bridge) {
         const bridgeGradient = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
-        bridgeGradient.addColorStop(0, `rgba(${palette[edge.a.cluster].rgb},${(active ? .42 : .05) * edgeVisibility * pathEmphasis})`);
-        bridgeGradient.addColorStop(1, `rgba(${palette[edge.b.cluster].rgb},${(active ? .42 : .05) * edgeVisibility * pathEmphasis})`);
+        bridgeGradient.addColorStop(0, `rgba(${topologyStyle(edge.a.cluster).rgb},${(active ? .42 : .05) * edgeVisibility * pathEmphasis})`);
+        bridgeGradient.addColorStop(1, `rgba(${topologyStyle(edge.b.cluster).rgb},${(active ? .42 : .05) * edgeVisibility * pathEmphasis})`);
         ctx.strokeStyle = bridgeGradient;
       } else {
         const destinationStyle = visualStyle(edge.b);
@@ -1849,7 +1887,7 @@
     if (tooltipDetail) tooltipDetail.textContent = node.detail || 'A relevant signal connected to this goal.';
     if (tooltipSource) tooltipSource.textContent = `${node.source || 'Weeple intelligence'}${node.freshness ? ` · ${node.freshness}` : ''}${node.permission ? ` · ${node.permission}` : ''}`;
     if (tooltipReason) tooltipReason.textContent = node.reason || 'It contributes to the selected goal.';
-    tooltip.style.setProperty('--tooltip-color', palette[node.cluster].color);
+    tooltip.style.setProperty('--tooltip-color', topologyStyle(node.cluster).color);
     tooltip.style.setProperty('--tooltip-shape', node.evidenceType === 'data' ? '2px' : '50%');
     const width = 345;
     let x = node.screen.x;
@@ -1873,7 +1911,7 @@
   topologyInputLayer.addEventListener('pointerdown', (event) => {
     const pos = pointerPosition(event);
     const touchedNode = getHitNode(pos.x, pos.y);
-    const rippleStyle = touchedNode ? visualStyle(touchedNode) : (palette[state.activeCluster] || palette.goals);
+    const rippleStyle = touchedNode ? visualStyle(touchedNode) : topologyStyle(state.activeCluster);
     state.touchRipples.push({ x: pos.x, y: pos.y, rgb: rippleStyle.rgb, startedAt: state.elapsed });
     if (state.touchRipples.length > 5) state.touchRipples.shift();
     topologyInputLayer.setPointerCapture(event.pointerId);
@@ -2141,6 +2179,17 @@
   let editingGoalIndex = -1;
   let goalSyncSequence = 0;
   let reasoningUpdateTimer = 0;
+  let goalPlanListOpen = false;
+  let goalPlanTaskDrawerOpen = false;
+  let goalPlanTaskOwner = 'human';
+  let goalPlanIntelDetail = null;
+  let goalPlanShareOpen = false;
+  let goalPlanMoreOpen = false;
+  let goalPlanTransitionDirection = 0;
+  let goalPlanTransitionTimer = 0;
+  let goalPlanTaskEditor = null;
+  let goalPlanSubgoalEditor = null;
+  let goalPlanFocusedTaskId = '';
   try {
     const savedDeletedGoals = JSON.parse(localStorage.getItem('weeple-deleted-goals') || '[]');
     if (Array.isArray(savedDeletedGoals)) savedDeletedGoals.forEach(title => deletedGoalTitles.add(String(title)));
@@ -2266,7 +2315,7 @@
       title: outcome, short: outcome.slice(0, 24), category, updated: 'Created now', archived: false, custom: true,
       status: 'Awaiting context', progress: 0, description: situation || `A new ${category.toLowerCase()} goal.`,
       sources: 0, memories: 0, outputs: 1, tasks: 3, completed: 0, accent: category === 'Learning' ? '139,92,246' : category === 'Wellbeing' ? '16,185,129' : category === 'Finance' ? '255,183,3' : category === 'Relationships' ? '255,124,89' : '255,94,0',
-      subgoals: template.subgoals.map(name => ({ name, done: 0, total: 1, state: 'Proposed' })),
+      subgoals: template.subgoals.map(name => ({ name, done: 0, total: 1, state: 'Proposed', origin: 'ai', confirmed: false })),
       taskLabels: template.subgoals,
       recommendation: template.suggestions[0].title,
       basis: ['Goal description', situation ? 'Current situation' : 'Situation not supplied', constraints ? 'Confirmed constraints' : 'No constraints supplied'],
@@ -2448,14 +2497,118 @@
     Project: ['Validate the next milestone with evidence', 'Resolve the highest-impact dependency']
   };
 
+  function goalPlanSlug(value) {
+    return String(value || 'goal').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 44) || 'goal';
+  }
+
+  function goalPlanDateKey(goal, dayOffset = 0) {
+    if (goal?.scheduledDate) return goal.scheduledDate;
+    const date = new Date();
+    date.setHours(12, 0, 0, 0);
+    date.setDate(date.getDate() + (Number.isInteger(goal?.scheduleOffset) ? goal.scheduleOffset : dayOffset));
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  }
+
+  function shiftGoalTime(time, minutes) {
+    const [hour, minute] = String(time || '09:00').split(':').map(Number);
+    const total = Math.max(0, Math.min(1439, (hour || 0) * 60 + (minute || 0) + minutes));
+    return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+  }
+
+  function resolveGoalArtwork(goal) {
+    const key = ['Travel', 'Wellbeing', 'Learning', 'Finance', 'Relationships', 'Project'].includes(goal?.category) ? goal.category.toLowerCase() : 'project';
+    const descriptions = {
+      travel: 'A prepared traveler approaching a modern airport at blue hour.',
+      wellbeing: 'A calm morning wellbeing routine overlooking a garden.',
+      learning: 'A focused learner practicing confidently in a modern study.',
+      finance: 'A calm financial planning session in a refined home office.',
+      relationships: 'A family sharing meaningful time in warm evening light.',
+      project: 'A focused creator reviewing a tangible project prototype.'
+    };
+    return { url: `assets/goals/${key}.png`, alt: descriptions[key], key };
+  }
+
+  function goalPlanTasks(goal, owner) {
+    ensureGoalCommandModel(goal);
+    return goal.subgoals.flatMap((subgoal, subgoalIndex) => subgoal.executionTasks.map((task, taskIndex) => ({ task, subgoal, subgoalIndex, taskIndex })))
+      .filter(entry => !owner || entry.task.owner === owner);
+  }
+
+  function goalPlanTaskMoment(task) {
+    return task.owner === 'ai' ? task.startsAt : task.dueAt;
+  }
+
+  function formatGoalPlanMoment(value, includeDate = true) {
+    if (!value) return 'Schedule needed';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return String(value).replace('T', ' ');
+    const date = new Intl.DateTimeFormat(undefined, includeDate ? { month: 'short', day: 'numeric' } : {}).format(parsed);
+    const time = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(parsed);
+    return includeDate ? `${date} · ${time}` : time;
+  }
+
+  function goalPlanCountdown(goal) {
+    const target = new Date(`${goalPlanDateKey(goal)}T${goal?.scheduledTime || '23:59'}`);
+    const difference = target.getTime() - Date.now();
+    if (!Number.isFinite(difference)) return 'Date ready';
+    if (difference <= 0) return 'Due now';
+    const hours = Math.ceil(difference / 3600000);
+    if (hours < 24) return `${hours}h left`;
+    const days = Math.ceil(hours / 24);
+    return `${days}d left`;
+  }
+
+  function deriveGoalObservations(goal) {
+    const observations = [...(goal.observations || [])];
+    const existingTitles = new Set(observations.map(item => item.title));
+    if (Number.isInteger(goal.scheduleOffset) && goal.scheduleOffset <= 1 && !existingTitles.has('Deadline proximity')) {
+      observations.push({ type: 'calendar', title: 'Deadline proximity', detail: 'The target window is close enough that timing now has a stronger influence on the plan.', source: 'Goal schedule', time: 'Live', influence: 86 });
+    }
+    if (Number(goal.sources || 0) >= 8 && !existingTitles.has('Context coverage')) {
+      observations.push({ type: 'context', title: 'Context coverage', detail: `${goal.sources} authorized sources are contributing current context to this goal.`, source: 'Authorized sources', time: 'Now', influence: 54 });
+    }
+    if (goal.category === 'Finance' && !existingTitles.has('Constraint pressure')) {
+      observations.push({ type: 'context', title: 'Constraint pressure', detail: 'The confirmed budget and timeline are narrowing the available recovery options.', source: 'Goal constraints', time: 'Current', influence: 63 });
+    }
+    return observations.slice(0, 6);
+  }
+
+  function syncPredictionSuggestions(goal) {
+    goal.suggestions = Array.isArray(goal.suggestions) ? goal.suggestions : [];
+    const suggestionId = `${goal.id}-prediction-move`;
+    const existingIndex = goal.suggestions.findIndex(item => item.id === suggestionId);
+    const probability = Number(goal.prediction?.probability || 0);
+    const shouldAdd = probability >= 80 || (probability > 0 && probability < 70);
+    if (!shouldAdd) {
+      if (existingIndex >= 0) goal.suggestions.splice(existingIndex, 1);
+      return;
+    }
+    const direction = probability >= 80 ? 'momentum' : 'review';
+    const templates = {
+      Travel: { label: 'BACKUP PATH', action: 'Prepare Backup', momentum: 'Prepare a backup route while the strongest travel window is still open.', review: 'Add a short travel check before the next booking decision.' },
+      Wellbeing: { label: 'DAILY RHYTHM', action: 'Set Daily Cue', momentum: 'Turn the strongest healthy pattern into one repeatable daily cue.', review: 'Add a gentle progress check before changing the routine.' },
+      Learning: { label: 'SKILL CHECK', action: 'Plan Skill Check', momentum: 'Use the current learning momentum in one real practice challenge.', review: 'Schedule a short skill check before adjusting the learning plan.' },
+      Finance: { label: 'PLAN CHECK', action: 'Schedule Review', momentum: 'Protect the current financial momentum with a simple review checkpoint.', review: 'Add a short financial review before the forecast window closes.' },
+      Relationships: { label: 'CONNECTION CUE', action: 'Protect Moment', momentum: 'Protect one meaningful shared moment while availability is strong.', review: 'Choose one simple check-in to strengthen the current connection rhythm.' },
+      Project: { label: 'MILESTONE CHECK', action: 'Review Milestone', momentum: 'Use the current momentum to prepare the next visible milestone.', review: 'Add a quick project review before committing more time.' }
+    };
+    const template = templates[goal.category] || templates.Project;
+    const generated = { id: suggestionId, label: template.label, title: template[direction], action: template.action, updates: Math.max(0, goal.openSubgoalIndex || 0), options: ['Today', 'Tomorrow', 'Choose time'], predictionGenerated: true };
+    if (existingIndex >= 0) Object.assign(goal.suggestions[existingIndex], generated);
+    else goal.suggestions.push(generated);
+  }
+
   function ensureGoalCommandModel(goal) {
+    goal.id = goal.id || `goal-${goalPlanSlug(goal.title)}`;
     goal.category = goal.category || 'Project';
     goal.outcome = goal.outcome || goal.description || goal.title;
     goal.currentSituation = goal.currentSituation || goal.description || 'AI is establishing the current baseline.';
     goal.constraints = goal.constraints || (goal.category === 'Travel' ? 'Timing, safety, and confirmed reservations' : 'User-confirmed time, privacy, and resource limits');
     goal.taskLabels = Array.isArray(goal.taskLabels) ? goal.taskLabels : [];
     goal.draftSubgoals = Array.isArray(goal.draftSubgoals) ? goal.draftSubgoals : [];
+    syncPredictionSuggestions(goal);
     goal.subgoals.forEach((subgoal, subgoalIndex) => {
+      subgoal.id = subgoal.id || `${goal.id}-subgoal-${subgoalIndex + 1}-${goalPlanSlug(subgoal.name)}`;
       const total = Math.max(1, Number(subgoal.total) || 1);
       const completeCount = Math.max(0, Math.min(total, Number(subgoal.done) || 0));
       if (!Array.isArray(subgoal.executionTasks)) {
@@ -2466,7 +2619,40 @@
           state: taskIndex < completeCount ? 'Completed' : taskIndex === completeCount ? 'Ready now' : 'Queued'
         }));
       }
-      subgoal.confirmed = subgoal.confirmed !== false;
+      const baseDate = goalPlanDateKey(goal, subgoalIndex);
+      const baseTime = goal.scheduledTime || '09:00';
+      subgoal.executionTasks.forEach((task, taskIndex) => {
+        task.id = task.id || `${subgoal.id}-task-${taskIndex + 1}-${goalPlanSlug(task.name)}`;
+        task.owner = task.owner === 'ai' ? 'ai' : 'human';
+        if (task.owner === 'ai') {
+          task.aiState = task.aiState || (task.done ? 'prepared' : 'queued');
+          task.startsAt = task.startsAt || `${baseDate}T${shiftGoalTime(baseTime, subgoalIndex * 35 + taskIndex * 15)}`;
+          task.expectedAt = task.expectedAt || `${baseDate}T${shiftGoalTime(baseTime, subgoalIndex * 35 + taskIndex * 15 + 45)}`;
+          task.done = task.aiState === 'prepared';
+        } else {
+          task.dueAt = task.dueAt || `${baseDate}T${shiftGoalTime(baseTime, subgoalIndex * 45 + taskIndex * 25)}`;
+          task.state = task.done ? 'Completed' : task.state || 'Ready now';
+        }
+      });
+      if (!subgoal.aiSeeded && !subgoal.executionTasks.some(task => task.owner === 'ai')) {
+        const aiReady = completeCount >= total;
+        subgoal.executionTasks.push({
+          id: `${subgoal.id}-ai-support`,
+          name: `Prepare support for ${subgoal.name}`,
+          owner: 'ai',
+          aiState: aiReady ? 'prepared' : subgoalIndex === 0 ? 'running' : 'queued',
+          done: aiReady,
+          state: aiReady ? 'Completed' : subgoalIndex === 0 ? 'Working' : 'Queued',
+          startsAt: `${baseDate}T${shiftGoalTime(baseTime, subgoalIndex * 45 - 20)}`,
+          expectedAt: `${baseDate}T${shiftGoalTime(baseTime, subgoalIndex * 45 + 25)}`
+        });
+        subgoal.aiSeeded = true;
+      }
+      subgoal.origin = subgoal.origin === 'user' ? 'user' : 'ai';
+      if (typeof subgoal.confirmed !== 'boolean') {
+        const reviewStates = new Set(['Planning', 'Proposed', 'Needs action', 'At risk', 'Review']);
+        subgoal.confirmed = subgoal.origin === 'user' || !reviewStates.has(subgoal.state);
+      }
       subgoal.total = subgoal.executionTasks.length;
       subgoal.done = subgoal.executionTasks.filter(task => task.done).length;
       if (subgoal.done >= subgoal.total) subgoal.state = 'Completed';
@@ -2493,6 +2679,14 @@
       goal.openSubgoalIndex = goal.subgoals.findIndex(subgoal => subgoal.done < subgoal.total);
     }
   }
+
+  function migrateGoalPlanStorage() {
+    goalProfiles.forEach(ensureGoalCommandModel);
+    persistCustomGoals();
+    persistGoalPlanOverrides();
+    try { localStorage.setItem('weeple-goal-plan-schema', '2'); } catch (error) { /* storage is optional */ }
+  }
+  migrateGoalPlanStorage();
 
   function renderGoalSupport(goal) {
     if (!goalSupportPanel) return;
@@ -2563,9 +2757,16 @@
     const prediction = goal.prediction || {};
     const primarySuggestion = unresolvedSuggestions[0];
     const targetSubgoal = primarySuggestion ? goal.subgoals[primarySuggestion.updates]?.name : pendingTasks[0]?.subgoalName;
+    const categoryMotivation = {
+      Travel: ['Your journey is getting safer.', 'Each confirmed step protects your arrival.'],
+      Wellbeing: ['Your consistency is becoming a habit.', 'Small wins are building a stronger routine.'],
+      Learning: ['Your confidence is growing.', 'Active practice is turning effort into skill.'],
+      Finance: ['Your financial foundation is strengthening.', 'Each review makes the plan more resilient.'],
+      Relationships: ['Your effort is creating connection.', 'Thoughtful follow-through keeps people close.']
+    }[goal.category] || ['Your goal is moving forward.', 'Every confirmed step strengthens the plan.'];
 
-    let motivation = actionsThisMonth ? `You are ${actionsThisMonth} action${actionsThisMonth === 1 ? '' : 's'} closer.` : 'Your path is ready.';
-    let motivationDetail = `${remainingCount} action${remainingCount === 1 ? '' : 's'} remain in the confirmed plan.`;
+    let motivation = categoryMotivation[0];
+    let motivationDetail = categoryMotivation[1];
     let momentum = actionsThisMonth ? `${goal.progress}% · ${actionsThisMonth} action${actionsThisMonth === 1 ? '' : 's'} completed` : `${goal.progress}% · Ready to start`;
     if (goal.progress >= 100) {
       momentum = '100% · Goal achieved';
@@ -2575,9 +2776,9 @@
       motivation = 'Weeple is moving this forward.';
       motivationDetail = `Weeple is ${activeExecution.executionState === 'executing' ? 'executing' : 'preparing'} the approved next move.`;
     } else if (unresolvedSuggestions.length) {
-      motivationDetail = unresolvedSuggestions.length === 1 ? 'One useful decision is ready when you are.' : `${unresolvedSuggestions.length} useful decisions are ready when you are.`;
+      motivationDetail = `${unresolvedSuggestions.length === 1 ? 'One useful decision is' : `${unresolvedSuggestions.length} useful decisions are`} ready for ${prediction.impact || 'the next milestone'}.`;
     } else if (completedTasks.length) {
-      motivationDetail = goal.progress >= 70 ? 'The outcome is getting close.' : 'Your confirmed plan is moving in the right direction.';
+      motivationDetail = goal.progress >= 70 ? `The ${prediction.impact || 'outcome'} is getting close.` : categoryMotivation[1];
     }
 
     const completedTitle = completedTasks.length ? conciseTaskName(completedTasks[completedTasks.length - 1].name) : 'Confirmed goal plan organized';
@@ -2638,7 +2839,12 @@
       goalTrajectory.setAttribute('aria-label', `${goal.progress}% of the goal journey complete. ${model.motivation}`);
     }
     goalResultsSummary.textContent = goal.updated || 'Updated now';
-    goalPlanCount.textContent = `${goal.subgoals.length} AI-created · editable`;
+    const aiSubgoalCount = goal.subgoals.filter(subgoal => subgoal.origin !== 'user').length;
+    const userSubgoalCount = goal.subgoals.length - aiSubgoalCount;
+    const pendingSubgoalCount = goal.subgoals.filter(subgoal => subgoal.origin !== 'user' && subgoal.confirmed === false).length;
+    goalPlanCount.textContent = pendingSubgoalCount
+      ? `${pendingSubgoalCount} awaiting confirmation · ${goal.subgoals.length} total`
+      : `${aiSubgoalCount} AI-created${userSubgoalCount ? ` · ${userSubgoalCount} yours` : ''}`;
     if (goalBriefSubgoalCount) goalBriefSubgoalCount.textContent = goal.subgoals.length;
     goalReasoningCount.textContent = `${observations.length} observation${observations.length === 1 ? '' : 's'}`;
     goalSourceCount.textContent = `${model.sourceCount} authorized`;
@@ -2721,7 +2927,7 @@
     const model = getGoalResultModel(goal);
     const observations = goal.observations || [];
     const titles = {
-      plan: ['YOUR CONFIRMED AI PLAN', 'View and edit subgoals'], reasoning: ['TRANSPARENT AI', 'Why this recommendation?'],
+      plan: ['YOUR GOAL PLAN', 'View and edit subgoals'], reasoning: ['TRANSPARENT AI', 'Why this recommendation?'],
       activity: ['AI WORK LOG', 'Completed and current work'], sources: ['AUTHORIZED CONTEXT', 'Connected sources']
     };
     const [eyebrow, title] = titles[type] || titles.plan;
@@ -2737,10 +2943,13 @@
     } else if (type === 'sources') {
       goalResultDrawerContent.innerHTML = `<div class="goal-detail-grid">${observations.map(observation => `<article class="goal-detail-card"><span>AUTHORIZED SOURCE</span><h3>${escapeGoalText(observation.source)}</h3><p>${escapeGoalText(observation.title)}</p><footer>${escapeGoalText(observation.time || 'Current')} · Used only for this goal</footer></article>`).join('') || '<article class="goal-detail-card"><span>PRIVATE BY DEFAULT</span><h3>No connected source</h3><p>Choose the minimum useful context when you want more proactive support.</p></article>'}</div>`;
     } else {
-      goalResultDrawerContent.innerHTML = `<section class="subgoal-manager-intro"><span><i></i>AI-GENERATED · CONTROLLED BY YOU</span><h3>Direct subgoals</h3><p>Weeple created this plan from your goal. Rename or remove anything that does not feel right.</p></section><div class="subgoal-manager-list">${goal.subgoals.map((subgoal, index) => {
+      goalResultDrawerContent.innerHTML = `<section class="subgoal-manager-intro"><span><i></i>YOUR PLAN · YOU STAY IN CONTROL</span><h3>Direct subgoals</h3><p>Confirm AI suggestions individually, edit anything, or add a subgoal of your own.</p><div class="subgoal-manager-toolbar"><button class="subgoal-add-trigger" type="button" data-subgoal-add aria-expanded="false"><span>+</span>Add your own subgoal</button></div></section><form class="subgoal-add-form" data-subgoal-add-form><label for="newSubgoalName">New subgoal</label><input id="newSubgoalName" name="subgoalName" maxlength="120" placeholder="What else should this goal include?" autocomplete="off"><div><button class="save" type="submit">Add to my plan</button><button type="button" data-subgoal-add-cancel>Cancel</button></div></form><div class="subgoal-manager-list">${goal.subgoals.map((subgoal, index) => {
         const complete = subgoal.done >= subgoal.total;
         const progress = subgoal.total ? Math.round((subgoal.done / subgoal.total) * 100) : 0;
-        return `<article class="subgoal-manager-card" data-subgoal-card="${index}"><header><span>SUBGOAL ${String(index + 1).padStart(2, '0')}</span><em class="${complete ? 'complete' : ''}">${complete ? 'Completed' : escapeGoalText(subgoal.state || 'Active')}</em></header><div class="subgoal-manager-name"><h3>${escapeGoalText(subgoal.name)}</h3><div><button type="button" data-subgoal-edit="${index}">Edit</button><button type="button" data-subgoal-remove="${index}">Remove</button></div></div><form class="subgoal-edit-form" data-subgoal-form="${index}"><label for="subgoalEdit${index}">Subgoal name</label><input id="subgoalEdit${index}" value="${escapeGoalText(subgoal.name)}" maxlength="120"><div><button class="save" type="submit">Save changes</button><button type="button" data-subgoal-cancel="${index}">Cancel</button></div></form><div class="subgoal-manager-progress"><i style="--subgoal-progress:${progress}"></i><span>${subgoal.done} of ${subgoal.total} actions complete</span></div><footer><span>AI-generated</span><i></i><span>Confirmed by you</span></footer></article>`;
+        const userCreated = subgoal.origin === 'user';
+        const confirmed = userCreated || subgoal.confirmed !== false;
+        const stateLabel = complete ? 'Completed' : !confirmed ? 'Needs confirmation' : escapeGoalText(subgoal.state || 'Active');
+        return `<article class="subgoal-manager-card${!confirmed ? ' is-unconfirmed' : ''}${userCreated ? ' user-created' : ''}" data-subgoal-card="${index}"><header><span>${userCreated ? 'YOUR SUBGOAL' : `AI SUBGOAL ${String(index + 1).padStart(2, '0')}`}</span><em class="${complete ? 'complete' : !confirmed ? 'pending-confirmation' : ''}">${stateLabel}</em></header><div class="subgoal-manager-name"><h3>${escapeGoalText(subgoal.name)}</h3><div>${!confirmed ? `<button class="subgoal-confirm" type="button" data-subgoal-confirm="${index}">Confirm</button>` : ''}<button type="button" data-subgoal-edit="${index}">Edit</button><button type="button" data-subgoal-remove="${index}">Remove</button></div></div><form class="subgoal-edit-form" data-subgoal-form="${index}"><label for="subgoalEdit${index}">Subgoal name</label><input id="subgoalEdit${index}" value="${escapeGoalText(subgoal.name)}" maxlength="120"><div><button class="save" type="submit">Save changes</button><button type="button" data-subgoal-cancel="${index}">Cancel</button></div></form><div class="subgoal-manager-progress"><i style="--subgoal-progress:${progress}"></i><span>${subgoal.done} of ${subgoal.total} actions complete</span></div><footer><span>${userCreated ? 'Created by you' : 'AI-generated'}</span><i></i><span>${confirmed ? 'In your confirmed plan' : 'Waiting for your confirmation'}</span></footer></article>`;
       }).join('')}</div>`;
     }
     goalResultDrawer.classList.add('visible');
@@ -2818,6 +3027,358 @@
     goalProposalInbox.innerHTML = `<div class="proposal-inbox-summary"><i class="proposal-inbox-symbol">${goal.draftSubgoals.length}</i><span><b>Proposed direct subgoals</b><small>Nothing enters your confirmed plan until you approve it.</small></span></div>${goal.draftSubgoals.map((draft, index) => `<article class="proposal-draft" data-proposal-index="${index}"><span>AI PROPOSAL - APPROVAL REQUIRED</span><h4>${escapeGoalText(draft.name)}</h4><div class="proposal-actions"><button class="proposal-confirm" type="button" data-proposal-action="confirm">Confirm</button><button type="button" data-proposal-action="adjust">Adjust</button><button type="button" data-proposal-action="reject">Reject</button></div></article>`).join('')}`;
   }
 
+  function goalPlanTaskEditorMarkup(goal) {
+    if (!goalPlanTaskEditor) return '';
+    const existing = goal.subgoals[goalPlanTaskEditor.subgoalIndex]?.executionTasks?.[goalPlanTaskEditor.taskIndex];
+    const owner = existing?.owner || goalPlanTaskEditor.owner || goalPlanTaskOwner;
+    const moment = owner === 'ai' ? existing?.startsAt : existing?.dueAt;
+    const finish = existing?.expectedAt;
+    const [date = goalPlanDateKey(goal), time = goal.scheduledTime || '09:00'] = String(moment || `${goalPlanDateKey(goal)}T${goal.scheduledTime || '09:00'}`).split('T');
+    const finishTime = String(finish || `${date}T${shiftGoalTime(time, 45)}`).split('T')[1] || shiftGoalTime(time, 45);
+    return `<form class="goal-plan-task-form" data-goal-task-form data-edit-subgoal="${goalPlanTaskEditor.subgoalIndex ?? 0}" data-edit-task="${Number.isInteger(goalPlanTaskEditor.taskIndex) ? goalPlanTaskEditor.taskIndex : -1}">
+      <header><span><small>${existing ? 'EDIT TASK' : 'NEW TASK'}</small><b>${owner === 'ai' ? 'AI work window' : 'Your next action'}</b></span><button type="button" data-goal-task-editor-close aria-label="Close task editor">&times;</button></header>
+      <div class="goal-plan-task-fields">
+        <label class="task-name"><span>TASK</span><input name="taskName" maxlength="64" required value="${escapeGoalText(existing?.name || '')}" placeholder="Short action"></label>
+        <label><span>SUBGOAL</span><select name="subgoalIndex">${goal.subgoals.map((subgoal, index) => `<option value="${index}"${index === (goalPlanTaskEditor.subgoalIndex ?? 0) ? ' selected' : ''}>${escapeGoalText(subgoal.name)}</option>`).join('')}</select></label>
+        <fieldset><legend>OWNER</legend><label><input type="radio" name="taskOwner" value="human"${owner === 'human' ? ' checked' : ''}><span class="human">YOU</span></label><label><input type="radio" name="taskOwner" value="ai"${owner === 'ai' ? ' checked' : ''}><span class="ai">AI</span></label></fieldset>
+        <label><span>DATE</span><input name="taskDate" type="date" required value="${date}"></label>
+        <label><span>${owner === 'ai' ? 'START' : 'DUE'}</span><input name="taskTime" type="time" required value="${time.slice(0, 5)}"></label>
+        <label class="task-ai-finish${owner === 'ai' ? ' visible' : ''}"><span>FINISH</span><input name="taskEndTime" type="time" value="${finishTime.slice(0, 5)}"></label>
+      </div>
+      <footer><button type="button" data-goal-task-editor-close>Cancel</button><button class="primary" type="submit">${existing ? 'Save task' : 'Add task'}</button></footer>
+    </form>`;
+  }
+
+  function goalPlanTaskGroupsMarkup(goal, owner) {
+    let visibleCount = 0;
+    const groups = goal.subgoals.map((subgoal, subgoalIndex) => {
+      if (subgoal.rejected) return '';
+      const tasks = subgoal.executionTasks.map((task, taskIndex) => ({ task, taskIndex })).filter(entry => entry.task.owner === owner);
+      visibleCount += tasks.length;
+      const confirmed = subgoal.origin === 'user' || subgoal.confirmed;
+      return `<section class="goal-plan-task-group">
+        <header><span><i class="${subgoal.origin === 'ai' ? 'ai' : 'human'}">${subgoal.origin === 'ai' ? 'AI' : 'YOU'}</i><b>${escapeGoalText(subgoal.name)}</b></span><div>${!confirmed && subgoal.origin === 'ai' ? `<button class="accept" type="button" data-game-subgoal-accept="${subgoalIndex}">Accept</button><button type="button" data-game-subgoal-reject="${subgoalIndex}">Reject</button>` : ''}<button type="button" data-game-subgoal-edit="${subgoalIndex}">Edit</button></div></header>
+        <div>${tasks.map(({ task, taskIndex }) => {
+          const state = owner === 'ai' ? task.aiState : task.done ? 'done' : 'todo';
+          const schedule = owner === 'ai' ? `${formatGoalPlanMoment(task.startsAt)}–${formatGoalPlanMoment(task.expectedAt, false)}` : formatGoalPlanMoment(task.dueAt);
+          return `<article class="goal-plan-task-row ${state}${task.id === goalPlanFocusedTaskId ? ' focused' : ''}" data-goal-task-id="${task.id}">
+            <button class="goal-plan-task-state" type="button" data-goal-task-action="${owner === 'ai' ? 'cycle' : 'toggle'}" data-task-path="${subgoalIndex}:${taskIndex}" aria-label="${owner === 'ai' ? `${state} AI task` : task.done ? 'Reopen task' : 'Complete task'}"><i></i></button>
+            <span><b title="${escapeGoalText(task.name)}">${escapeGoalText(task.name)}</b><small><em>${owner === 'ai' ? 'AI' : 'YOU'}</em>${schedule}</small></span>
+            <strong>${owner === 'ai' ? state : task.done ? 'Done' : 'To do'}</strong>
+            <div>${owner === 'ai' ? `<button class="ai-control" type="button" data-goal-task-action="${state === 'running' ? 'pause' : state === 'prepared' ? 'review' : 'run'}" data-task-path="${subgoalIndex}:${taskIndex}">${state === 'running' ? 'Pause' : state === 'prepared' ? 'Review' : 'Run'}</button>` : ''}<button type="button" data-goal-task-action="edit" data-task-path="${subgoalIndex}:${taskIndex}" aria-label="Edit or reschedule task">Edit</button><button type="button" data-goal-task-action="delete" data-task-path="${subgoalIndex}:${taskIndex}" aria-label="Delete task">Delete</button></div>
+          </article>`;
+        }).join('') || `<span class="goal-plan-group-empty">No ${owner === 'ai' ? 'AI work' : 'personal task'} in this milestone</span>`}</div>
+      </section>`;
+    }).join('');
+    const rejected = goal.subgoals.map((subgoal, index) => ({ subgoal, index })).filter(entry => entry.subgoal.rejected);
+    const rejectedMarkup = rejected.length ? `<section class="goal-plan-rejected"><header><small>REMOVED FROM PLAN</small><b>${rejected.length}</b></header>${rejected.map(({ subgoal, index }) => `<span><i>×</i><b>${escapeGoalText(subgoal.name)}</b><button type="button" data-game-subgoal-restore="${index}">Restore</button><button type="button" data-game-subgoal-delete="${index}">Delete</button></span>`).join('')}</section>` : '';
+    return (groups || `<div class="goal-plan-empty"><i>${owner === 'ai' ? 'AI' : 'YOU'}</i><b>No ${owner === 'ai' ? 'AI work' : 'personal tasks'} yet</b><button type="button" data-goal-task-add>Add task</button></div>`) + rejectedMarkup;
+  }
+
+  function goalPlanSubgoalEditorMarkup(goal) {
+    if (goalPlanSubgoalEditor === null) return '';
+    const index = Number(goalPlanSubgoalEditor);
+    const subgoal = Number.isInteger(index) && index >= 0 ? goal.subgoals[index] : null;
+    return `<form class="goal-plan-subgoal-form" data-goal-subgoal-form data-subgoal-index="${subgoal ? index : -1}">
+      <header><span><small>${subgoal ? 'EDIT SUBGOAL' : 'NEW SUBGOAL'}</small><b>${subgoal ? 'Shape this milestone' : 'Add your own milestone'}</b></span><button type="button" data-goal-subgoal-editor-close aria-label="Close subgoal editor">&times;</button></header>
+      <label><span>SUBGOAL</span><input name="subgoalName" maxlength="70" required value="${escapeGoalText(subgoal?.name || '')}" placeholder="One clear milestone"></label>
+      <footer><button type="button" data-goal-subgoal-editor-close>Cancel</button><button class="primary" type="submit">${subgoal ? 'Save subgoal' : 'Add subgoal'}</button></footer>
+    </form>`;
+  }
+
+  function goalPlanIntelligenceDrawerMarkup(goal, scoredObservations) {
+    if (!goalPlanIntelDetail) return '';
+    const prediction = goal.prediction;
+    if (goalPlanIntelDetail.type === 'task') {
+      const subgoal = goal.subgoals[goalPlanIntelDetail.subgoalIndex];
+      const task = subgoal?.executionTasks?.[goalPlanIntelDetail.taskIndex];
+      if (!task) return '';
+      return `<aside class="goal-plan-intel-drawer" role="dialog" aria-modal="true" aria-label="AI task output"><button class="goal-plan-intel-scrim" type="button" data-goal-intel-close aria-label="Close AI task output"></button><section>
+        <header><span><small>AI OUTPUT</small><h3>${escapeGoalText(task.name)}</h3></span><button type="button" data-goal-intel-close aria-label="Close">&times;</button></header>
+        <div class="goal-plan-suggestion-icon"><i>AI</i><span><small>${escapeGoalText(String(task.aiState || 'queued').toUpperCase())}</small><b>${escapeGoalText(subgoal.name)}</b></span></div>
+        <div class="goal-plan-fact-grid"><span><small>START</small><b>${formatGoalPlanMoment(task.startsAt)}</b></span><span><small>EXPECTED</small><b>${formatGoalPlanMoment(task.expectedAt)}</b></span></div>
+        <article><small>PREPARED OUTPUT</small><p>${task.aiState === 'prepared' ? 'The preparation is ready for your review. Nothing external has been sent.' : task.aiState === 'running' ? 'Weeple is preparing this now. You can pause it at any time.' : 'This preparation is queued and waiting to run.'}</p></article>
+        <div class="goal-plan-detail-actions"><button type="button" data-goal-intel-close>Close</button>${task.aiState === 'prepared' ? '<button class="primary" type="button" data-goal-intel-close>Reviewed</button>' : ''}</div>
+        <footer><i></i>No external action without your confirmation</footer>
+      </section></aside>`;
+    }
+    if (goalPlanIntelDetail.type === 'observation') {
+      const observation = scoredObservations[goalPlanIntelDetail.index] || scoredObservations[0];
+      if (!observation) return '';
+      const suggestion = goal.suggestions?.find(item => !item.decision) || goal.suggestions?.[0];
+      return `<aside class="goal-plan-intel-drawer" role="dialog" aria-modal="true" aria-label="Observation detail"><button class="goal-plan-intel-scrim" type="button" data-goal-intel-close aria-label="Close observation detail"></button><section>
+        <header><span><small>OBSERVATION</small><h3>${escapeGoalText(observation.title)}</h3></span><button type="button" data-goal-intel-close aria-label="Close">&times;</button></header>
+        <div class="goal-plan-driver-score" style="--driver:${observation.influence}"><strong>${observation.influence}</strong><span><b>Influence</b><i><em></em></i></span></div>
+        <div class="goal-plan-fact-grid"><span><small>SOURCE</small><b>${escapeGoalText(observation.source)}</b></span><span><small>UPDATED</small><b>${escapeGoalText(observation.time)}</b></span></div>
+        <div class="goal-plan-reason-path"><span><i>1</i><b>Signal</b></span><em></em><span><i>2</i><b>${escapeGoalText(prediction.risk)}</b></span><em></em><span><i>3</i><b>${escapeGoalText(suggestion?.action || 'Next move')}</b></span></div>
+        <article><small>INFLUENCED BECAUSE</small><p>${escapeGoalText(observation.detail)}</p></article>
+        <footer><i></i>Authorized for this goal only</footer>
+      </section></aside>`;
+    }
+    if (goalPlanIntelDetail.type === 'suggestion') {
+      const suggestion = goal.suggestions?.[goalPlanIntelDetail.index];
+      if (!suggestion) return '';
+      const scheduled = String(suggestion.scheduledAt || `${goalPlanDateKey(goal)}T${goal.scheduledTime || '09:00'}`).split('T');
+      return `<aside class="goal-plan-intel-drawer" role="dialog" aria-modal="true" aria-label="Suggestion details"><button class="goal-plan-intel-scrim" type="button" data-goal-intel-close aria-label="Close suggestion details"></button><section>
+        <header><span><small>NEXT MOVE</small><h3>${escapeGoalText(suggestion.action || suggestion.title)}</h3></span><button type="button" data-goal-intel-close aria-label="Close">&times;</button></header>
+        <div class="goal-plan-suggestion-icon"><i>→</i><span><small>${escapeGoalText(suggestion.label)}</small><b>${escapeGoalText(suggestion.title)}</b></span></div>
+        <form class="goal-plan-suggestion-schedule" data-goal-suggestion-schedule data-suggestion-index="${goalPlanIntelDetail.index}"><label><span>DATE</span><input name="suggestionDate" type="date" required value="${scheduled[0]}"></label><label><span>TIME</span><input name="suggestionTime" type="time" required value="${(scheduled[1] || '09:00').slice(0,5)}"></label><label class="goal-plan-approval"><input name="suggestionApproval" type="checkbox" checked disabled><span><i></i><b>Ask before external action</b></span></label><button type="submit">Save timing</button></form>
+        <article><small>EXPECTED EFFECT</small><p>${escapeGoalText(goal.prediction?.impact || 'Improves the next milestone')}</p></article>
+        <div class="goal-plan-detail-actions">${suggestion.decision ? `<em>${suggestion.decision === 'confirmed' ? 'Approved' : 'Skipped'}</em>` : `<button type="button" data-game-suggestion="reject" data-suggestion-index="${goalPlanIntelDetail.index}">Skip</button><button class="primary" type="button" data-game-suggestion="confirm" data-suggestion-index="${goalPlanIntelDetail.index}">Do it</button>`}</div>
+        <footer><i></i>External AI actions remain blocked until confirmed</footer>
+      </section></aside>`;
+    }
+    const ranked = [...scoredObservations].sort((a, b) => b.influence - a.influence);
+    return `<aside class="goal-plan-intel-drawer" role="dialog" aria-modal="true" aria-label="Prediction detail"><button class="goal-plan-intel-scrim" type="button" data-goal-intel-close aria-label="Close prediction detail"></button><section>
+      <header><span><small>WHY THIS PREDICTION?</small><h3>${escapeGoalText(prediction.risk)}</h3></span><button type="button" data-goal-intel-close aria-label="Close">&times;</button></header>
+      <div class="goal-plan-prediction-detail"><div class="goal-plan-prediction-ring" style="--prediction:${prediction.probability}"><strong>${prediction.probability}<small>%</small></strong></div><span><small>${escapeGoalText(prediction.confidence)}</small><b>${escapeGoalText(prediction.window)}</b></span></div>
+      <div class="goal-plan-driver-list">${ranked.map((item, index) => `<span style="--driver:${item.influence}"><i>${index + 1}</i><b>${escapeGoalText(item.title)}</b><em>${item.influence}</em><small><strong></strong></small></span>`).join('')}</div>
+      <div class="goal-plan-factor-grid"><span><i>⏱</i><b>Timing</b><em>${goalPlanCountdown(goal)}</em></span><span><i>◔</i><b>Progress</b><em>${goal.progress}%</em></span><span><i>◇</i><b>Constraints</b><em>Included</em></span></div>
+      <article><small>WHAT IT MEANS</small><p>${escapeGoalText(prediction.title)}</p></article>
+      <footer><i></i>AI inference · not a confirmed fact</footer>
+    </section></aside>`;
+  }
+
+  function goalPlanShareMarkup(goal, artwork, progress) {
+    if (!goalPlanShareOpen) return '';
+    return `<aside class="goal-plan-share" role="dialog" aria-modal="true" aria-label="Share goal achievement"><button class="goal-plan-share-scrim" type="button" data-goal-share-close aria-label="Close share preview"></button><section>
+      <header><span><small>PRIVACY-REVIEWED SHARE</small><h3>Share your momentum</h3></span><button type="button" data-goal-share-close aria-label="Close">&times;</button></header>
+      <div class="goal-plan-share-card" style="--share-image:url('${artwork.url}')"><span><small>${escapeGoalText(goal.category)}</small><h4>${escapeGoalText(goal.title)}</h4></span><output><strong>${progress}%</strong><small>${formatGoalPlanMoment(`${goalPlanDateKey(goal)}T${goal.scheduledTime || '23:59'}`)}</small></output></div>
+      <div class="goal-plan-share-safe"><i>✓</i><span><b>Private details removed</b><small>No observations, sources, tasks, or prediction evidence.</small></span></div>
+      <footer><button type="button" data-goal-share-close>Cancel</button><button class="download" type="button" data-goal-share-download>Download</button><button class="primary" type="button" data-goal-share-confirm>Share</button></footer>
+    </section></aside>`;
+  }
+
+  function renderGoalGameBoardLegacy(goal) {
+    if (!goalGameContent) return;
+    ensureGoalCommandModel(goal);
+    const observations = goal.observations || [];
+    const prediction = goal.prediction || { probability: 58, risk: 'BUILDING', title: 'The first milestone is achievable.', impact: 'Next milestone', window: 'Next review', confidence: 'Medium confidence' };
+    const suggestions = goal.suggestions || [];
+    const activeSubgoals = goal.subgoals.filter(subgoal => !subgoal.rejected);
+    const nextSubgoal = activeSubgoals.find(subgoal => subgoal.done < subgoal.total) || activeSubgoals[0];
+    const completedTasks = activeSubgoals.reduce((total, subgoal) => total + subgoal.done, 0);
+    const totalTasks = activeSubgoals.reduce((total, subgoal) => total + subgoal.total, 0);
+    const progress = Math.round(completedTasks / Math.max(1, totalTasks) * 100);
+    const scheduleLabel = Number(goal.scheduleOffset) === 0 ? 'Today' : Number(goal.scheduleOffset) === 1 ? 'Tomorrow' : prediction.window || 'Next review';
+    const compactSubgoalName = (name) => {
+      const concise = String(name || '')
+        .replace(/^(check-in for|confirm|review|build|practice|understand|establish|create|protect|stay|preserve)\s+/i, '')
+        .replace(/^(an?|the)\s+/i, '')
+        .replace(/^healthy\s+/i, '')
+        .replace(/\s+advancement$/i, '')
+        .trim();
+      return concise.split(/\s+/).filter(word => !/^(for|in|across)$/i.test(word)).slice(0, 2).join(' ') || String(name || 'Next step');
+    };
+    const howLabel = activeSubgoals.length
+      ? activeSubgoals.slice(0, 3).map(subgoal => compactSubgoalName(subgoal.name)).join(' · ')
+      : 'Choose the first subgoal';
+    const predictionSummary = [prediction.impact, prediction.window].filter(Boolean).join(' · ') || prediction.title;
+    const goalPraise = {
+      Travel: {
+        early: ['Smart preparation!', 'You are protecting the journey before it begins.'],
+        steady: ['Travel plan taking shape!', 'Every confirmation makes the arrival smoother.'],
+        close: ['Ready for the journey!', 'Your important travel details are nearly secured.']
+      },
+      Wellbeing: {
+        early: ['A meaningful start!', 'Small healthy choices are already adding up.'],
+        steady: ['Strong momentum!', 'Your consistency is becoming a lasting routine.'],
+        close: ['Remarkable consistency!', 'Your daily choices are creating real change.']
+      },
+      Learning: {
+        early: ['Keep exploring!', 'Every practice session is building confidence.'],
+        steady: ['Your skill is growing!', 'Focused practice is turning into fluency.'],
+        close: ['Impressive progress!', 'You are close to owning this new skill.']
+      },
+      Finance: {
+        early: ['A stronger foundation!', 'Each smart review improves your resilience.'],
+        steady: ['Your plan is strengthening!', 'Consistent choices are building security.'],
+        close: ['Financial momentum!', 'Your safety buffer is within reach.']
+      },
+      Relationships: {
+        early: ['Connection starts here!', 'Thoughtful effort always matters.'],
+        steady: ['Meaningful momentum!', 'Your follow-through is bringing people closer.'],
+        close: ['Beautiful progress!', 'Your care is creating stronger connections.']
+      }
+    }[goal.category] || {
+      early: ['Great progress!', 'Every completed step counts.'],
+      steady: ['Strong momentum!', 'Your consistent work is paying off.'],
+      close: ['Outstanding!', 'You are close to the finish.']
+    };
+    const conclusion = /high risk/i.test(String(prediction.risk))
+      ? ['Good catch!', 'You still have time to protect the plan.']
+      : progress >= 80 ? goalPraise.close : progress >= 50 ? goalPraise.steady : goalPraise.early;
+    const scoredObservations = observations.slice(0, 3).map((observation, index) => ({
+      ...observation,
+      influence: Number(observation.influence) || Math.max(54, 92 - index * 17)
+    }));
+    const highestInfluence = Math.max(0, ...scoredObservations.map(observation => observation.influence));
+
+    goalGameContent.innerHTML = `
+      <header class="goal-game-hud">
+        <span><i></i><small>GOAL JOURNEY</small><b>Mission runway</b></span>
+        <div class="goal-game-status"><i></i><strong>${progress}%</strong><span>${completedTasks} actions complete</span></div>
+      </header>
+      <div class="goal-game-layout goal-runway-layout">
+        <aside class="goal-blueprint" aria-label="Goal definition">
+          <header><small>MISSION BRIEF</small><h3>Goal blueprint</h3></header>
+          <article class="goal-blueprint-card what"><span>01</span><div><small>WHAT</small><b>${escapeGoalText(goal.title)}</b></div></article>
+          <article class="goal-blueprint-card how"><span>02</span><div><small>HOW</small><b>${escapeGoalText(howLabel)}</b></div></article>
+          <article class="goal-blueprint-card when"><span>03</span><div><small>WHEN</small><b>${escapeGoalText(`${scheduleLabel}${goal.scheduledTime ? ` - ${goal.scheduledTime}` : ''}`)}</b></div></article>
+          <article class="goal-blueprint-card result" style="--result-score:${prediction.probability}">
+            <span>04</span>
+            <div class="goal-result-copy"><small>RESULT - AI PREDICTION</small><b>${escapeGoalText(prediction.risk)}</b><em>${escapeGoalText(predictionSummary)}</em></div>
+            <div class="goal-result-score"><strong>${prediction.probability}<small>%</small></strong></div>
+          </article>
+        </aside>
+
+        <section class="goal-quest-panel game-panel">
+          <header><span><small>YOUR ROUTE</small><h3>AI subgoals</h3></span><button type="button" data-game-subgoal-add><i>+</i>Add subgoal</button></header>
+          <div class="goal-quest-list">
+            ${goal.subgoals.map((subgoal, index) => {
+              const complete = subgoal.done >= subgoal.total;
+              const userCreated = subgoal.origin === 'user';
+              const rejected = Boolean(subgoal.rejected);
+              const confirmed = userCreated || subgoal.confirmed;
+              const stateLabel = rejected ? 'Rejected' : complete ? 'Complete' : confirmed ? 'Accepted' : 'Review';
+              const subgoalProgress = Math.round(subgoal.done / Math.max(1, subgoal.total) * 100);
+              return `<article class="goal-quest${rejected ? ' rejected' : ''}${complete ? ' complete' : ''}${!confirmed && !rejected ? ' needs-review' : ''}" style="--quest-progress:${subgoalProgress}">
+                <i class="goal-quest-index">${complete ? '&#10003;' : String(index + 1).padStart(2, '0')}</i>
+                <span><small><i class="goal-origin-badge ${userCreated ? 'user' : 'ai'}">${userCreated ? 'YOU' : 'AI'}</i>${stateLabel}</small><b>${escapeGoalText(subgoal.name)}</b><i class="goal-quest-meter"><em></em></i></span>
+                <em>${subgoalProgress}%</em>
+                <div class="goal-quest-actions">
+                  ${!userCreated && !confirmed && !rejected ? `<button class="accept" type="button" data-game-subgoal-accept="${index}">Accept</button><button type="button" data-game-subgoal-reject="${index}">Reject</button>` : ''}
+                  ${rejected ? `<button class="accept" type="button" data-game-subgoal-restore="${index}">Restore</button>` : ''}
+                  <button type="button" data-game-subgoal-edit="${index}">Edit</button>
+                  <button class="delete" type="button" data-game-subgoal-delete="${index}">Delete</button>
+                </div>
+              </article>`;
+            }).join('')}
+          </div>
+          <footer class="goal-praise">
+            <span class="goal-trophy" aria-hidden="true"><i>&#9733;</i></span>
+            <span><small>CONCLUSION</small><b>${conclusion[0]}</b><em>${conclusion[1]}</em></span>
+            <output class="goal-conclusion-progress" aria-label="${progress}% goal progress"><strong>${progress}%</strong><small>Goal progress</small></output>
+          </footer>
+        </section>
+
+        <aside class="goal-intelligence-stage">
+          <section class="goal-intel-panel game-panel">
+            <header><span><small>LIVE SIGNALS</small><h3>Observations</h3></span><em>${scoredObservations.length}</em></header>
+            <div class="goal-influence-list">
+              ${scoredObservations.map(observation => `<article class="goal-influence${observation.influence === highestInfluence ? ' strongest' : ''}">
+                <span class="observation-symbol">${observationIcons[observation.type] || observationIcons.context}</span>
+                <div><b>${escapeGoalText(observation.title)}</b><small>${observation.influence === highestInfluence ? '<strong>HIGH IMPACT</strong>' : ''}${escapeGoalText(observation.source)}</small><i><em style="width:${observation.influence}%"></em></i></div>
+                <strong>${observation.influence}</strong>
+              </article>`).join('') || '<div class="goal-game-empty">No observation yet</div>'}
+            </div>
+          </section>
+
+          <section class="goal-action-panel game-panel">
+            <header><span><small>RECOMMENDED</small><h3>Next moves</h3></span><em>${suggestions.filter(item => !item.decision).length} ready</em></header>
+            <div class="goal-game-suggestions">
+              ${suggestions.slice(0, 2).map((suggestion, index) => {
+                const confirmed = suggestion.decision === 'confirmed';
+                const rejected = suggestion.decision === 'rejected';
+                return `<article class="goal-game-suggestion${confirmed ? ' confirmed' : ''}${rejected ? ' rejected' : ''}" title="${escapeGoalText(suggestion.title)}">
+                  <i>${confirmed ? '&#10003;' : rejected ? '&times;' : index + 1}</i><span><small>${escapeGoalText(suggestion.label)}</small><b>${escapeGoalText(suggestion.action || suggestion.title)}</b></span>
+                  <div>${!suggestion.decision ? `<button class="accept" type="button" data-game-suggestion="confirm" data-suggestion-index="${index}">Do it</button><button type="button" data-game-suggestion="reject" data-suggestion-index="${index}">Skip</button>` : `<em>${confirmed ? 'Accepted' : 'Skipped'}</em>`}</div>
+                </article>`;
+              }).join('') || '<div class="goal-game-empty">No action needed</div>'}
+            </div>
+          </section>
+        </aside>
+      </div>
+    `;
+  }
+
+  function renderGoalGameBoard(goal) {
+    if (!goalGameContent) return;
+    ensureGoalCommandModel(goal);
+    const observations = deriveGoalObservations(goal);
+    const prediction = goal.prediction || { probability: 58, risk: 'BUILDING', title: 'The first milestone is achievable.', impact: 'Next milestone', window: 'Next review', confidence: 'Medium confidence' };
+    const suggestions = goal.suggestions || [];
+    const activeSubgoals = goal.subgoals.filter(subgoal => !subgoal.rejected);
+    const allTasks = activeSubgoals.flatMap(subgoal => subgoal.executionTasks);
+    const humanTasks = allTasks.filter(task => task.owner === 'human');
+    const aiTasks = allTasks.filter(task => task.owner === 'ai');
+    const completedTasks = allTasks.filter(task => task.owner === 'human' ? task.done : task.aiState === 'prepared').length;
+    const progress = Math.round(completedTasks / Math.max(1, allTasks.length) * 100);
+    goal.progress = progress;
+    goal.completed = completedTasks;
+    goal.tasks = allTasks.length;
+    const nextHuman = humanTasks.filter(task => !task.done).sort((a, b) => String(a.dueAt).localeCompare(String(b.dueAt)))[0];
+    const nextAi = aiTasks.find(task => task.aiState === 'running') || aiTasks.find(task => task.aiState === 'queued');
+    const nextTask = nextHuman || nextAi;
+    const activeAiCount = aiTasks.filter(task => ['queued', 'running', 'blocked'].includes(task.aiState)).length;
+    const artwork = resolveGoalArtwork(goal);
+    const deadline = `${goalPlanDateKey(goal)}T${goal.scheduledTime || '23:59'}`;
+    const scoredObservations = observations.map((observation, index) => ({ ...observation, influence: Number(observation.influence) || Math.max(42, 92 - index * 13) }));
+    const highestInfluence = Math.max(0, ...scoredObservations.map(item => item.influence));
+    const rankedObservations = scoredObservations.map((observation, index) => ({ ...observation, originalIndex: index })).sort((a, b) => b.influence - a.influence);
+    const taskDrawerLabel = goalPlanTaskOwner === 'ai' ? 'AI tasks' : 'Your tasks';
+    const previousGoal = goalProfiles[state.currentGoalIndex - 1];
+    const nextGoal = goalProfiles[state.currentGoalIndex + 1];
+
+    const goalSwitcherMarkup = `<div class="goal-plan-edge-switcher">
+      <button class="goal-plan-edge-handle" type="button" data-goal-list-toggle aria-expanded="${String(goalPlanListOpen)}" aria-label="Open goal list"><span>Goals</span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+      ${goalPlanListOpen ? `<button class="goal-plan-list-scrim" type="button" data-goal-list-close aria-label="Close goal list"></button><section class="goal-plan-list" aria-label="Choose a goal"><header><span><small>YOUR GOALS</small><b>Choose your mission</b></span><div><button type="button" data-goal-create aria-label="Add goal">+</button><button type="button" data-goal-list-close aria-label="Close goal list">&times;</button></div></header><label><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><input type="search" data-goal-plan-search placeholder="Find a goal" autocomplete="off"></label><div>${goalProfiles.map((profile, index) => { ensureGoalCommandModel(profile); return `<button class="goal-plan-list-item${index === state.currentGoalIndex ? ' active' : ''}" type="button" data-goal-plan-select="${index}" data-goal-search-value="${escapeGoalText(profile.title.toLowerCase())}"><i>${goalCategorySymbols[profile.category] || 'GO'}</i><span><b>${escapeGoalText(profile.title)}</b><small>${formatGoalPlanMoment(`${goalPlanDateKey(profile)}T${profile.scheduledTime || '23:59'}`)}</small></span><em>${profile.progress || 0}%</em></button>`; }).join('')}</div><footer><button type="button" data-goal-create><i>+</i>Add goal</button></footer></section>` : ''}
+    </div>`;
+
+    goalGameContent.innerHTML = `<div class="goal-plan-shell${goalPlanTaskDrawerOpen ? ' task-open' : ''}${goalPlanListOpen ? ' goal-list-open' : ''}" style="--observation-count:${scoredObservations.length};--suggestion-count:${Math.min(3, suggestions.length)}">
+      ${goalSwitcherMarkup}
+      <main class="goal-plan-stage">
+        <section class="goal-plan-visual${goalPlanTransitionDirection < 0 ? ' goal-switch-previous' : goalPlanTransitionDirection > 0 ? ' goal-switch-next' : ''}" aria-label="Goal visualization">
+          <img src="${artwork.url}" alt="${artwork.alt}">
+          <div class="goal-plan-image-shade"></div>
+          <div class="goal-plan-image-title"><small>${escapeGoalText(goal.category)} GOAL</small><h1 title="${escapeGoalText(goal.title)}">${escapeGoalText(goal.title)}</h1></div>
+          <span class="goal-plan-live"><i></i>${goal.monitoringPaused ? 'PAUSED' : 'GOAL ACTIVE'}</span>
+          <div class="goal-plan-image-actions">
+            <button class="goal-plan-image-share" type="button" data-goal-plan-share aria-label="Share goal"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.5-4.4M8.2 13.2l7.5 4.4"/></svg><span>Share</span></button>
+            <div class="goal-plan-image-more"><button type="button" data-goal-plan-more aria-haspopup="menu" aria-expanded="${String(goalPlanMoreOpen)}" aria-label="More goal actions"><i></i><i></i><i></i></button>${goalPlanMoreOpen ? `<div role="menu" aria-label="Goal actions"><button type="button" role="menuitem" data-goal-plan-edit><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 5.5 4 4M4 20l3.8-.8L19 8a2.1 2.1 0 0 0-3-3L4.8 16.2 4 20Z"/></svg><span>Edit goal</span><em aria-hidden="true">›</em></button><button class="delete" type="button" role="menuitem" data-goal-plan-delete><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg><span>Delete goal</span><em aria-hidden="true">›</em></button></div>` : ''}</div>
+          </div>
+          <div class="goal-plan-image-progress"><span><small>PROGRESS</small><b>${progress}%</b></span><i><em style="width:${progress}%"></em></i></div>
+          <div class="goal-plan-image-deadline"><small>DEADLINE</small><b>${goalPlanCountdown(goal)}</b><em>${formatGoalPlanMoment(deadline)}</em></div>
+          <div class="goal-plan-next"><i>→</i><span><small>NEXT MOVE</small><b title="${escapeGoalText(nextTask?.name || 'Review progress')}">${escapeGoalText(nextTask?.name || 'Review progress')}</b></span></div>
+          <nav class="goal-plan-art-navigation" aria-label="Switch goals">
+            ${previousGoal ? `<button class="previous" type="button" data-goal-direction="-1" aria-keyshortcuts="ArrowLeft" aria-label="Previous goal: ${escapeGoalText(previousGoal.title)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>` : ''}
+            ${nextGoal ? `<button class="next" type="button" data-goal-direction="1" aria-keyshortcuts="ArrowRight" aria-label="Next goal: ${escapeGoalText(nextGoal.title)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>` : ''}
+          </nav>
+        </section>
+
+        <aside class="goal-plan-intelligence">
+          <section class="goal-plan-observation" aria-label="Live goal observations">
+            <header><span><small><i aria-hidden="true"></i>LIVE SIGNALS</small><b>Observations</b></span><button type="button" data-goal-observation-open="${rankedObservations[0]?.originalIndex || 0}" aria-label="Open strongest observation">${scoredObservations.length}</button></header>
+            <div class="goal-observation-monitor"><span><i aria-hidden="true"><em></em><em></em><em></em></i>Analyzing now</span><small>INFLUENCE ON PREDICTION</small></div>
+            <div class="goal-observation-stream">
+              ${rankedObservations.map((observation, rank) => {
+                const signalIcon = observation.type === 'calendar'
+                  ? '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="14" rx="3"/><path d="M8 3v6M16 3v6M4 10h16"/></svg>'
+                  : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a4 4 0 0 0-4 4v1a4 4 0 0 0-2 7.46A4 4 0 0 0 10 21h2V3Z"/><path d="M12 6h2a3 3 0 0 1 3 3v1a3.5 3.5 0 0 1 1 6.85A3.5 3.5 0 0 1 14.5 21H12M8 8h4M7 14h5M12 11h4M12 17h5"/></svg>';
+                return `<button class="goal-observation-signal${rank === 0 ? ' strongest' : ''}" type="button" data-goal-observation-index="${observation.originalIndex}" aria-label="Open ${escapeGoalText(observation.title)}, ${observation.influence}% influence" style="--signal:${observation.influence};--signal-delay:${rank * 70}ms"><i>${signalIcon}</i><span><b title="${escapeGoalText(observation.title)}">${escapeGoalText(observation.title)}</b><small title="${escapeGoalText(observation.source)}">${rank === 0 ? 'TOP DRIVER' : escapeGoalText(observation.source)}</small><em><u></u></em></span><strong>${observation.influence}<small>%</small></strong></button>`;
+              }).join('') || '<div class="goal-observation-empty"><i></i><span><b>Waiting for signals</b><small>Connect a source to begin</small></span></div>'}
+            </div>
+            <footer><span><i></i>${scoredObservations.length} signals connected</span><b>Tap to explore <i>→</i></b></footer>
+          </section>
+
+          <button class="goal-plan-prediction" type="button" data-goal-prediction-open aria-label="Open prediction reasoning">
+            <div class="goal-plan-prediction-ring" style="--prediction:${prediction.probability}"><i class="prediction-comet" aria-hidden="true"></i><strong>${prediction.probability}<small>%</small></strong></div>
+            <span><small>AI PREDICTION</small><b>${escapeGoalText(prediction.risk)}</b><em title="${escapeGoalText(prediction.title)}">${escapeGoalText(prediction.title)}</em></span><i>›</i>
+          </button>
+
+          <section class="goal-plan-suggestions"><header><i class="goal-suggestion-spark" aria-hidden="true">✦</i><span><small>NEXT MOVES</small><b>Suggestions</b></span><em>${suggestions.filter(item => !item.decision).length}</em></header><div>${suggestions.slice(0, 3).map((suggestion, index) => `<article class="${suggestion.decision || ''}" data-goal-suggestion-open="${index}"><i>${suggestion.decision === 'confirmed' ? '✓' : index + 1}</i><span><small>${escapeGoalText(suggestion.label)}</small><b title="${escapeGoalText(suggestion.title)}">${escapeGoalText(suggestion.action || suggestion.title)}</b></span><div>${suggestion.decision ? `<em>${suggestion.decision === 'confirmed' ? 'Done' : 'Skipped'}</em>` : `<button class="primary" type="button" data-game-suggestion="confirm" data-suggestion-index="${index}">Do it</button><button type="button" data-game-suggestion="reject" data-suggestion-index="${index}">Skip</button>`}</div></article>`).join('') || '<span class="goal-plan-no-suggestion">All clear</span>'}</div></section>
+        </aside>
+      </main>
+
+      <section class="goal-plan-task-dock${goalPlanTaskDrawerOpen ? ' open' : ''}">
+        <button class="goal-plan-task-summary" type="button" data-goal-task-drawer-toggle aria-expanded="${String(goalPlanTaskDrawerOpen)}"><span><i class="human">YOU</i><b>${humanTasks.filter(task => !task.done).length}</b><small>to do</small></span><span><i class="ai">AI</i><b>${activeAiCount}</b><small>active</small></span><em></em><strong title="${escapeGoalText(nextTask?.name || 'All current work reviewed')}">${escapeGoalText(nextTask?.name || 'All current work reviewed')}</strong><small>${nextTask ? formatGoalPlanMoment(goalPlanTaskMoment(nextTask)) : 'Up to date'}</small><i class="chevron">⌃</i></button>
+        ${goalPlanTaskDrawerOpen ? `<div class="goal-plan-task-drawer"><header><div role="tablist" aria-label="Task owner"><button class="${goalPlanTaskOwner === 'human' ? 'active' : ''}" type="button" data-goal-task-owner="human"><i>YOU</i>Your tasks <em>${humanTasks.length}</em></button><button class="${goalPlanTaskOwner === 'ai' ? 'active' : ''}" type="button" data-goal-task-owner="ai"><i>AI</i>AI tasks <em>${aiTasks.length}</em></button></div><span><button type="button" data-game-subgoal-add>+ Subgoal</button><button class="primary" type="button" data-goal-task-add>+ Task</button><button type="button" data-goal-task-drawer-close aria-label="Close task drawer">&times;</button></span></header><div class="goal-plan-task-content" aria-label="${taskDrawerLabel}">${goalPlanTaskGroupsMarkup(goal, goalPlanTaskOwner)}</div>${goalPlanTaskEditorMarkup(goal)}${goalPlanSubgoalEditorMarkup(goal)}</div>` : ''}
+      </section>
+      ${goalPlanIntelligenceDrawerMarkup(goal, scoredObservations)}
+      ${goalPlanShareMarkup(goal, artwork, progress)}
+    </div>`;
+  }
+
   function renderGoalCommandCenter(goal) {
     ensureGoalCommandModel(goal);
     const observations = goal.observations || [
@@ -2858,6 +3419,7 @@
     // The compact Goal workspace is the only visible presentation. Keeping the
     // retired multi-panel UI out of the hot path makes goal switching immediate.
     renderGoalResultsSurface(goal);
+    renderGoalGameBoard(goal);
     return;
 
     activeGoalTitle.textContent = goal.title;
@@ -3044,6 +3606,45 @@
     }, reduceMotion ? 500 : 1750);
   }
 
+  function confirmGoalSuggestion(goal, suggestion) {
+    if (!goal || !suggestion || suggestion.decision) return false;
+    suggestion.decision = 'confirmed';
+    suggestion.executionState = 'preparing';
+    persistCustomGoals();
+    renderGoalCommandCenter(goal);
+    renderGoalCollection();
+    triggerReasoningUpdate('Plan updated from your decision');
+    haptic(14);
+    showToast(`${suggestion.action} approved - AI is preparing`);
+    window.setTimeout(() => {
+      if (!goalProfiles.includes(goal) || suggestion.decision !== 'confirmed') return;
+      suggestion.executionState = 'executing';
+      if (goalProfiles[state.currentGoalIndex] === goal) renderGoalCommandCenter(goal);
+      showToast(`${suggestion.action} is executing securely`);
+      window.setTimeout(() => {
+        if (!goalProfiles.includes(goal) || suggestion.decision !== 'confirmed') return;
+        const subgoal = goal.subgoals[Number(suggestion.updates)];
+        if (subgoal) {
+          ensureGoalCommandModel(goal);
+          const previouslyComplete = subgoal.executionTasks.filter(task => task.done).length;
+          subgoal.executionTasks.forEach(task => { task.done = true; task.state = 'Completed'; });
+          subgoal.confirmed = true;
+          goal.completedThisMonth = Math.max(0, Number(goal.completedThisMonth || 0) + subgoal.executionTasks.length - previouslyComplete);
+          syncGoalTaskStats(goal);
+          updateGoalCompletionSummary(goal);
+          persistGoalPlanOverrides();
+        }
+        suggestion.executionState = 'completed';
+        persistCustomGoals();
+        if (goalProfiles[state.currentGoalIndex] === goal) renderGoalCommandCenter(goal);
+        renderGoalCollection();
+        haptic(12);
+        showToast(`${suggestion.action} completed - goal plan updated`);
+      }, reduceMotion ? 0 : 1700);
+    }, reduceMotion ? 0 : 850);
+    return true;
+  }
+
   function closeGoalActionMenu() {
     goalActionMenu.classList.remove('visible');
     goalActionMenu.setAttribute('aria-hidden', 'true');
@@ -3070,6 +3671,7 @@
 
   function renderEmptyGoalWorkspace() {
     goalsWorkspace.classList.add('no-goals');
+    if (goalGameContent) goalGameContent.innerHTML = '<div class="goal-game-empty-state"><b>Create your first goal</b><button type="button" data-empty-goal-add>New goal</button></div>';
     renderGoalCollection();
     renderGoalRail();
     goalCommandTitle.textContent = 'Create your first goal';
@@ -3256,66 +3858,150 @@
   ];
 
   function sourceStatusLabel(source) {
+    if (source.aiEnabled === false && source.statusType !== 'revoked') return '<span class="source-status paused"><i></i>Paused</span>';
     return `<span class="source-status ${source.statusType}"><i></i>${source.status}</span>`;
+  }
+
+  function sourceAdapterIcon(source) {
+    const icons = {
+      iphone: '<rect x="8" y="3" width="16" height="26" rx="4"/><path d="M14 7h4M15 25h2"/>',
+      macbook: '<rect x="5" y="6" width="22" height="15" rx="2"/><path d="M3 25h26l-2 3H5l-2-3Z"/>',
+      dashcam: '<path d="M7 10h18a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V13a3 3 0 0 1 3-3Z"/><circle cx="17" cy="18" r="5"/><path d="m9 10 2-4h9l2 4"/>',
+      documents: '<path d="M9 3h11l7 7v19H9z"/><path d="M20 3v8h7M13 17h10M13 22h10"/>',
+      research: '<path d="M8 4h14a3 3 0 0 1 3 3v9"/><path d="M8 4a3 3 0 0 0-3 3v20h12"/><circle cx="22" cy="22" r="5"/><path d="m26 26 4 4"/>',
+      calendar: '<rect x="4" y="6" width="24" height="23" rx="4"/><path d="M4 13h24M10 3v6M22 3v6M10 18h4v4h-4z"/>',
+      notion: '<rect x="5" y="4" width="24" height="26" rx="3"/><path d="M10 24V10l12 14V10"/>',
+      fitness: '<path d="M17 28S5 21 5 13a6 6 0 0 1 11-3 6 6 0 0 1 11 3c0 8-10 15-10 15Z"/><path d="m9 18 4-1 2-5 4 10 2-5 4-1"/>',
+      identity: '<circle cx="16" cy="11" r="6"/><path d="M5 29c1-7 5-10 11-10s10 3 11 10"/><path d="m23 7 2 2 4-4"/>',
+      wechat: '<path d="M4 14c0-6 5-10 12-10s12 4 12 10-5 10-12 10c-2 0-4-.4-5.5-1.2L6 25l1.2-4C5.2 19.2 4 16.8 4 14Z"/><path d="M17 20c0-4 3.5-7 8-7s7 3 7 7-3 7-7 7c-1.3 0-2.5-.2-3.6-.7L18 28l.8-3c-1.1-1.3-1.8-3-1.8-5Z"/>',
+      drive: '<path d="m16 4 6 10H10L16 4Z"/><path d="m10 14-6 10h12l6-10H10Z"/><path d="m22 14 6 10H16l6-10Z"/>',
+      web: '<circle cx="16" cy="16" r="13"/><path d="M3 16h26M16 3c4 4 6 8 6 13s-2 9-6 13c-4-4-6-8-6-13s2-9 6-13Z"/>'
+    };
+    return `<svg viewBox="0 0 32 32" aria-hidden="true">${icons[source.id] || icons.web}</svg>`;
+  }
+
+  function reconnectSource(source, button) {
+    if (!source || source.statusType !== 'revoked' || button?.disabled) return;
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Connecting...';
+    }
+    window.setTimeout(() => {
+      source.status = 'Connected';
+      source.statusType = 'connected';
+      source.aiEnabled = true;
+      source.scopeEnabled = source.scopes.map(() => true);
+      source.lastSync = 'Reconnected now';
+      source.usedBy = 'Available for future authorized AI tasks';
+      renderSourceGrid();
+      if (state.selectedSourceId === source.id) renderSourceInspector(source);
+      showToast(`${source.name} connected securely`);
+    }, 650);
   }
 
   function renderSourceGrid() {
     const visibleSources = state.sourceFilter === 'all' ? dataSources : dataSources.filter(source => source.category === state.sourceFilter);
-    sourceCount.textContent = `${visibleSources.length} shown · 42 assets processed today`;
-    sourceGrid.innerHTML = visibleSources.map(source => `
-      <button class="source-card${source.id === state.selectedSourceId ? ' active' : ''}" type="button" data-source-id="${source.id}">
-        <header><span class="source-symbol ${source.category}"><i></i><i></i><i></i></span>${sourceStatusLabel(source)}</header>
-        <strong>${source.name}</strong><small>${source.type}</small>
-        <div><span>${source.method}</span><em>${source.lastSync}</em></div>
-        <footer><b>${source.assets}</b><span>View access →</span></footer>
-      </button>
+    sourceCount.textContent = `${visibleSources.length} source${visibleSources.length === 1 ? '' : 's'}`;
+    sourceGrid.innerHTML = visibleSources.map((source, index) => `
+      <article class="source-card${source.aiEnabled === false ? ' is-paused' : ''}" data-source-id="${source.id}" style="--card-order:${index}">
+        <span class="source-mini-icon ${source.category}">${sourceAdapterIcon(source)}</span>
+        <span class="source-card-copy"><strong>${source.name}</strong>${sourceStatusLabel(source)}</span>
+        <footer>
+          <span><small>Last sync</small><b>${source.lastSync}</b></span>
+          <button class="manage" type="button" data-source-manage="${source.id}" aria-haspopup="dialog"><span>Manage</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7.5 5 5 5-5 5"/></svg></button>
+        </footer>
+      </article>
     `).join('');
-    sourceGrid.querySelectorAll('[data-source-id]').forEach(button => button.addEventListener('click', () => selectSource(button.dataset.sourceId)));
+    sourceGrid.querySelectorAll('.source-card').forEach(card => {
+      card.addEventListener('pointermove', event => {
+        if (event.pointerType === 'touch') return;
+        const bounds = card.getBoundingClientRect();
+        const x = (event.clientX - bounds.left) / bounds.width;
+        const y = (event.clientY - bounds.top) / bounds.height;
+        card.style.setProperty('--glass-x', `${x * 100}%`);
+        card.style.setProperty('--glass-y', `${y * 100}%`);
+        card.style.setProperty('--tilt-x', `${(0.5 - y) * 3.5}deg`);
+        card.style.setProperty('--tilt-y', `${(x - 0.5) * 4.5}deg`);
+      });
+      card.addEventListener('pointerleave', () => {
+        card.style.removeProperty('--tilt-x');
+        card.style.removeProperty('--tilt-y');
+      });
+    });
+    sourceGrid.querySelectorAll('[data-source-manage]').forEach(button => button.addEventListener('click', () => selectSource(button.dataset.sourceManage, button)));
   }
 
   function renderSourceInspector(source) {
     const revoked = source.statusType === 'revoked';
+    if (!source.scopeEnabled) source.scopeEnabled = source.scopes.map(() => !revoked);
     sourceInspectorContent.innerHTML = `
-      <header class="source-detail-header"><span><i></i>AUTHORIZATION DETAIL</span>${sourceStatusLabel(source)}<h2>${source.name}</h2><p>${source.type} · ${source.method}</p></header>
+      <header class="source-detail-header"><span><i></i>AUTHORIZATION DETAIL</span>${sourceStatusLabel(source)}<h2 id="sourceInspectorTitle">${source.name}</h2><p>${source.type} · ${source.method}</p></header>
       ${revoked ? '<div class="revoked-banner"><i></i><span><strong>Access revoked</strong><small>This source is excluded from every future AI task.</small></span></div>' : ''}
-      <section class="source-detail-block"><header><strong>Authorized scope</strong><span>Minimum access</span></header>${source.scopes.map((scope, index) => `<button class="scope-toggle${revoked ? '' : ' on'}" type="button" data-scope-index="${index}" aria-pressed="${String(!revoked)}"><span><i></i>${scope}</span><em></em></button>`).join('')}</section>
+      <section class="source-availability"><span><strong>Available to Weeple</strong><small>${revoked ? 'Reconnect this source to make it available.' : 'Allow this source in future authorized AI tasks.'}</small></span><button class="source-adapter-toggle" type="button" aria-pressed="${String(!revoked && source.aiEnabled !== false)}" aria-label="${source.aiEnabled === false ? 'Resume' : 'Pause'} ${source.name}" ${revoked ? 'disabled' : ''}><i></i></button></section>
+      <section class="source-detail-block"><header><strong>Authorized scope</strong><span>Minimum access</span></header>${source.scopes.map((scope, index) => `<button class="scope-toggle${!revoked && source.scopeEnabled[index] ? ' on' : ''}" type="button" data-scope-index="${index}" aria-pressed="${String(!revoked && source.scopeEnabled[index])}" ${revoked ? 'disabled' : ''}><span><i></i>${scope}</span><em></em></button>`).join('')}</section>
       <section class="source-detail-block"><header><strong>Allowed purposes</strong><span>You control this</span></header><div class="purpose-chips">${source.purposes.map(purpose => `<span>${purpose}</span>`).join('')}</div></section>
       <section class="source-use-log"><small>RECENT AI USE</small><strong>${source.usedBy}</strong><span>Last synchronization: ${source.lastSync}</span></section>
       <section class="source-processing"><span><i></i><b>Processing location</b><small>${source.category === 'identity' ? 'Public discovery with review gate' : 'Encrypted local processing where available'}</small></span><em>${source.assets}</em></section>
-      <div class="source-detail-actions"><button class="source-sync" type="button" ${revoked ? 'disabled' : ''}>Sync now</button><button class="source-revoke" type="button" ${revoked ? 'disabled' : ''}>Revoke access</button></div>
+      <div class="source-detail-actions">${revoked ? '<button class="source-sync source-reconnect" type="button">Connect source</button>' : '<button class="source-sync" type="button">Sync now</button><button class="source-revoke" type="button">Disconnect</button>'}</div>
     `;
+    const availabilityButton = sourceInspectorContent.querySelector('.source-availability .source-adapter-toggle');
+    availabilityButton.addEventListener('click', () => {
+      if (revoked) return;
+      source.aiEnabled = source.aiEnabled === false;
+      renderSourceGrid();
+      renderSourceInspector(source);
+      window.requestAnimationFrame(() => sourceInspectorContent.querySelector('.source-availability .source-adapter-toggle')?.focus());
+      showToast(`${source.name} ${source.aiEnabled ? 'is available to Weeple' : 'is paused'}`);
+    });
     sourceInspectorContent.querySelectorAll('.scope-toggle').forEach(button => button.addEventListener('click', () => {
       if (revoked) return;
       const on = button.classList.toggle('on');
       button.setAttribute('aria-pressed', String(on));
+      source.scopeEnabled[Number(button.dataset.scopeIndex)] = on;
       showToast(`${button.textContent.trim()} ${on ? 'allowed' : 'excluded from future tasks'}`);
     }));
     const syncButton = sourceInspectorContent.querySelector('.source-sync');
     syncButton.addEventListener('click', () => {
+      if (syncButton.classList.contains('source-reconnect')) { reconnectSource(source, syncButton); return; }
       if (syncButton.disabled || syncButton.classList.contains('is-loading')) return;
       syncButton.classList.add('is-loading');
       syncButton.textContent = 'Synchronizing…';
       window.setTimeout(() => { syncButton.classList.remove('is-loading'); syncButton.textContent = 'Sync now'; showToast(`${source.name} synchronized securely`); }, 760);
     });
     const revokeButton = sourceInspectorContent.querySelector('.source-revoke');
-    revokeButton.addEventListener('click', () => {
-      if (revokeButton.disabled) return;
+    revokeButton?.addEventListener('click', () => {
       if (!revokeButton.classList.contains('confirming')) {
         revokeButton.classList.add('confirming');
-        revokeButton.textContent = 'Confirm revoke';
-        showToast('Confirm to stop all future AI use of this source');
+        revokeButton.textContent = 'Confirm disconnect';
+        showToast(`Confirm to disconnect ${source.name}`);
         return;
       }
-      source.status = 'Revoked'; source.statusType = 'revoked'; source.lastSync = 'Access stopped'; source.usedBy = 'Future AI use is blocked';
-      renderSourceGrid(); renderSourceInspector(source); showToast(`${source.name} access revoked`);
+      source.status = 'Revoked'; source.statusType = 'revoked'; source.aiEnabled = false; source.scopeEnabled = source.scopes.map(() => false); source.lastSync = 'Access stopped'; source.usedBy = 'Future AI use is blocked';
+      renderSourceGrid(); renderSourceInspector(source); showToast(`${source.name} disconnected`);
     });
   }
 
-  function selectSource(id) {
+  let sourceInspectorTriggerId = '';
+
+  function selectSource(id, trigger = null) {
     const source = dataSources.find(item => item.id === id) || dataSources[0];
     state.selectedSourceId = source.id;
-    renderSourceGrid();
+    sourceInspectorTriggerId = trigger?.dataset.sourceManage || source.id;
     renderSourceInspector(source);
+    sourceInspector.classList.add('visible');
+    sourceInspector.setAttribute('aria-hidden', 'false');
+    dataWorkspace.classList.add('inspector-open');
+    window.requestAnimationFrame(() => sourceInspectorClose.focus());
+  }
+
+  function closeSourceInspector(restoreFocus = true) {
+    if (!sourceInspector.classList.contains('visible')) return;
+    sourceInspector.classList.remove('visible');
+    sourceInspector.setAttribute('aria-hidden', 'true');
+    dataWorkspace.classList.remove('inspector-open');
+    if (restoreFocus && sourceInspectorTriggerId) {
+      window.requestAnimationFrame(() => sourceGrid.querySelector(`[data-source-manage="${sourceInspectorTriggerId}"]`)?.focus());
+    }
   }
 
   function openConnectionWizard() {
@@ -3404,9 +4090,9 @@
 
   function openDataWorkspace(announce = true) {
     state.dataWorkspaceActive = true; stopTopologyLoop(); dataWorkspace.classList.add('visible'); dataWorkspace.setAttribute('aria-hidden', 'false'); osShell.classList.add('data-page');
-    selectSource(state.selectedSourceId); focusCluster('data', false); if (announce) showToast('Personal data control center opened');
+    renderSourceGrid(); focusCluster('data', false); if (announce) showToast('Personal data control center opened');
   }
-  function closeDataWorkspace() { state.dataWorkspaceActive = false; dataWorkspace.classList.remove('visible'); dataWorkspace.setAttribute('aria-hidden', 'true'); osShell.classList.remove('data-page'); closeConnectionWizard(); }
+  function closeDataWorkspace() { state.dataWorkspaceActive = false; dataWorkspace.classList.remove('visible'); dataWorkspace.setAttribute('aria-hidden', 'true'); osShell.classList.remove('data-page'); closeSourceInspector(false); closeConnectionWizard(); }
   function openUseWorkspace(announce = true) {
     state.useWorkspaceActive = true; stopTopologyLoop(); useWorkspace.classList.add('visible'); useWorkspace.setAttribute('aria-hidden', 'false'); osShell.classList.add('use-page'); focusCluster('memory', false); if (announce) showToast('Active AI workspace opened');
   }
@@ -3545,10 +4231,412 @@
   goalDeleteCancel.addEventListener('click', closeGoalDeleteSheet);
   goalDeleteConfirm.addEventListener('click', deleteSelectedGoal);
   goalResultDrawerClose.addEventListener('click', closeGoalResultDrawer);
+
+  function commitGoalPlanChange(goal, message) {
+    syncGoalTaskStats(goal);
+    updateGoalCompletionSummary(goal);
+    goal.updated = 'Updated now';
+    persistCustomGoals();
+    persistGoalPlanOverrides();
+    renderGoalCommandCenter(goal);
+    renderGoalCollection();
+    if (typeof renderCalendar === 'function') renderCalendar('left', false);
+    if (message) showToast(message);
+  }
+
+  async function createGoalShareCard(goal, downloadOnly = false) {
+    const artwork = resolveGoalArtwork(goal);
+    const canvas = document.createElement('canvas');
+    canvas.width = 1200; canvas.height = 675;
+    const context = canvas.getContext('2d');
+    const image = new Image();
+    image.src = artwork.url;
+    await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject; });
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const shade = context.createLinearGradient(0, 0, canvas.width, 0);
+    shade.addColorStop(0, 'rgba(10,16,26,.86)'); shade.addColorStop(.62, 'rgba(10,16,26,.22)'); shade.addColorStop(1, 'rgba(10,16,26,.08)');
+    context.fillStyle = shade; context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = '#ff681f'; context.beginPath(); context.arc(82, 78, 9, 0, Math.PI * 2); context.fill();
+    context.fillStyle = '#ffffff'; context.font = '700 22px Arial'; context.fillText(`${String(goal.category).toUpperCase()} GOAL`, 108, 86);
+    context.font = '800 58px Arial';
+    const title = goal.title.length > 38 ? `${goal.title.slice(0, 36)}…` : goal.title;
+    context.fillText(title, 72, 190);
+    context.fillStyle = '#ff7430'; context.font = '800 112px Arial'; context.fillText(`${goal.progress}%`, 72, 340);
+    context.fillStyle = '#ffffff'; context.font = '700 25px Arial'; context.fillText(`Target · ${formatGoalPlanMoment(`${goalPlanDateKey(goal)}T${goal.scheduledTime || '23:59'}`)}`, 78, 405);
+    context.fillStyle = 'rgba(255,255,255,.8)'; context.font = '600 22px Arial'; context.fillText('Making meaningful progress with Weeple', 78, 580);
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+    if (!blob) throw new Error('Share card could not be created');
+    const filename = `${goalPlanSlug(goal.title)}-progress.png`;
+    const file = new File([blob], filename, { type: 'image/png' });
+    if (!downloadOnly && navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+      await navigator.share({ title: goal.title, text: `${goal.progress}% toward ${goal.title}`, files: [file] });
+      return 'shared';
+    }
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a'); link.href = url; link.download = filename; link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    try { await navigator.clipboard?.writeText(`${goal.progress}% toward ${goal.title}`); } catch (error) { /* download remains available */ }
+    return 'downloaded';
+  }
+
+  function navigateGoalPlanBy(direction) {
+    const normalizedDirection = direction < 0 ? -1 : direction > 0 ? 1 : 0;
+    const nextIndex = state.currentGoalIndex + normalizedDirection;
+    if (!normalizedDirection || nextIndex < 0 || nextIndex >= goalProfiles.length) {
+      haptic(4);
+      return false;
+    }
+
+    goalPlanListOpen = false;
+    goalPlanMoreOpen = false;
+    goalPlanIntelDetail = null;
+    goalPlanShareOpen = false;
+    goalPlanTaskEditor = null;
+    goalPlanSubgoalEditor = null;
+    goalPlanFocusedTaskId = '';
+    goalPlanTransitionDirection = normalizedDirection;
+    window.clearTimeout(goalPlanTransitionTimer);
+    selectGoal(nextIndex);
+
+    window.requestAnimationFrame(() => {
+      const preferredArrow = goalGameContent.querySelector(`[data-goal-direction="${normalizedDirection}"]`)
+        || goalGameContent.querySelector(`[data-goal-direction="${normalizedDirection * -1}"]`);
+      preferredArrow?.focus({ preventScroll: true });
+    });
+
+    goalPlanTransitionTimer = window.setTimeout(() => {
+      goalPlanTransitionDirection = 0;
+      goalGameContent.querySelector('.goal-plan-visual')?.classList.remove('goal-switch-previous', 'goal-switch-next');
+    }, reduceMotion ? 0 : 430);
+    haptic(8);
+    return true;
+  }
+
+  function goalPlanDirectionAtPoint(clientX, clientY) {
+    const arrows = [...goalGameContent.querySelectorAll('[data-goal-direction]')];
+    const matchedArrow = arrows.find((arrow) => {
+      const bounds = arrow.getBoundingClientRect();
+      return clientX >= bounds.left && clientX <= bounds.right && clientY >= bounds.top && clientY <= bounds.bottom;
+    });
+    return matchedArrow ? Number(matchedArrow.dataset.goalDirection) : 0;
+  }
+
+  goalGameContent?.addEventListener('click', (event) => {
+    if (!event.target.closest('.goal-plan-intel-scrim,.goal-plan-share-scrim')) return;
+    const direction = goalPlanDirectionAtPoint(event.clientX, event.clientY);
+    if (!direction) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    navigateGoalPlanBy(direction);
+  }, true);
+
+  goalGameContent?.addEventListener('click', (event) => {
+    if (event.target.closest('[data-empty-goal-add]')) { openGoalCreateSheet(); return; }
+    const goal = goalProfiles[state.currentGoalIndex];
+    if (!goal) return;
+
+    if (event.target.closest('[data-goal-list-toggle]')) { goalPlanListOpen = !goalPlanListOpen; renderGoalGameBoard(goal); if (goalPlanListOpen) window.requestAnimationFrame(() => goalGameContent.querySelector('.goal-plan-list input')?.focus()); haptic(5); return; }
+    if (event.target.closest('[data-goal-list-close]')) { goalPlanListOpen = false; renderGoalGameBoard(goal); return; }
+    const directionButton = event.target.closest('[data-goal-direction]');
+    if (directionButton) {
+      navigateGoalPlanBy(Number(directionButton.dataset.goalDirection));
+      return;
+    }
+    const goalSelect = event.target.closest('[data-goal-plan-select]');
+    if (goalSelect) { window.clearTimeout(goalPlanTransitionTimer); goalPlanTransitionDirection = 0; goalPlanListOpen = false; goalPlanMoreOpen = false; goalPlanIntelDetail = null; goalPlanFocusedTaskId = ''; selectGoal(Number(goalSelect.dataset.goalPlanSelect)); haptic(8); return; }
+    if (event.target.closest('[data-goal-create]')) { goalPlanListOpen = false; openGoalCreateSheet(); return; }
+    if (event.target.closest('[data-goal-plan-more]')) {
+      goalPlanMoreOpen = !goalPlanMoreOpen;
+      renderGoalGameBoard(goal);
+      window.requestAnimationFrame(() => goalGameContent.querySelector(goalPlanMoreOpen ? '.goal-plan-image-more [role="menu"] button' : '[data-goal-plan-more]')?.focus());
+      haptic(5);
+      return;
+    }
+    if (event.target.closest('[data-goal-plan-edit]')) { goalPlanMoreOpen = false; openGoalEditSheet(); return; }
+    if (event.target.closest('[data-goal-plan-delete]')) { goalPlanMoreOpen = false; openGoalDeleteSheet(); return; }
+    if (event.target.closest('[data-goal-plan-share]')) { goalPlanMoreOpen = false; goalPlanShareOpen = true; renderGoalGameBoard(goal); return; }
+    if (event.target.closest('[data-goal-share-close]')) { goalPlanShareOpen = false; renderGoalGameBoard(goal); return; }
+    const shareButton = event.target.closest('[data-goal-share-confirm],[data-goal-share-download]');
+    if (shareButton) {
+      shareButton.disabled = true; shareButton.textContent = 'Preparing...';
+      createGoalShareCard(goal, shareButton.hasAttribute('data-goal-share-download')).then(result => { goalPlanShareOpen = false; renderGoalGameBoard(goal); showToast(result === 'shared' ? 'Goal momentum shared' : 'Private goal card downloaded'); }).catch(error => { shareButton.disabled = false; shareButton.textContent = 'Try again'; showToast('Sharing is unavailable in this browser'); });
+      return;
+    }
+    const suggestionOpen = event.target.closest('[data-goal-suggestion-open]');
+    if (suggestionOpen && !event.target.closest('[data-game-suggestion]')) { goalPlanIntelDetail = { type: 'suggestion', index: Number(suggestionOpen.dataset.goalSuggestionOpen) }; renderGoalGameBoard(goal); haptic(6); return; }
+    const observationOpen = event.target.closest('[data-goal-observation-index],[data-goal-observation-open]');
+    if (observationOpen) { goalPlanIntelDetail = { type: 'observation', index: Number(observationOpen.dataset.goalObservationIndex || observationOpen.dataset.goalObservationOpen || 0) }; renderGoalGameBoard(goal); haptic(6); return; }
+    if (event.target.closest('[data-goal-prediction-open]')) { goalPlanIntelDetail = { type: 'prediction' }; renderGoalGameBoard(goal); haptic(6); return; }
+    if (event.target.closest('[data-goal-intel-close]')) { goalPlanIntelDetail = null; renderGoalGameBoard(goal); return; }
+    if (event.target.closest('[data-goal-task-drawer-toggle]')) { goalPlanTaskDrawerOpen = !goalPlanTaskDrawerOpen; goalPlanTaskEditor = null; goalPlanSubgoalEditor = null; renderGoalGameBoard(goal); haptic(6); return; }
+    if (event.target.closest('[data-goal-task-drawer-close]')) { goalPlanTaskDrawerOpen = false; goalPlanTaskEditor = null; goalPlanSubgoalEditor = null; renderGoalGameBoard(goal); return; }
+    const ownerButton = event.target.closest('[data-goal-task-owner]');
+    if (ownerButton) { goalPlanTaskOwner = ownerButton.dataset.goalTaskOwner; goalPlanTaskEditor = null; renderGoalGameBoard(goal); haptic(5); return; }
+    if (event.target.closest('[data-goal-task-add]')) { goalPlanSubgoalEditor = null; goalPlanTaskEditor = { owner: goalPlanTaskOwner, subgoalIndex: Math.max(0, goal.openSubgoalIndex || 0), taskIndex: -1 }; renderGoalGameBoard(goal); window.setTimeout(() => goalGameContent.querySelector('[name="taskName"]')?.focus(), 30); return; }
+    if (event.target.closest('[data-goal-task-editor-close]')) { goalPlanTaskEditor = null; renderGoalGameBoard(goal); return; }
+    if (event.target.closest('[data-goal-subgoal-editor-close]')) { goalPlanSubgoalEditor = null; renderGoalGameBoard(goal); return; }
+    const taskAction = event.target.closest('[data-goal-task-action]');
+    if (taskAction) {
+      const [subgoalIndex, taskIndex] = taskAction.dataset.taskPath.split(':').map(Number);
+      const task = goal.subgoals[subgoalIndex]?.executionTasks?.[taskIndex];
+      if (!task) return;
+      const action = taskAction.dataset.goalTaskAction;
+      if (action === 'edit') { goalPlanTaskEditor = { owner: task.owner, subgoalIndex, taskIndex }; renderGoalGameBoard(goal); return; }
+      if (action === 'delete') {
+        if (taskAction.dataset.confirm !== 'true') { taskAction.dataset.confirm = 'true'; taskAction.textContent = 'Confirm'; window.setTimeout(() => { if (taskAction.isConnected) { taskAction.dataset.confirm = 'false'; taskAction.textContent = 'Delete'; } }, 2200); return; }
+        goal.subgoals[subgoalIndex].executionTasks.splice(taskIndex, 1); goalPlanTaskEditor = null; commitGoalPlanChange(goal, `${task.name} deleted`); return;
+      }
+      if (action === 'toggle') { task.done = !task.done; task.state = task.done ? 'Completed' : 'Ready now'; commitGoalPlanChange(goal, task.done ? 'Task completed' : 'Task reopened'); haptic(10); return; }
+      if (action === 'run') { task.aiState = 'running'; task.done = false; task.state = 'Working'; commitGoalPlanChange(goal, 'AI preparation started'); haptic(9); return; }
+      if (action === 'pause') { task.aiState = 'queued'; task.done = false; task.state = 'Queued'; commitGoalPlanChange(goal, 'AI preparation paused'); haptic(8); return; }
+      if (action === 'review') { goalPlanIntelDetail = { type: 'task', subgoalIndex, taskIndex }; renderGoalGameBoard(goal); haptic(6); return; }
+      if (action === 'cycle') {
+        task.aiState = task.aiState === 'queued' ? 'running' : task.aiState === 'running' ? 'prepared' : 'queued';
+        task.done = task.aiState === 'prepared'; task.state = task.aiState === 'running' ? 'Working' : task.aiState === 'prepared' ? 'Completed' : 'Queued';
+        commitGoalPlanChange(goal, task.aiState === 'running' ? 'AI work started' : task.aiState === 'prepared' ? 'AI output prepared for review' : 'AI work queued'); haptic(9); return;
+      }
+    }
+    const acceptButton = event.target.closest('[data-game-subgoal-accept]');
+    const rejectButton = event.target.closest('[data-game-subgoal-reject]');
+    const restoreButton = event.target.closest('[data-game-subgoal-restore]');
+    const editButton = event.target.closest('[data-game-subgoal-edit]');
+    const deleteButton = event.target.closest('[data-game-subgoal-delete]');
+    const suggestionButton = event.target.closest('[data-game-suggestion]');
+
+    if (event.target.closest('[data-game-subgoal-add]')) {
+      goalPlanTaskEditor = null;
+      goalPlanSubgoalEditor = -1;
+      renderGoalGameBoard(goal);
+      window.setTimeout(() => goalGameContent.querySelector('[name="subgoalName"]')?.focus(), 30);
+      return;
+    }
+    if (acceptButton) {
+      const subgoal = goal.subgoals[Number(acceptButton.dataset.gameSubgoalAccept)];
+      if (!subgoal) return;
+      subgoal.confirmed = true;
+      subgoal.rejected = false;
+      subgoal.state = subgoal.state === 'Completed' ? 'Completed' : 'Active';
+      goal.updated = 'Updated now';
+      persistCustomGoals(); persistGoalPlanOverrides(); renderGoalCommandCenter(goal); renderGoalCollection();
+      showToast(`${subgoal.name} accepted`); haptic(12);
+      return;
+    }
+    if (rejectButton) {
+      const subgoal = goal.subgoals[Number(rejectButton.dataset.gameSubgoalReject)];
+      if (!subgoal) return;
+      subgoal.confirmed = false;
+      subgoal.rejected = true;
+      subgoal.state = 'Rejected';
+      goal.updated = 'Updated now';
+      persistCustomGoals(); persistGoalPlanOverrides(); renderGoalCommandCenter(goal); renderGoalCollection();
+      showToast(`${subgoal.name} rejected - no action will run`); haptic(9);
+      return;
+    }
+    if (restoreButton) {
+      const subgoal = goal.subgoals[Number(restoreButton.dataset.gameSubgoalRestore)];
+      if (!subgoal) return;
+      subgoal.rejected = false;
+      subgoal.confirmed = true;
+      subgoal.state = 'Active';
+      goal.updated = 'Updated now';
+      persistCustomGoals(); persistGoalPlanOverrides(); renderGoalCommandCenter(goal); renderGoalCollection();
+      showToast(`${subgoal.name} restored to your plan`); haptic(10);
+      return;
+    }
+    if (editButton) {
+      const index = Number(editButton.dataset.gameSubgoalEdit);
+      goalPlanTaskEditor = null;
+      goalPlanSubgoalEditor = index;
+      renderGoalGameBoard(goal);
+      window.setTimeout(() => goalGameContent.querySelector('[name="subgoalName"]')?.select(), 30);
+      return;
+    }
+    if (deleteButton) {
+      const index = Number(deleteButton.dataset.gameSubgoalDelete);
+      const subgoal = goal.subgoals[index];
+      if (!subgoal) return;
+      if (goal.subgoals.length === 1) { showToast('Keep at least one subgoal'); return; }
+      if (deleteButton.dataset.confirmDelete !== 'true') {
+        deleteButton.dataset.confirmDelete = 'true';
+        deleteButton.textContent = 'Confirm';
+        window.setTimeout(() => {
+          if (!deleteButton.isConnected) return;
+          deleteButton.dataset.confirmDelete = 'false';
+          deleteButton.textContent = 'Delete';
+        }, 2400);
+        return;
+      }
+      goal.subgoals.splice(index, 1);
+      goal.updated = 'Updated now';
+      syncGoalTaskStats(goal);
+      persistCustomGoals(); persistGoalPlanOverrides(); renderGoalCommandCenter(goal); renderGoalCollection();
+      showToast(`${subgoal.name} deleted`); haptic(10);
+      return;
+    }
+    if (suggestionButton) {
+      const suggestion = goal.suggestions?.[Number(suggestionButton.dataset.suggestionIndex)];
+      if (!suggestion || suggestion.decision) return;
+      if (suggestionButton.dataset.gameSuggestion === 'confirm') {
+        confirmGoalSuggestion(goal, suggestion);
+      } else {
+        suggestion.decision = 'rejected';
+        persistCustomGoals(); renderGoalCommandCenter(goal); renderGoalCollection();
+        showToast('Suggestion skipped - no action taken'); haptic(8);
+      }
+    }
+  });
+  goalGameContent?.addEventListener('submit', (event) => {
+    const suggestionForm = event.target.closest('[data-goal-suggestion-schedule]');
+    if (suggestionForm) {
+      event.preventDefault();
+      const goal = goalProfiles[state.currentGoalIndex];
+      const suggestion = goal?.suggestions?.[Number(suggestionForm.dataset.suggestionIndex)];
+      if (!goal || !suggestion) return;
+      const data = new FormData(suggestionForm);
+      suggestion.scheduledAt = `${data.get('suggestionDate')}T${data.get('suggestionTime')}`;
+      suggestion.approvalConfirmed = true;
+      goalPlanIntelDetail = null;
+      persistCustomGoals(); persistGoalPlanOverrides(); renderGoalGameBoard(goal);
+      showToast('Suggestion timing saved'); haptic(8);
+      return;
+    }
+    const subgoalForm = event.target.closest('[data-goal-subgoal-form]');
+    if (subgoalForm) {
+      event.preventDefault();
+      const goal = goalProfiles[state.currentGoalIndex];
+      const name = String(new FormData(subgoalForm).get('subgoalName') || '').trim();
+      if (!goal || !name) return;
+      const index = Number(subgoalForm.dataset.subgoalIndex);
+      if (index >= 0 && goal.subgoals[index]) {
+        goal.subgoals[index].name = name;
+      } else {
+        goal.subgoals.push({ id: `subgoal-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name, done: 0, total: 0, state: 'Active', origin: 'user', confirmed: true, rejected: false, executionTasks: [], aiSeeded: true });
+      }
+      goalPlanSubgoalEditor = null;
+      commitGoalPlanChange(goal, index >= 0 ? 'Subgoal updated' : 'Your subgoal was added');
+      haptic(10);
+      return;
+    }
+    const form = event.target.closest('[data-goal-task-form]');
+    if (!form) return;
+    event.preventDefault();
+    const goal = goalProfiles[state.currentGoalIndex];
+    if (!goal) return;
+    const data = new FormData(form);
+    const name = String(data.get('taskName') || '').trim();
+    const owner = data.get('taskOwner') === 'ai' ? 'ai' : 'human';
+    const targetSubgoalIndex = Number(data.get('subgoalIndex'));
+    const date = String(data.get('taskDate') || '');
+    const time = String(data.get('taskTime') || '');
+    const endTime = String(data.get('taskEndTime') || shiftGoalTime(time, 45));
+    if (!name || !date || !time || !goal.subgoals[targetSubgoalIndex]) return;
+
+    const originalSubgoalIndex = Number(form.dataset.editSubgoal);
+    const originalTaskIndex = Number(form.dataset.editTask);
+    const originalTask = originalTaskIndex >= 0
+      ? goal.subgoals[originalSubgoalIndex]?.executionTasks?.[originalTaskIndex]
+      : null;
+    const task = originalTask || { id: `goal-task-${Date.now()}-${Math.random().toString(36).slice(2, 7)}` };
+    task.name = name;
+    task.owner = owner;
+    if (owner === 'ai') {
+      task.done = task.aiState === 'prepared';
+      task.aiState = task.aiState || 'queued';
+      task.state = task.aiState === 'running' ? 'Working' : task.aiState === 'prepared' ? 'Completed' : 'Queued';
+      task.startsAt = `${date}T${time}`;
+      task.expectedAt = `${date}T${endTime || shiftGoalTime(time, 45)}`;
+      delete task.dueAt;
+    } else {
+      task.done = Boolean(task.done && originalTask?.owner === 'human');
+      task.state = task.done ? 'Completed' : 'Ready now';
+      task.dueAt = `${date}T${time}`;
+      delete task.startsAt;
+      delete task.expectedAt;
+      delete task.aiState;
+    }
+    if (originalTask) {
+      if (originalSubgoalIndex !== targetSubgoalIndex) {
+        goal.subgoals[originalSubgoalIndex].executionTasks.splice(originalTaskIndex, 1);
+        goal.subgoals[targetSubgoalIndex].executionTasks.push(task);
+      }
+    } else {
+      goal.subgoals[targetSubgoalIndex].executionTasks.push(task);
+    }
+    goalPlanTaskOwner = owner;
+    goalPlanTaskEditor = null;
+    goalPlanFocusedTaskId = task.id;
+    commitGoalPlanChange(goal, originalTask ? 'Task updated everywhere' : 'Task added to Goal and Calendar');
+    haptic(10);
+  });
+  goalGameContent?.addEventListener('change', (event) => {
+    const ownerInput = event.target.closest('[data-goal-task-form] input[name="taskOwner"]');
+    if (!ownerInput) return;
+    const form = ownerInput.closest('[data-goal-task-form]');
+    const isAi = ownerInput.value === 'ai';
+    form.querySelector('.task-ai-finish')?.classList.toggle('visible', isAi);
+    const timeLabel = form.querySelector('input[name="taskTime"]')?.closest('label')?.querySelector('span');
+    if (timeLabel) timeLabel.textContent = isAi ? 'START' : 'DUE';
+  });
+  goalGameContent?.addEventListener('input', (event) => {
+    if (!event.target.matches('[data-goal-plan-search]')) return;
+    const query = event.target.value.trim().toLowerCase();
+    goalGameContent.querySelectorAll('[data-goal-search-value]').forEach(item => {
+      item.hidden = query && !item.dataset.goalSearchValue.includes(query);
+    });
+  });
+  goalGameContent?.addEventListener('keydown', (event) => {
+    if (event.target.closest('.goal-plan-art-navigation') && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+      event.preventDefault();
+      navigateGoalPlanBy(event.key === 'ArrowLeft' ? -1 : 1);
+      return;
+    }
+    const observationNode = event.target.closest('[data-goal-observation-index]');
+    if (!observationNode || (event.key !== 'Enter' && event.key !== ' ')) return;
+    event.preventDefault();
+    const goal = goalProfiles[state.currentGoalIndex];
+    if (!goal) return;
+    goalPlanIntelDetail = { type: 'observation', index: Number(observationNode.dataset.goalObservationIndex) };
+    renderGoalGameBoard(goal);
+  });
   goalResultDrawerContent.addEventListener('click', (event) => {
     if (goalResultDrawer.dataset.view !== 'plan') return;
     const goal = goalProfiles[state.currentGoalIndex];
     if (!goal) return;
+    const addButton = event.target.closest('[data-subgoal-add]');
+    if (addButton) {
+      const addForm = goalResultDrawerContent.querySelector('[data-subgoal-add-form]');
+      addForm?.classList.add('is-open');
+      addButton.setAttribute('aria-expanded', 'true');
+      window.setTimeout(() => addForm?.querySelector('input')?.focus(), 40);
+      haptic(5);
+      return;
+    }
+    const addCancelButton = event.target.closest('[data-subgoal-add-cancel]');
+    if (addCancelButton) {
+      const addForm = addCancelButton.closest('[data-subgoal-add-form]');
+      addForm?.reset();
+      addForm?.classList.remove('is-open');
+      goalResultDrawerContent.querySelector('[data-subgoal-add]')?.setAttribute('aria-expanded', 'false');
+      haptic(4);
+      return;
+    }
+    const confirmButton = event.target.closest('[data-subgoal-confirm]');
+    if (confirmButton) {
+      const subgoalIndex = Number(confirmButton.dataset.subgoalConfirm);
+      const subgoal = goal.subgoals[subgoalIndex];
+      if (!subgoal) return;
+      subgoal.confirmed = true;
+      if (!subgoal.state || subgoal.state === 'Proposed') subgoal.state = 'Active';
+      goal.updated = 'Updated now';
+      persistCustomGoals();
+      persistGoalPlanOverrides();
+      renderGoalCommandCenter(goal);
+      renderGoalCollection();
+      renderGoalResultDrawer('plan');
+      showToast(`${subgoal.name} confirmed in your plan`);
+      haptic(12);
+      return;
+    }
     const editButton = event.target.closest('[data-subgoal-edit]');
     if (editButton) {
       const card = editButton.closest('[data-subgoal-card]');
@@ -3600,10 +4688,46 @@
     renderGoalCommandCenter(goal);
     renderGoalCollection();
     renderGoalResultDrawer('plan');
-    showToast(`${removedName} removed from the confirmed plan`);
+    showToast(`${removedName} removed from the plan`);
     haptic(10);
   });
   goalResultDrawerContent.addEventListener('submit', (event) => {
+    const addForm = event.target.closest('[data-subgoal-add-form]');
+    if (addForm) {
+      event.preventDefault();
+      const goal = goalProfiles[state.currentGoalIndex];
+      const input = addForm.querySelector('input[name="subgoalName"]');
+      const newName = input?.value.trim().replace(/[<>]/g, '');
+      if (!goal || !newName) {
+        input?.focus();
+        return;
+      }
+      if (goal.subgoals.some(subgoal => subgoal.name.toLowerCase() === newName.toLowerCase())) {
+        showToast('That subgoal is already in this plan');
+        input?.focus();
+        return;
+      }
+      goal.subgoals.push({
+        name: newName,
+        done: 0,
+        total: 1,
+        state: 'Ready',
+        origin: 'user',
+        confirmed: true,
+        executionTasks: [{ name: `Advance ${newName}`, done: false, state: 'Ready now' }]
+      });
+      goal.taskLabels.push(`Advance ${newName}`);
+      goal.updated = 'Updated now';
+      syncGoalTaskStats(goal);
+      persistCustomGoals();
+      persistGoalPlanOverrides();
+      renderGoalCommandCenter(goal);
+      renderGoalCollection();
+      renderGoalResultDrawer('plan');
+      showToast(`${newName} added as your subgoal`);
+      haptic(12);
+      return;
+    }
     const form = event.target.closest('[data-subgoal-form]');
     if (!form) return;
     event.preventDefault();
@@ -3689,8 +4813,7 @@
       return;
     }
     if (actionType === 'confirm' && suggestion) {
-      const hiddenConfirm = reasoningSuggestionList.querySelector(`[data-suggestion-index="${suggestionIndex}"] [data-suggestion-decision="confirm"]`);
-      hiddenConfirm?.click();
+      confirmGoalSuggestion(goal, suggestion);
       return;
     }
     if (actionType === 'activity' || actionType === 'plan') {
@@ -3876,7 +4999,7 @@
       return;
     }
     if (action === 'confirm') {
-      goal.subgoals.push({ name: draft.name, done: 0, total: 2, state: 'Active', confirmed: true, executionTasks: [{ name: `Clarify success for ${draft.name}`, done: false, state: 'Ready now' }, { name: `Advance ${draft.name}`, done: false, state: 'Queued' }] });
+      goal.subgoals.push({ name: draft.name, done: 0, total: 2, state: 'Active', origin: 'ai', confirmed: true, executionTasks: [{ name: `Clarify success for ${draft.name}`, done: false, state: 'Ready now' }, { name: `Advance ${draft.name}`, done: false, state: 'Queued' }] });
       goal.taskLabels.push(`Advance ${draft.name}`);
       goal.draftSubgoals.splice(proposalIndex, 1);
       syncGoalTaskStats(goal);
@@ -4052,39 +5175,7 @@
     }
     const result = card.querySelector('.suggestion-result span');
     if (decision === 'confirm') {
-      if (!suggestion) return;
-      suggestion.decision = 'confirmed';
-      suggestion.executionState = 'preparing';
-      persistCustomGoals();
-      renderGoalCommandCenter(goal);
-      renderGoalCollection();
-      triggerReasoningUpdate('Plan updated from your decision');
-      haptic(14);
-      showToast(`${suggestion.action} approved - AI is preparing`);
-      window.setTimeout(() => {
-        if (!goalProfiles.includes(goal) || suggestion.decision !== 'confirmed') return;
-        suggestion.executionState = 'executing';
-        if (goalProfiles[state.currentGoalIndex] === goal) renderGoalCommandCenter(goal);
-        showToast(`${suggestion.action} is executing securely`);
-        window.setTimeout(() => {
-          if (!goalProfiles.includes(goal) || suggestion.decision !== 'confirmed') return;
-          const subgoal = goal.subgoals[Number(card.dataset.updatesSubgoal)];
-          if (subgoal) {
-            ensureGoalCommandModel(goal);
-            const previouslyComplete = subgoal.executionTasks.filter(task => task.done).length;
-            subgoal.executionTasks.forEach(task => { task.done = true; task.state = 'Completed'; });
-            goal.completedThisMonth = Math.max(0, Number(goal.completedThisMonth || 0) + subgoal.executionTasks.length - previouslyComplete);
-            syncGoalTaskStats(goal);
-            updateGoalCompletionSummary(goal);
-          }
-          suggestion.executionState = 'completed';
-          persistCustomGoals();
-          if (goalProfiles[state.currentGoalIndex] === goal) renderGoalCommandCenter(goal);
-          renderGoalCollection();
-          haptic(12);
-          showToast(`${suggestion.action} completed - goal plan updated`);
-        }, reduceMotion ? 0 : 1700);
-      }, reduceMotion ? 0 : 850);
+      confirmGoalSuggestion(goal, suggestion);
       return;
     } else {
       card.classList.remove('is-adjusting');
@@ -4200,6 +5291,8 @@
     renderSourceGrid();
   }));
   addSourceButton.addEventListener('click', openConnectionWizard);
+  sourceInspectorClose.addEventListener('click', () => closeSourceInspector());
+  sourceInspectorBackdrop.addEventListener('click', () => closeSourceInspector());
   connectionWizardClose.addEventListener('click', closeConnectionWizard);
   wizardCancel.addEventListener('click', closeConnectionWizard);
   connectionWizard.querySelectorAll('[data-wizard-source]').forEach(button => button.addEventListener('click', () => {
@@ -4340,6 +5433,7 @@
   const calendarToday = document.getElementById('calendarToday');
   const calendarPrevious = document.getElementById('calendarPrevious');
   const calendarNext = document.getElementById('calendarNext');
+  const calendarAddTask = document.getElementById('calendarAddTask');
   const calendarMonthButton = document.getElementById('calendarMonthButton');
   const monthPopover = document.getElementById('monthPopover');
   const monthPickerTitle = document.getElementById('monthPickerTitle');
@@ -4347,6 +5441,19 @@
   const monthPickerNext = document.getElementById('monthPickerNext');
   const monthPickerToday = document.getElementById('monthPickerToday');
   const monthDays = document.getElementById('monthDays');
+  const calendarTaskModal = document.getElementById('calendarTaskModal');
+  const calendarTaskBackdrop = document.getElementById('calendarTaskBackdrop');
+  const calendarTaskClose = document.getElementById('calendarTaskClose');
+  const calendarTaskCancel = document.getElementById('calendarTaskCancel');
+  const calendarTaskForm = document.getElementById('calendarTaskForm');
+  const calendarTaskName = document.getElementById('calendarTaskName');
+  const calendarTaskDate = document.getElementById('calendarTaskDate');
+  const calendarTaskTime = document.getElementById('calendarTaskTime');
+  const calendarTaskGoal = document.getElementById('calendarTaskGoal');
+  const calendarTaskSubgoal = document.getElementById('calendarTaskSubgoal');
+  const calendarTaskTimeLabel = document.getElementById('calendarTaskTimeLabel');
+  const calendarTaskEndField = document.getElementById('calendarTaskEndField');
+  const calendarTaskEndTime = document.getElementById('calendarTaskEndTime');
   const calendarReferenceDate = new Date();
   calendarReferenceDate.setHours(12, 0, 0, 0);
   let selectedCalendarDate = new Date(calendarReferenceDate);
@@ -4354,6 +5461,13 @@
   let calendarPointerStart = null;
   let calendarSuppressClick = false;
   let calendarTransitioning = false;
+  let calendarUserTasks = [];
+  try {
+    const storedCalendarTasks = JSON.parse(localStorage.getItem('weeple-calendar-tasks') || '[]');
+    if (Array.isArray(storedCalendarTasks)) calendarUserTasks = storedCalendarTasks;
+  } catch (error) {
+    // Local persistence is optional; the task still works for this session.
+  }
 
   const calendarAgendaSets = [
     [
@@ -4386,7 +5500,13 @@
     { label: 'FOUND 3 INSIGHTS', detail: 'Useful patterns were discovered', badge: 'AI Discovery', icon: 'spark' },
     { label: 'AI IS PREPARING', detail: 'Materials are being assembled', badge: 'AI Planning', icon: 'clock' }
   ];
-  const calendarCardColors = ['16,185,129', '139,92,246', '255,183,3'];
+  // Day-state accents keep the carousel easy to scan without coloring the
+  // surrounding Overview background.
+  const calendarCardColors = {
+    past: '100,116,139',
+    today: '255,107,44',
+    upcoming: '139,92,246'
+  };
 
   function sameCalendarDay(a, b) {
     return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -4400,6 +5520,75 @@
 
   function calendarDateKey(date) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  }
+
+  function calendarDateFromKey(key) {
+    const [year, month, day] = String(key).split('-').map(Number);
+    return new Date(year, month - 1, day, 12);
+  }
+
+  function calendarTasksForDate(date) {
+    const key = calendarDateKey(date);
+    return calendarUserTasks.filter(task => task.date === key);
+  }
+
+  function linkedGoalTasksForDate(date) {
+    const key = calendarDateKey(date);
+    const linked = [];
+    goalProfiles.forEach((goal, goalIndex) => {
+      ensureGoalCommandModel(goal);
+      goal.subgoals.forEach((subgoal, subgoalIndex) => {
+        if (subgoal.rejected) return;
+        subgoal.executionTasks.forEach((task, taskIndex) => {
+          const moment = goalPlanTaskMoment(task);
+          if (!moment || String(moment).slice(0, 10) !== key) return;
+          linked.push({ goal, goalIndex, subgoal, subgoalIndex, task, taskIndex });
+        });
+      });
+    });
+    return linked;
+  }
+
+  function calendarItemOwner(item) {
+    if (item.owner === 'ai' || item.owner === 'human') return item.owner;
+    return item.type === 'action' || item.type === 'goal' ? 'human' : 'ai';
+  }
+
+  function persistCalendarTasks() {
+    try { localStorage.setItem('weeple-calendar-tasks', JSON.stringify(calendarUserTasks)); } catch (error) { /* storage is optional */ }
+  }
+
+  function openCalendarTaskModal() {
+    calendarTaskForm.reset();
+    calendarTaskDate.value = calendarDateKey(selectedCalendarDate);
+    calendarTaskTime.value = '09:00';
+    calendarTaskEndTime.value = '09:45';
+    calendarTaskGoal.innerHTML = '<option value="">Standalone task</option>' + goalProfiles.map((goal, index) => `<option value="${index}">${escapeGoalText(goal.title)}</option>`).join('');
+    calendarTaskSubgoal.innerHTML = '<option value="">Choose a goal first</option>';
+    calendarTaskSubgoal.disabled = true;
+    calendarTaskEndField.classList.remove('visible');
+    calendarTaskTimeLabel.textContent = 'DUE TIME';
+    calendarTaskEndTime.required = false;
+    calendarTaskModal.classList.add('open');
+    calendarTaskModal.setAttribute('aria-hidden', 'false');
+    window.setTimeout(() => calendarTaskName.focus(), 180);
+  }
+
+  function closeCalendarTaskModal() {
+    calendarTaskModal.classList.remove('open');
+    calendarTaskModal.setAttribute('aria-hidden', 'true');
+  }
+
+  function updateCalendarSubgoalOptions() {
+    const goal = goalProfiles[Number(calendarTaskGoal.value)];
+    if (!goal) {
+      calendarTaskSubgoal.innerHTML = '<option value="">Choose a goal first</option>';
+      calendarTaskSubgoal.disabled = true;
+      return;
+    }
+    ensureGoalCommandModel(goal);
+    calendarTaskSubgoal.disabled = false;
+    calendarTaskSubgoal.innerHTML = goal.subgoals.map((subgoal, index) => `<option value="${index}">${escapeGoalText(subgoal.name)}</option>`).join('');
   }
 
   function scheduledGoalsForDate(date) {
@@ -4471,26 +5660,65 @@
       const isPast = !isToday && date < calendarReferenceDate;
       const setIndex = sameCalendarDay(date, calendarReferenceDate)
         ? 0
-        : Math.abs(date.getDate() + date.getMonth()) % calendarAgendaSets.length;
-      const baseAgenda = calendarAgendaSets[setIndex];
-      const backgroundAgenda = isFuture
-        ? baseAgenda.map(item => ({ ...item, type: 'planning', label: 'AI IS PREPARING', status: 'Preparing', icon: 'clock' }))
-        : baseAgenda;
+        : Math.abs(date.getDate() + date.getMonth()) % sideDayStories.length;
       const scheduledGoals = scheduledGoalsForDate(date);
+      const linkedTasks = linkedGoalTasksForDate(date).map(({ goal, goalIndex, subgoal, subgoalIndex, task, taskIndex }) => ({
+        type: task.owner === 'ai' ? 'planning' : 'action',
+        owner: task.owner,
+        label: task.owner === 'ai' ? 'AI TASK' : 'YOUR TASK',
+        title: escapeGoalText(task.name),
+        detail: task.owner === 'ai'
+          ? `${String(task.startsAt).slice(11, 16)}–${String(task.expectedAt).slice(11, 16)} · ${escapeGoalText(subgoal.name)}`
+          : `${escapeGoalText(subgoal.name)} · ${task.done ? 'Completed' : 'To do'}`,
+        status: task.owner === 'ai' ? task.aiState : task.done ? 'Done' : 'To do',
+        icon: task.owner === 'ai' ? 'spark' : task.done ? 'check' : 'target',
+        goalIndex, subgoalIndex, taskIndex, taskId: task.id,
+        linkedTask: true,
+        timelineTime: String(goalPlanTaskMoment(task)).slice(11, 16),
+        rgb: task.owner === 'ai' ? '139,92,246' : '255,94,0'
+      }));
+      const addedTasks = calendarTasksForDate(date).map(task => ({
+        type: task.owner === 'ai' ? 'planning' : 'action',
+        owner: task.owner,
+        label: task.owner === 'ai' ? 'AI TASK' : 'YOUR TASK',
+        title: escapeGoalText(task.title),
+        detail: task.owner === 'ai' ? 'Weeple will prepare this for you' : 'Added by you',
+        status: task.owner === 'ai' ? 'Queued' : 'To do',
+        icon: task.owner === 'ai' ? 'spark' : 'check',
+        timelineTime: task.time,
+        rgb: task.owner === 'ai' ? '139,92,246' : '255,94,0'
+      }));
       const goalAgenda = scheduledGoals.map(({ goal, index }) => ({
-        type: 'goal', label: 'SCHEDULED GOAL', title: `${goal.scheduledTime ? `${goal.scheduledTime} · ` : ''}${goal.title}`,
+        type: 'goal', owner: 'human', label: 'SCHEDULED GOAL', title: `${goal.scheduledTime ? `${goal.scheduledTime} · ` : ''}${goal.title}`,
         detail: 'Tap to open this goal and its current context', status: `${goal.progress}%`, icon: 'target', goalIndex: index,
         timelineTime: goal.scheduledTime || 'GOAL', rgb: goal.accent || '255,94,0'
       }));
-      const agenda = [...goalAgenda, ...backgroundAgenda].slice(0, 3);
-      const story = scheduledGoals.length
-        ? { label: 'GOAL SCHEDULED', detail: scheduledGoals[0].goal.title, badge: scheduledGoals[0].goal.scheduledTime || 'Open goal', icon: 'target' }
-        : isFuture
+      // A day should reflect its actual assignments. Do not pad it with demo
+      // entries or truncate it to three items: some days are empty and busy
+      // days need to expose every task.
+      const agenda = [...linkedTasks, ...addedTasks, ...goalAgenda].sort((a, b) => {
+        const aTime = /^\d{2}:\d{2}$/.test(a.timelineTime || '') ? a.timelineTime : '99:99';
+        const bTime = /^\d{2}:\d{2}$/.test(b.timelineTime || '') ? b.timelineTime : '99:99';
+        return aTime.localeCompare(bTime);
+      });
+      const agendaCount = agenda.length;
+      // Keep adjacent day cards visually distinct. Goal accents belong to the
+      // agenda item inside the card, not to the calendar day itself.
+      const cardRgb = isToday
+        ? calendarCardColors.today
+        : isPast
+          ? calendarCardColors.past
+          : calendarCardColors.upcoming;
+      // Side cards describe the day state. Scheduled goals remain available
+      // in the expanded agenda when that day moves to the center.
+      const story = isFuture
         ? sideDayStories[2]
         : isPast
           ? sideDayStories[0]
-          : sideDayStories[setIndex];
-      const cardRgb = scheduledGoals.length ? (scheduledGoals[0].goal.accent || '255,94,0') : isToday ? '255,94,0' : calendarCardColors[setIndex];
+          : scheduledGoals.length
+            ? { label: 'GOAL SCHEDULED', detail: scheduledGoals[0].goal.title, badge: scheduledGoals[0].goal.scheduledTime || 'Open goal', icon: 'target' }
+            : sideDayStories[setIndex];
+      const storyRgb = isPast ? '16,185,129' : isFuture ? '139,92,246' : cardRgb;
       const heading = isToday
         ? `Today · ${new Intl.DateTimeFormat(undefined, { month: 'long', day: 'numeric' }).format(date)}`
         : new Intl.DateTimeFormat(undefined, { month: 'long', day: 'numeric' }).format(date);
@@ -4498,12 +5726,13 @@
       card.className = `calendar-day-card ${isFuture ? 'is-upcoming' : isPast ? 'is-past' : 'is-today'}`;
       card.dataset.position = String(offset);
       card.style.setProperty('--card-rgb', cardRgb);
+      card.style.setProperty('--story-rgb', storyRgb);
       card.setAttribute('aria-label', new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(date));
       card.innerHTML = `
         <header class="day-card-heading">
-          <small>${offset === 0 ? (scheduledGoals.length ? `${scheduledGoals.length} GOAL${scheduledGoals.length === 1 ? '' : 'S'} SCHEDULED` : isFuture ? 'AI IS PREPARING' : `${agenda.length} AI RESULTS PREPARED`) : new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(date).toUpperCase()}</small>
+          <small>${offset === 0 ? `${agendaCount} ${agendaCount === 1 ? 'TASK' : 'TASKS'} SCHEDULED` : new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(date).toUpperCase()}</small>
           <strong>${heading}</strong>
-          <p>${scheduledGoals.length ? 'Scheduled goals are connected to your Goals workspace' : isFuture ? 'AI is assembling the most useful context for this day' : `AI has prepared ${agenda.length} useful results for you`}</p>
+          <p>${agendaCount ? 'Your actions and AI work are organized by time' : 'No tasks or goals are assigned to this day'}</p>
         </header>
         <div class="side-day-overview">
           <span class="side-orb"><svg viewBox="0 0 24 24" aria-hidden="true">${calendarIcons[story.icon]}</svg></span>
@@ -4513,19 +5742,25 @@
           ${isFuture ? '<span class="preparing-loader" aria-label="AI preparation in progress"><i></i><i></i><i></i></span>' : ''}
         </div>
         <div class="expanded-agenda">
-          ${agenda.map(item => {
-            const itemRgb = item.rgb || (item.type === 'complete' ? '16,185,129' : item.type === 'planning' ? '139,92,246' : '255,94,0');
+          ${agenda.length ? agenda.map(item => {
+            const owner = calendarItemOwner(item);
+            const itemRgb = item.rgb || (owner === 'ai' ? '139,92,246' : '255,94,0');
             const timeMatch = String(item.title).match(/(?:^|[^\d])(\d{1,2}:\d{2})(?:\b|$)/);
             const timelineTime = item.timelineTime || timeMatch?.[1] || (item.type === 'complete' ? 'DONE' : item.type === 'planning' ? 'NEXT' : 'NOW');
             const itemContent = `
               <time class="calendar-timeline-time">${timelineTime}</time>
               <span class="carousel-agenda-icon"><svg viewBox="0 0 24 24" aria-hidden="true">${calendarIcons[item.icon]}</svg></span>
-              <span class="carousel-agenda-copy"><small>${item.label}</small><strong>${item.title}</strong><span>${item.detail}</span></span>
+              <span class="carousel-agenda-copy"><small><em class="calendar-owner owner-${owner}">${owner === 'ai' ? 'AI' : 'YOU'}</em>${item.label}</small><strong>${item.title}</strong><span>${item.detail}</span></span>
               <span class="carousel-agenda-status">${item.status}</span>`;
             return item.goalIndex !== undefined
-              ? `<button class="carousel-agenda-item calendar-goal-item" type="button" data-calendar-goal="${item.goalIndex}" style="--item-rgb:${itemRgb}" aria-label="Open goal: ${escapeGoalText(goalProfiles[item.goalIndex]?.title || item.title)}">${itemContent}</button>`
+              ? `<button class="carousel-agenda-item calendar-goal-item${item.linkedTask ? ' linked-task' : ''}" type="button" data-calendar-goal="${item.goalIndex}"${item.linkedTask ? ` data-calendar-task="${item.taskId}" data-calendar-task-owner="${item.owner}"` : ''} style="--item-rgb:${itemRgb}" aria-label="Open goal: ${escapeGoalText(goalProfiles[item.goalIndex]?.title || item.title)}">${itemContent}</button>`
               : `<div class="carousel-agenda-item" style="--item-rgb:${itemRgb}">${itemContent}</div>`;
-          }).join('')}
+          }).join('') : `
+            <div class="calendar-empty-agenda">
+              <span><svg viewBox="0 0 24 24" aria-hidden="true">${calendarIcons.check}</svg></span>
+              <strong>Nothing scheduled</strong>
+              <p>This day is clear. Add a task when you are ready.</p>
+            </div>`}
         </div>
       `;
       card.querySelectorAll('[data-calendar-goal]').forEach(goalButton => {
@@ -4534,6 +5769,11 @@
           const goalIndex = Number(goalButton.dataset.calendarGoal);
           if (!goalProfiles[goalIndex]) return;
           state.currentGoalIndex = goalIndex;
+          if (goalButton.dataset.calendarTask) {
+            goalPlanTaskDrawerOpen = true;
+            goalPlanTaskOwner = goalButton.dataset.calendarTaskOwner === 'ai' ? 'ai' : 'human';
+            goalPlanFocusedTaskId = goalButton.dataset.calendarTask;
+          }
           openPrimaryView('goals');
           haptic(8);
         });
@@ -4580,6 +5820,56 @@
 
   calendarPrevious.addEventListener('click', () => moveCalendar(-1));
   calendarNext.addEventListener('click', () => moveCalendar(1));
+  calendarAddTask.addEventListener('click', openCalendarTaskModal);
+  calendarTaskBackdrop.addEventListener('click', closeCalendarTaskModal);
+  calendarTaskClose.addEventListener('click', closeCalendarTaskModal);
+  calendarTaskCancel.addEventListener('click', closeCalendarTaskModal);
+  calendarTaskGoal.addEventListener('change', updateCalendarSubgoalOptions);
+  calendarTaskForm.querySelectorAll('input[name="calendarTaskOwner"]').forEach(input => input.addEventListener('change', () => {
+    const isAi = input.checked && input.value === 'ai';
+    if (!input.checked) return;
+    calendarTaskEndField.classList.toggle('visible', isAi);
+    calendarTaskEndTime.required = isAi;
+    calendarTaskTimeLabel.textContent = isAi ? 'START TIME' : 'DUE TIME';
+    if (isAi && !calendarTaskEndTime.value) calendarTaskEndTime.value = shiftGoalTime(calendarTaskTime.value || '09:00', 45);
+  }));
+  calendarTaskTime.addEventListener('change', () => {
+    if (calendarTaskEndField.classList.contains('visible')) calendarTaskEndTime.value = shiftGoalTime(calendarTaskTime.value || '09:00', 45);
+  });
+  calendarTaskForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const title = calendarTaskName.value.trim();
+    const date = calendarTaskDate.value;
+    const time = calendarTaskTime.value;
+    const owner = new FormData(calendarTaskForm).get('calendarTaskOwner') === 'ai' ? 'ai' : 'human';
+    if (!title || !date || !time) return;
+    const goalIndex = calendarTaskGoal.value === '' ? -1 : Number(calendarTaskGoal.value);
+    const subgoalIndex = calendarTaskSubgoal.value === '' ? -1 : Number(calendarTaskSubgoal.value);
+    const goal = goalProfiles[goalIndex];
+    const subgoal = goal?.subgoals?.[subgoalIndex];
+    if (goal && subgoal) {
+      const task = { id: `goal-task-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name: title, owner, done: false };
+      if (owner === 'ai') {
+        task.aiState = 'queued'; task.state = 'Queued'; task.startsAt = `${date}T${time}`;
+        task.expectedAt = `${date}T${calendarTaskEndTime.value || shiftGoalTime(time, 45)}`;
+      } else {
+        task.state = 'Ready now'; task.dueAt = `${date}T${time}`;
+      }
+      subgoal.executionTasks.push(task);
+      syncGoalTaskStats(goal);
+      goal.updated = 'Updated now';
+      persistCustomGoals(); persistGoalPlanOverrides(); renderGoalCollection();
+      if (state.goalWorkspaceActive && state.currentGoalIndex === goalIndex) renderGoalCommandCenter(goal);
+    } else {
+      calendarUserTasks.unshift({ id: `task-${Date.now()}`, title, date, time, owner, expectedTime: owner === 'ai' ? (calendarTaskEndTime.value || shiftGoalTime(time, 45)) : '' });
+      persistCalendarTasks();
+    }
+    selectedCalendarDate = calendarDateFromKey(date);
+    monthPickerCursor = new Date(selectedCalendarDate.getFullYear(), selectedCalendarDate.getMonth(), 1, 12);
+    closeCalendarTaskModal();
+    renderCalendar('left');
+    showToast(goal && subgoal ? 'Task linked to Goal and Calendar' : owner === 'ai' ? 'AI task added to the calendar' : 'Your task was added to the calendar');
+  });
   calendarMonthButton.addEventListener('click', () => toggleMonthPicker());
   monthPickerPrevious.addEventListener('click', () => {
     monthPickerCursor.setMonth(monthPickerCursor.getMonth() - 1);
@@ -4759,16 +6049,38 @@
     }
   });
   document.addEventListener('keydown', (event) => {
+    if (event.key === 'Tab' && sourceInspector.classList.contains('visible')) {
+      const focusable = [...sourceInspector.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+        .filter(element => element.offsetParent !== null && element !== sourceInspectorBackdrop);
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (first && last && event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (first && last && !event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
     if (event.key === 'Escape') {
+      const goalPlanMoreWasOpen = goalPlanMoreOpen;
+      const goalPlanWasOpen = goalPlanListOpen || goalPlanMoreOpen || goalPlanIntelDetail || goalPlanShareOpen || goalPlanTaskEditor || goalPlanSubgoalEditor !== null;
+      goalPlanListOpen = false;
+      goalPlanMoreOpen = false;
+      goalPlanIntelDetail = null;
+      goalPlanShareOpen = false;
+      goalPlanTaskEditor = null;
+      goalPlanSubgoalEditor = null;
+      if (goalPlanWasOpen && state.goalWorkspaceActive && goalProfiles[state.currentGoalIndex]) {
+        renderGoalGameBoard(goalProfiles[state.currentGoalIndex]);
+        if (goalPlanMoreWasOpen) window.requestAnimationFrame(() => goalGameContent.querySelector('[data-goal-plan-more]')?.focus());
+      }
       closeGoalActionMenu();
       closeGoalMonitoringPopover();
       closeGoalResultDrawer();
       closeGoalDeleteSheet();
       closeCollaborationSheet();
       closeGoalCreateSheet();
+      closeSourceInspector();
       closeConnectionWizard();
       closeMemoryProposal();
       closeMemoryDrawer();
+      closeCalendarTaskModal();
       closeOnboarding();
       toggleCommand(false);
       notificationPanel.classList.remove('open');
@@ -4781,6 +6093,13 @@
     }
   });
   document.addEventListener('pointerdown', (event) => {
+    if (goalPlanMoreOpen && !event.target.closest('.goal-plan-image-more')) {
+      window.setTimeout(() => {
+        if (!goalPlanMoreOpen) return;
+        goalPlanMoreOpen = false;
+        if (state.goalWorkspaceActive && goalProfiles[state.currentGoalIndex]) renderGoalGameBoard(goalProfiles[state.currentGoalIndex]);
+      }, 0);
+    }
     if (!goalActionMenu.contains(event.target) && !goalMoreButton.contains(event.target)) closeGoalActionMenu();
     if (!goalMonitoringPopover.contains(event.target) && !goalMonitoringButton.contains(event.target)) closeGoalMonitoringPopover();
     if (!notificationPanel.contains(event.target) && !noticeButton.contains(event.target)) {
@@ -4825,6 +6144,7 @@
   const initialCluster = window.location.hash.slice(1);
   if (initialCluster === 'setup') openOnboarding();
   else if (initialCluster === 'new-goal') { openPrimaryView('goals', false); openGoalCreateSheet(); }
+  else if (initialCluster === 'goal-plan') { openPrimaryView('goals', false); renderGoalResultDrawer('plan'); }
   else if (initialCluster === 'connect-source') { openPrimaryView('data', false); openConnectionWizard(); }
   else if (initialCluster === 'memory-manager') { openPrimaryView('memory', false); openMemoryDrawer(); }
   else if (focusContent[initialCluster]) openPrimaryView(initialCluster, false);

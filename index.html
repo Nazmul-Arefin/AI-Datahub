@@ -66,8 +66,9 @@
 
       <section class="calendar-panel" aria-label="AI calendar">
         <header class="calendar-toolbar">
-          <div><span><i></i>AI CALENDAR</span><button class="month-selector" id="calendarMonthButton" type="button" aria-expanded="false"><strong id="calendarMonth">July 2026</strong><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button></div>
+          <div><span><i></i>YOU + AI CALENDAR</span><button class="month-selector" id="calendarMonthButton" type="button" aria-expanded="false"><strong id="calendarMonth">July 2026</strong><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button></div>
           <div class="calendar-controls">
+            <button class="calendar-add-task" id="calendarAddTask" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Task</span></button>
             <button class="today-button" id="calendarToday" type="button">Today</button>
             <button class="calendar-arrow" id="calendarPrevious" type="button" aria-label="Previous day"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
             <button class="calendar-arrow" id="calendarNext" type="button" aria-label="Next day"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
@@ -87,6 +88,36 @@
         <div class="calendar-swipe-hint"><span></span>Swipe to explore your days<span></span></div>
       </section>
 
+      <section class="calendar-task-modal" id="calendarTaskModal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="calendarTaskTitle">
+        <button class="calendar-task-backdrop" id="calendarTaskBackdrop" type="button" aria-label="Close task form"></button>
+        <div class="calendar-task-sheet">
+          <header>
+            <span><i></i>NEW CALENDAR TASK</span>
+            <button id="calendarTaskClose" type="button" aria-label="Close task form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
+          </header>
+          <h2 id="calendarTaskTitle">Add the next move</h2>
+          <p>Choose who owns it. Weeple keeps your work and AI work clear.</p>
+          <form id="calendarTaskForm">
+            <label class="calendar-task-title-field"><span>TASK</span><input id="calendarTaskName" type="text" maxlength="60" required placeholder="What needs to happen?"></label>
+            <div class="calendar-task-link">
+              <label><span>LINK TO GOAL <em>OPTIONAL</em></span><select id="calendarTaskGoal"><option value="">Standalone task</option></select></label>
+              <label><span>SUBGOAL</span><select id="calendarTaskSubgoal" disabled><option value="">Choose a goal first</option></select></label>
+            </div>
+            <div class="calendar-task-schedule">
+              <label><span>DATE</span><input id="calendarTaskDate" type="date" required></label>
+              <label><span id="calendarTaskTimeLabel">DUE TIME</span><input id="calendarTaskTime" type="time" required></label>
+              <label class="calendar-task-end-field" id="calendarTaskEndField"><span>EXPECTED FINISH</span><input id="calendarTaskEndTime" type="time"></label>
+            </div>
+            <fieldset class="calendar-task-owner">
+              <legend>WHO WILL DO IT?</legend>
+              <label><input type="radio" name="calendarTaskOwner" value="human" checked><span class="owner-choice-human"><i>YOU</i><b>My task</b><small>I will take action</small></span></label>
+              <label><input type="radio" name="calendarTaskOwner" value="ai"><span class="owner-choice-ai"><i>AI</i><b>AI task</b><small>Weeple will prepare it</small></span></label>
+            </fieldset>
+            <footer><button id="calendarTaskCancel" type="button">Cancel</button><button class="calendar-task-submit" type="submit">Add task</button></footer>
+          </form>
+        </div>
+      </section>
+
       <section class="goals-workspace" id="goalsWorkspace" aria-label="Goal management workspace" aria-hidden="true">
         <div class="goal-space-glow" aria-hidden="true"></div>
         <div class="reasoning-ambient" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
@@ -104,6 +135,7 @@
 
         <aside class="goal-library" aria-label="Your goal collection">
           <div class="goal-focus-switcher">
+            <span class="choose-goal-label"><i></i>CHOOSE GOAL</span>
             <button class="goal-focus-arrow" id="goalFocusPrevious" type="button" aria-label="Previous goal">‹</button>
             <button class="goal-focus-picker" id="goalFocusPicker" type="button" aria-expanded="false" aria-controls="goalPickerPanel"><small id="goalFocusPosition">Goal 1 of 5</small><b id="goalFocusTitle">Business Trip to Beijing Tomorrow</b><span id="goalFocusStatus">Waiting for you</span></button>
             <button class="goal-focus-arrow" id="goalFocusNext" type="button" aria-label="Next goal">›</button>
@@ -143,11 +175,10 @@
             </div>
             <div class="goal-command-actions" aria-label="Goal controls">
               <button class="goal-edit-button" id="goalMenuButton" type="button" aria-label="Edit selected goal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16-.7 4.2L7.5 19 18 8.5 14.5 5 4 15.5Z"/><path d="m13.5 6 3.5 3.5"/></svg><span>Edit</span></button>
+              <button class="goal-delete-button goal-delete-quick" id="goalDeleteButton" type="button" aria-label="Delete selected goal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5"/></svg><span>Delete</span></button>
               <button class="goal-more-button" id="goalMoreButton" type="button" aria-label="More goal actions" aria-expanded="false" aria-controls="goalActionMenu"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button>
             </div>
-            <div class="goal-action-menu" id="goalActionMenu" aria-hidden="true">
-              <button class="goal-delete-button" id="goalDeleteButton" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5"/></svg><span>Delete goal</span></button>
-            </div>
+            <div class="goal-action-menu" id="goalActionMenu" aria-hidden="true"></div>
             <div class="goal-command-controls">
               <button class="autonomy-chip" id="goalMonitoringButton" type="button" aria-expanded="false"><i></i><span><b id="goalMonitoringLabel">Safe work runs automatically</b><small id="goalMonitoringDescription">External actions always ask first</small></span></button>
               <div class="goal-monitoring-popover" id="goalMonitoringPopover" aria-hidden="true"></div>
@@ -159,6 +190,10 @@
             </div>
             <button class="goal-edge-cue previous" id="goalPreviousCue" type="button" aria-label="Previous goal"><span>‹</span><small></small></button>
             <button class="goal-edge-cue next" id="goalNextCue" type="button" aria-label="Next goal"><small></small><span>›</span></button>
+          </section>
+
+          <section class="goal-game-board" id="goalGameBoard" aria-label="Interactive goal journey">
+            <div id="goalGameContent" aria-live="polite"></div>
           </section>
 
           <section class="goal-logic-surface goal-simple-surface" aria-labelledby="goalLogicTitle">
@@ -191,7 +226,7 @@
               <aside class="goal-ai-now" aria-labelledby="goalResultsTitle">
                 <header class="results-panel-heading">
                   <span><i></i><small>WEEPLE RIGHT NOW</small><h2 id="goalResultsTitle">You don’t need to manage this</h2></span>
-                  <em id="goalResultsSummary">Updated now</em>
+                  <div class="goal-ai-live-state" aria-label="Weeple AI is actively monitoring"><span aria-hidden="true"><i></i><i></i><i></i><i></i></span><b>AI ACTIVE</b><em id="goalResultsSummary">Updated now</em></div>
                 </header>
                 <section class="goal-results-panel">
                   <div class="goal-result-stream" id="goalResultStream" aria-live="polite"></div>
@@ -358,41 +393,37 @@
         <div class="data-space-ambient" aria-hidden="true"><i></i><i></i><i></i></div>
         <header class="workspace-heading data-heading">
           <div class="data-heading-copy">
-            <span><i></i>PERSONAL CONTEXT · PRIVATE BY DEFAULT</span>
+            <span><i></i>PRIVATE CONNECTIONS</span>
             <h1>Import Data</h1>
-            <p>Connect only what helps. Every source stays visible, reversible, and under your control.</p>
+            <p>Choose what Weeple can access.</p>
           </div>
           <div class="data-heading-actions">
-            <span class="data-privacy-state"><i></i><b>Protected</b><small>Minimum access active</small></span>
             <button id="addSourceButton" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Add source</span></button>
           </div>
         </header>
 
-        <aside class="data-category-rail" aria-label="Data source categories">
-          <strong>YOUR DATA</strong>
-          <button class="active" type="button" data-source-filter="all"><i>12</i><span>All</span></button>
-          <button type="button" data-source-filter="device"><i>03</i><span>Devices</span></button>
-          <button type="button" data-source-filter="files"><i>03</i><span>Files</span></button>
-          <button type="button" data-source-filter="productivity"><i>02</i><span>Work</span></button>
-          <button type="button" data-source-filter="health"><i>01</i><span>Health</span></button>
-          <button type="button" data-source-filter="identity"><i>02</i><span>Identity</span></button>
-          <button type="button" data-source-filter="communication"><i>01</i><span>Social</span></button>
-        </aside>
-
         <main class="data-main">
-          <section class="value-pipeline" aria-label="Personal data value chain">
-            <span class="pipeline-live"><i></i>HOW YOUR CONTEXT WORKS</span>
-            <div><span><i>01</i><b>You authorize</b><small>Minimum useful scope</small></span><em>→</em><span><i>02</i><b>Weeple understands</b><small>Local context first</small></span><em>→</em><span><i>03</i><b>AI prepares</b><small>Transparent outputs</small></span><em>→</em><span><i>04</i><b>You decide</b><small>Confirm or adjust</small></span><em>→</em><span><i>05</i><b>Nothing is hidden</b><small>Review access anytime</small></span></div>
-          </section>
-          <header class="source-toolbar">
-            <div><small>CONNECTED CONTEXT</small><strong>Your sources</strong><span id="sourceCount">12 shown · 42 assets processed today</span></div>
-            <div class="source-health-summary" aria-label="Connection health"><span><i></i><b>8</b> current</span><span><i></i><b>2</b> reviewing</span></div>
+          <header class="data-gallery-toolbar">
+            <nav class="data-category-rail" aria-label="Filter data sources">
+              <button class="active" type="button" data-source-filter="all"><span>All sources</span></button>
+              <button type="button" data-source-filter="device"><span>Devices</span></button>
+              <button type="button" data-source-filter="files"><span>Files</span></button>
+              <button type="button" data-source-filter="productivity"><span>Work</span></button>
+              <button type="button" data-source-filter="health"><span>Health</span></button>
+              <button type="button" data-source-filter="identity"><span>Identity</span></button>
+              <button type="button" data-source-filter="communication"><span>Social</span></button>
+            </nav>
+            <span class="adapter-count" id="sourceCount">12 sources</span>
           </header>
           <section class="source-grid" id="sourceGrid" aria-live="polite"></section>
         </main>
 
-        <aside class="source-inspector" id="sourceInspector" aria-label="Selected source authorization details">
-          <div id="sourceInspectorContent"></div>
+        <aside class="source-inspector" id="sourceInspector" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="sourceInspectorTitle">
+          <div class="source-inspector-backdrop" id="sourceInspectorBackdrop" aria-hidden="true"></div>
+          <section class="source-inspector-panel">
+            <button class="source-inspector-close" id="sourceInspectorClose" type="button" aria-label="Close authorization detail"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
+            <div id="sourceInspectorContent"></div>
+          </section>
         </aside>
 
         <section class="connection-wizard" id="connectionWizard" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="connectionWizardTitle">
