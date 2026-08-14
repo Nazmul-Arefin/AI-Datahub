@@ -133,9 +133,11 @@
   const dataWorkspace = document.getElementById('dataWorkspace');
   const sourceGrid = document.getElementById('sourceGrid');
   const sourceCount = document.getElementById('sourceCount');
+  const sourceInspector = document.getElementById('sourceInspector');
   const sourceInspectorContent = document.getElementById('sourceInspectorContent');
+  const sourceInspectorBackdrop = document.getElementById('sourceInspectorBackdrop');
+  const sourceInspectorClose = document.getElementById('sourceInspectorClose');
   const addSourceButton = document.getElementById('addSourceButton');
-  const addAdapterButton = document.getElementById('addAdapterButton');
   const connectionWizard = document.getElementById('connectionWizard');
   const connectionWizardClose = document.getElementById('connectionWizardClose');
   const wizardCancel = document.getElementById('wizardCancel');
@@ -207,6 +209,15 @@
     memory: { color: '#8b5cf6', rgb: '139,92,246', label: 'LONG-TERM MEMORY' },
     subgoal: { color: '#ff8c42', rgb: '255,140,66', label: 'DIRECT SUBGOAL' },
     execution: { color: '#8b5cf6', rgb: '139,92,246', label: 'AI EXECUTION' }
+  };
+
+  const overviewTopologyPalette = {
+    goals: { color: '#f39a76', rgb: '243,154,118', label: 'GOAL MANAGEMENT' },
+    data: { color: '#9a5b16', rgb: '154,91,22', label: 'PERSONAL DATA' },
+    memory: { color: '#7e3f46', rgb: '126,63,70', label: 'LONG-TERM MEMORY' },
+    subgoal: { color: '#fac69d', rgb: '250,198,157', label: 'DIRECT SUBGOAL' },
+    execution: { color: '#c9b5a5', rgb: '201,181,165', label: 'AI EXECUTION' },
+    ai: { color: '#ff5e00', rgb: '255,94,0', label: 'AI SYNTHESIS' }
   };
 
   const clusterConfig = [
@@ -312,23 +323,28 @@
     return from.map((value, index) => Math.round(value + (to[index] - value) * amount));
   }
 
+  function topologyStyle(key) {
+    const overviewSurface = !state.goalWorkspaceActive && !state.dataWorkspaceActive && !state.useWorkspaceActive;
+    return (overviewSurface ? overviewTopologyPalette : palette)[key] || palette[key] || palette.goals;
+  }
+
   function visualStyle(node) {
-    const base = palette[node.cluster];
+    const base = topologyStyle(node.cluster);
     if (state.goalWorkspaceActive && node.cluster === 'goals' && !node.core) {
       return node.goalRole === 'subgoal' ? palette.subgoal : palette.execution;
     }
     if (node.visualKind === 'ai-core') {
-      return { color: '#6d5dfc', rgb: '109,93,252', label: 'AI SYNTHESIS' };
+      return topologyStyle('ai');
     }
     if (!node.core || node.cluster !== 'goals') return base;
     const execution = getExecutionLevel();
-    const mixed = blendRgb([255, 94, 0], [139, 92, 246], execution);
+    const mixed = blendRgb(topologyStyle('goals').rgb.split(',').map(Number), topologyStyle('execution').rgb.split(',').map(Number), execution);
     return { color: `rgb(${mixed.join(',')})`, rgb: mixed.join(','), label: base.label };
   }
 
   function applyAmbientTheme() {
     const executionVisible = state.executionAmbient && (state.activeCluster === 'overview' || state.activeCluster === 'goals');
-    const style = executionVisible ? palette.execution : (palette[state.activeCluster] || palette.goals);
+    const style = executionVisible ? topologyStyle('execution') : topologyStyle(state.activeCluster);
     document.documentElement.style.setProperty('--active-rgb', style.rgb);
     document.documentElement.style.setProperty('--active-color', style.color);
   }
@@ -970,20 +986,29 @@
     }
 
     const coreRadius = radius * .9;
+    const brandedSynthesis = node.visualKind === 'ai-core' && !state.goalWorkspaceActive && !state.dataWorkspaceActive && !state.useWorkspaceActive;
     const halo = ctx.createRadialGradient(0, 0, 0, 0, 0, coreRadius * 2.8);
-    halo.addColorStop(0, `rgba(${style.rgb},.25)`);
-    halo.addColorStop(.3, `rgba(${style.rgb},.08)`);
+    halo.addColorStop(0, `rgba(${style.rgb},${brandedSynthesis ? .34 : .25})`);
+    halo.addColorStop(.3, `rgba(${style.rgb},${brandedSynthesis ? .12 : .08})`);
     halo.addColorStop(1, `rgba(${style.rgb},0)`);
     ctx.fillStyle = halo;
     ctx.beginPath();
     ctx.arc(0, 0, coreRadius * 2.8, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = 'rgba(255,255,255,.62)';
-    ctx.strokeStyle = `rgba(${style.rgb},.58)`;
+    if (brandedSynthesis) {
+      const synthesisFill = ctx.createRadialGradient(-coreRadius * .28, -coreRadius * .3, 0, 0, 0, coreRadius * 1.08);
+      synthesisFill.addColorStop(0, '#ffb24a');
+      synthesisFill.addColorStop(.42, '#ff7200');
+      synthesisFill.addColorStop(1, '#ed4300');
+      ctx.fillStyle = synthesisFill;
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,.62)';
+    }
+    ctx.strokeStyle = brandedSynthesis ? 'rgba(32,32,32,.72)' : `rgba(${style.rgb},.58)`;
     ctx.lineWidth = 1.1;
     ctx.shadowColor = style.color;
-    ctx.shadowBlur = 17;
+    ctx.shadowBlur = brandedSynthesis ? 28 : 17;
     ctx.beginPath();
     ctx.arc(0, 0, coreRadius, 0, Math.PI * 2);
     ctx.fill();
@@ -992,7 +1017,7 @@
 
     ctx.save();
     ctx.rotate(phase * .055 + node.phase);
-    ctx.strokeStyle = `rgba(${style.rgb},.72)`;
+    ctx.strokeStyle = brandedSynthesis ? 'rgba(25,27,28,.78)' : `rgba(${style.rgb},.72)`;
     ctx.lineWidth = 1.35;
     ctx.lineCap = 'round';
     for (let segment = 0; segment < 4; segment += 1) {
@@ -1005,7 +1030,7 @@
 
     ctx.save();
     ctx.rotate(Math.PI / 4 - phase * .018);
-    ctx.strokeStyle = `rgba(${style.rgb},.48)`;
+    ctx.strokeStyle = brandedSynthesis ? 'rgba(255,255,255,.58)' : `rgba(${style.rgb},.48)`;
     ctx.lineWidth = .85;
     ctx.strokeRect(-coreRadius * .34, -coreRadius * .34, coreRadius * .68, coreRadius * .68);
     ctx.restore();
@@ -1036,13 +1061,15 @@
     const goalCore = nodes.find(node => node.id === 'goals-core');
     if (!goalCore || !Number.isFinite(goalCore.screen.x)) return;
     const goalNodes = nodes.filter(node => node.role === 'goal');
+    const brainAccent = topologyStyle('ai').rgb;
+    const goalAccent = topologyStyle('goals').rgb;
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
     const radius = 104 * goalCore.screen.scale;
     const glow = ctx.createRadialGradient(goalCore.screen.x, goalCore.screen.y, 0, goalCore.screen.x, goalCore.screen.y, radius);
-    glow.addColorStop(0, 'rgba(109,93,252,.095)');
-    glow.addColorStop(.42, 'rgba(73,137,255,.028)');
-    glow.addColorStop(1, 'rgba(255,94,0,0)');
+    glow.addColorStop(0, `rgba(${brainAccent},.095)`);
+    glow.addColorStop(.42, `rgba(${goalAccent},.028)`);
+    glow.addColorStop(1, `rgba(${goalAccent},0)`);
     ctx.fillStyle = glow;
     ctx.beginPath();
     ctx.arc(goalCore.screen.x, goalCore.screen.y, radius, 0, Math.PI * 2);
@@ -1052,8 +1079,8 @@
       if (!Number.isFinite(goalNode.screen.x)) return;
       const branchGlow = ctx.createLinearGradient(goalNode.screen.x, goalNode.screen.y, goalCore.screen.x, goalCore.screen.y);
       branchGlow.addColorStop(0, 'rgba(255,255,255,0)');
-      branchGlow.addColorStop(.54, goalNode.isSelectedGoal ? 'rgba(255,94,0,.055)' : 'rgba(109,93,252,.012)');
-      branchGlow.addColorStop(1, goalNode.isSelectedGoal ? 'rgba(109,93,252,.075)' : 'rgba(109,93,252,.025)');
+      branchGlow.addColorStop(.54, goalNode.isSelectedGoal ? `rgba(${goalAccent},.055)` : `rgba(${brainAccent},.012)`);
+      branchGlow.addColorStop(1, goalNode.isSelectedGoal ? `rgba(${brainAccent},.075)` : `rgba(${brainAccent},.025)`);
       ctx.strokeStyle = branchGlow;
       ctx.lineWidth = (goalNode.isSelectedGoal ? 18 : 8) * Math.max(.7, goalNode.screen.scale);
       ctx.beginPath();
@@ -1067,7 +1094,7 @@
     });
 
     const contourRadius = 82 * goalCore.screen.scale;
-    ctx.strokeStyle = 'rgba(109,93,252,.11)';
+    ctx.strokeStyle = `rgba(${brainAccent},.11)`;
     ctx.lineWidth = .65;
     ctx.setLineDash([2, 9]);
     ctx.lineDashOffset = reduceMotion ? 0 : -state.elapsed * 2.5;
@@ -1077,9 +1104,9 @@
 
     const scanX = goalCore.screen.x + Math.sin(reduceMotion ? 0 : state.elapsed * .18) * contourRadius * .72;
     const scanGradient = ctx.createLinearGradient(scanX, goalCore.screen.y - contourRadius * .45, scanX, goalCore.screen.y + contourRadius * .45);
-    scanGradient.addColorStop(0, 'rgba(109,93,252,0)');
-    scanGradient.addColorStop(.5, 'rgba(109,93,252,.12)');
-    scanGradient.addColorStop(1, 'rgba(109,93,252,0)');
+    scanGradient.addColorStop(0, `rgba(${brainAccent},0)`);
+    scanGradient.addColorStop(.5, `rgba(${brainAccent},.12)`);
+    scanGradient.addColorStop(1, `rgba(${brainAccent},0)`);
     ctx.strokeStyle = scanGradient;
     ctx.lineWidth = .7;
     ctx.beginPath();
@@ -1253,7 +1280,7 @@
           const organic = .48 + .52 * Math.abs(Math.sin(bar * 1.73 + state.elapsed * 5.5));
           const length = (3 + state.voiceLevel * 24 * organic) * scale;
           const inner = voiceRadius + Math.sin(state.elapsed * 2.4 + bar * .45) * 1.5;
-          ctx.strokeStyle = `rgba(139,92,246,${.28 + state.voiceLevel * .55})`;
+          ctx.strokeStyle = `rgba(${topologyStyle('execution').rgb},${.28 + state.voiceLevel * .55})`;
           ctx.lineWidth = 1.3 + state.voiceLevel * 1.4;
           ctx.beginPath();
           ctx.moveTo(Math.cos(angle) * inner, Math.sin(angle) * inner);
@@ -1466,7 +1493,7 @@
         const response = .35 + .65 * Math.abs(Math.sin(bar * 1.73 + state.elapsed * 5.5));
         const length = 1.5 + state.voiceLevel * 13 * response;
         const inner = voiceRadius;
-        ctx.strokeStyle = `rgba(139,92,246,${.16 + state.voiceLevel * .48})`;
+        ctx.strokeStyle = `rgba(${topologyStyle('execution').rgb},${.16 + state.voiceLevel * .48})`;
         ctx.lineWidth = .8 + state.voiceLevel;
         ctx.beginPath();
         ctx.moveTo(screen.x + Math.cos(angle) * inner, screen.y + Math.sin(angle) * inner);
@@ -1581,7 +1608,7 @@
       const arrival = (progress - .82) / .18;
       const opacity = Math.pow(1 - arrival, 1.7);
       const target = edge.b.screen;
-      const style = palette[edge.evidenceType];
+      const style = topologyStyle(edge.evidenceType);
       const radius = (7 + arrival * 21) * Math.max(.75, target.scale);
       ctx.save();
       ctx.globalAlpha = opacity * state.clusterVisibility[edge.b.cluster];
@@ -1687,6 +1714,15 @@
         node.z = node.baseZ + tissueBreath;
       }
       node.screen = project(node);
+      if (
+        node.visualKind === 'ai-core' &&
+        !state.goalWorkspaceActive &&
+        !state.dataWorkspaceActive &&
+        !state.useWorkspaceActive
+      ) {
+        node.screen.x = state.width * (state.width < 700 ? .66 : .72);
+        node.screen.y = state.height * .465;
+      }
       node.screen.r = Math.max(node.core ? 10 : (node.showLabel ? 3.3 : 2), node.radius * node.screen.scale);
     });
 
@@ -1710,8 +1746,8 @@
       const controlY = (a.y + b.y) * .5 + (dx / distance) * bend;
       if (edge.bridge) {
         const bridgeGradient = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
-        bridgeGradient.addColorStop(0, `rgba(${palette[edge.a.cluster].rgb},${(active ? .42 : .05) * edgeVisibility * pathEmphasis})`);
-        bridgeGradient.addColorStop(1, `rgba(${palette[edge.b.cluster].rgb},${(active ? .42 : .05) * edgeVisibility * pathEmphasis})`);
+        bridgeGradient.addColorStop(0, `rgba(${topologyStyle(edge.a.cluster).rgb},${(active ? .42 : .05) * edgeVisibility * pathEmphasis})`);
+        bridgeGradient.addColorStop(1, `rgba(${topologyStyle(edge.b.cluster).rgb},${(active ? .42 : .05) * edgeVisibility * pathEmphasis})`);
         ctx.strokeStyle = bridgeGradient;
       } else {
         const destinationStyle = visualStyle(edge.b);
@@ -1851,7 +1887,7 @@
     if (tooltipDetail) tooltipDetail.textContent = node.detail || 'A relevant signal connected to this goal.';
     if (tooltipSource) tooltipSource.textContent = `${node.source || 'Weeple intelligence'}${node.freshness ? ` · ${node.freshness}` : ''}${node.permission ? ` · ${node.permission}` : ''}`;
     if (tooltipReason) tooltipReason.textContent = node.reason || 'It contributes to the selected goal.';
-    tooltip.style.setProperty('--tooltip-color', palette[node.cluster].color);
+    tooltip.style.setProperty('--tooltip-color', topologyStyle(node.cluster).color);
     tooltip.style.setProperty('--tooltip-shape', node.evidenceType === 'data' ? '2px' : '50%');
     const width = 345;
     let x = node.screen.x;
@@ -1875,7 +1911,7 @@
   topologyInputLayer.addEventListener('pointerdown', (event) => {
     const pos = pointerPosition(event);
     const touchedNode = getHitNode(pos.x, pos.y);
-    const rippleStyle = touchedNode ? visualStyle(touchedNode) : (palette[state.activeCluster] || palette.goals);
+    const rippleStyle = touchedNode ? visualStyle(touchedNode) : topologyStyle(state.activeCluster);
     state.touchRipples.push({ x: pos.x, y: pos.y, rgb: rippleStyle.rgb, startedAt: state.elapsed });
     if (state.touchRipples.length > 5) state.touchRipples.shift();
     topologyInputLayer.setPointerCapture(event.pointerId);
@@ -3299,14 +3335,14 @@
           <span class="goal-plan-live"><i></i>${goal.monitoringPaused ? 'PAUSED' : 'GOAL ACTIVE'}</span>
           <div class="goal-plan-image-actions">
             <button class="goal-plan-image-share" type="button" data-goal-plan-share aria-label="Share goal"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.5-4.4M8.2 13.2l7.5 4.4"/></svg><span>Share</span></button>
-            <div class="goal-plan-image-more"><button type="button" data-goal-plan-more aria-haspopup="menu" aria-expanded="${String(goalPlanMoreOpen)}" aria-label="More goal actions"><i></i><i></i><i></i></button>${goalPlanMoreOpen ? `<div role="menu" aria-label="Goal actions"><button type="button" role="menuitem" data-goal-plan-edit><span>Edit goal</span></button><button class="delete" type="button" role="menuitem" data-goal-plan-delete><span>Delete goal</span></button></div>` : ''}</div>
+            <div class="goal-plan-image-more"><button type="button" data-goal-plan-more aria-haspopup="menu" aria-expanded="${String(goalPlanMoreOpen)}" aria-label="More goal actions"><i></i><i></i><i></i></button>${goalPlanMoreOpen ? `<div role="menu" aria-label="Goal actions"><button type="button" role="menuitem" data-goal-plan-edit><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 5.5 4 4M4 20l3.8-.8L19 8a2.1 2.1 0 0 0-3-3L4.8 16.2 4 20Z"/></svg><span>Edit goal</span><em aria-hidden="true">›</em></button><button class="delete" type="button" role="menuitem" data-goal-plan-delete><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg><span>Delete goal</span><em aria-hidden="true">›</em></button></div>` : ''}</div>
           </div>
           <div class="goal-plan-image-progress"><span><small>PROGRESS</small><b>${progress}%</b></span><i><em style="width:${progress}%"></em></i></div>
           <div class="goal-plan-image-deadline"><small>DEADLINE</small><b>${goalPlanCountdown(goal)}</b><em>${formatGoalPlanMoment(deadline)}</em></div>
           <div class="goal-plan-next"><i>→</i><span><small>NEXT MOVE</small><b title="${escapeGoalText(nextTask?.name || 'Review progress')}">${escapeGoalText(nextTask?.name || 'Review progress')}</b></span></div>
           <nav class="goal-plan-art-navigation" aria-label="Switch goals">
-            ${previousGoal ? `<button class="previous" type="button" data-goal-direction="-1" aria-label="Previous goal: ${escapeGoalText(previousGoal.title)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>` : ''}
-            ${nextGoal ? `<button class="next" type="button" data-goal-direction="1" aria-label="Next goal: ${escapeGoalText(nextGoal.title)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>` : ''}
+            ${previousGoal ? `<button class="previous" type="button" data-goal-direction="-1" aria-keyshortcuts="ArrowLeft" aria-label="Previous goal: ${escapeGoalText(previousGoal.title)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>` : ''}
+            ${nextGoal ? `<button class="next" type="button" data-goal-direction="1" aria-keyshortcuts="ArrowRight" aria-label="Next goal: ${escapeGoalText(nextGoal.title)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>` : ''}
           </nav>
         </section>
 
@@ -3848,91 +3884,80 @@
     if (!source || source.statusType !== 'revoked' || button?.disabled) return;
     if (button) {
       button.disabled = true;
-      button.textContent = 'Reconnecting...';
+      button.textContent = 'Connecting...';
     }
     window.setTimeout(() => {
       source.status = 'Connected';
       source.statusType = 'connected';
       source.aiEnabled = true;
+      source.scopeEnabled = source.scopes.map(() => true);
       source.lastSync = 'Reconnected now';
       source.usedBy = 'Available for future authorized AI tasks';
       renderSourceGrid();
       if (state.selectedSourceId === source.id) renderSourceInspector(source);
-      showToast(`${source.name} reconnected securely`);
+      showToast(`${source.name} connected securely`);
     }, 650);
   }
 
   function renderSourceGrid() {
     const visibleSources = state.sourceFilter === 'all' ? dataSources : dataSources.filter(source => source.category === state.sourceFilter);
-    sourceCount.textContent = `${visibleSources.length} adapters shown - 42 assets processed today`;
-    sourceGrid.innerHTML = visibleSources.map(source => `
-      <article class="source-card${source.id === state.selectedSourceId ? ' active' : ''}${source.aiEnabled === false ? ' is-paused' : ''}" data-source-id="${source.id}" tabindex="0" role="button" aria-label="Manage ${source.name} adapter">
-        <header>
-          <span class="source-identity"><span class="source-mini-icon ${source.category}">${sourceAdapterIcon(source)}</span><span><strong>${source.name}</strong><small>${source.method}</small></span></span>
-          <button class="source-adapter-toggle" type="button" data-source-toggle="${source.id}" aria-pressed="${String(source.aiEnabled !== false && source.statusType !== 'revoked')}" aria-label="${source.aiEnabled === false ? 'Resume' : 'Pause'} ${source.name}"><i></i></button>
-        </header>
-        <div class="source-card-visual ${source.category}">
-          <span>${sourceAdapterIcon(source)}</span>
-        </div>
-        <div class="source-card-summary">
-          ${sourceStatusLabel(source)}
-          <span><b>${source.assets}</b></span>
-        </div>
+    sourceCount.textContent = `${visibleSources.length} source${visibleSources.length === 1 ? '' : 's'}`;
+    sourceGrid.innerHTML = visibleSources.map((source, index) => `
+      <article class="source-card${source.aiEnabled === false ? ' is-paused' : ''}" data-source-id="${source.id}" style="--card-order:${index}">
+        <span class="source-mini-icon ${source.category}">${sourceAdapterIcon(source)}</span>
+        <span class="source-card-copy"><strong>${source.name}</strong>${sourceStatusLabel(source)}</span>
         <footer>
-          <span><b>${source.lastSync}</b></span>
-          <span class="source-card-actions">${source.statusType === 'revoked' ? `<button class="reconnect" type="button" data-source-reconnect="${source.id}">Reconnect</button>` : `<button type="button" data-source-remove="${source.id}">Disconnect</button>`}<button class="manage" type="button" data-source-manage="${source.id}">Manage</button></span>
+          <span><small>Last sync</small><b>${source.lastSync}</b></span>
+          <button class="manage" type="button" data-source-manage="${source.id}" aria-haspopup="dialog"><span>Manage</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7.5 5 5 5-5 5"/></svg></button>
         </footer>
       </article>
     `).join('');
-    sourceGrid.querySelectorAll('[data-source-id]').forEach(card => {
-      card.addEventListener('click', event => { if (!event.target.closest('button')) selectSource(card.dataset.sourceId); });
-      card.addEventListener('keydown', event => {
-        if ((event.key === 'Enter' || event.key === ' ') && event.target === card) { event.preventDefault(); selectSource(card.dataset.sourceId); }
+    sourceGrid.querySelectorAll('.source-card').forEach(card => {
+      card.addEventListener('pointermove', event => {
+        if (event.pointerType === 'touch') return;
+        const bounds = card.getBoundingClientRect();
+        const x = (event.clientX - bounds.left) / bounds.width;
+        const y = (event.clientY - bounds.top) / bounds.height;
+        card.style.setProperty('--glass-x', `${x * 100}%`);
+        card.style.setProperty('--glass-y', `${y * 100}%`);
+        card.style.setProperty('--tilt-x', `${(0.5 - y) * 3.5}deg`);
+        card.style.setProperty('--tilt-y', `${(x - 0.5) * 4.5}deg`);
+      });
+      card.addEventListener('pointerleave', () => {
+        card.style.removeProperty('--tilt-x');
+        card.style.removeProperty('--tilt-y');
       });
     });
-    sourceGrid.querySelectorAll('[data-source-manage]').forEach(button => button.addEventListener('click', () => selectSource(button.dataset.sourceManage)));
-    sourceGrid.querySelectorAll('[data-source-reconnect]').forEach(button => button.addEventListener('click', () => {
-      reconnectSource(dataSources.find(item => item.id === button.dataset.sourceReconnect), button);
-    }));
-    sourceGrid.querySelectorAll('[data-source-toggle]').forEach(button => button.addEventListener('click', () => {
-      const source = dataSources.find(item => item.id === button.dataset.sourceToggle);
-      if (!source || source.statusType === 'revoked') { showToast('Reconnect this adapter before enabling it'); return; }
-      source.aiEnabled = source.aiEnabled === false;
-      renderSourceGrid();
-      if (state.selectedSourceId === source.id) renderSourceInspector(source);
-      showToast(`${source.name} ${source.aiEnabled ? 'is available to Weeple' : 'is paused'}`);
-    }));
-    sourceGrid.querySelectorAll('[data-source-remove]').forEach(button => button.addEventListener('click', () => {
-      const source = dataSources.find(item => item.id === button.dataset.sourceRemove);
-      if (!source || source.statusType === 'revoked') return;
-      if (button.dataset.confirming !== 'true') {
-        button.dataset.confirming = 'true';
-        button.textContent = 'Confirm';
-        showToast(`Confirm to disconnect ${source.name}`);
-        return;
-      }
-      source.status = 'Revoked'; source.statusType = 'revoked'; source.aiEnabled = false; source.lastSync = 'Access stopped'; source.usedBy = 'Future AI use is blocked';
-      renderSourceGrid();
-      if (state.selectedSourceId === source.id) renderSourceInspector(source);
-      showToast(`${source.name} disconnected`);
-    }));
+    sourceGrid.querySelectorAll('[data-source-manage]').forEach(button => button.addEventListener('click', () => selectSource(button.dataset.sourceManage, button)));
   }
 
   function renderSourceInspector(source) {
     const revoked = source.statusType === 'revoked';
+    if (!source.scopeEnabled) source.scopeEnabled = source.scopes.map(() => !revoked);
     sourceInspectorContent.innerHTML = `
-      <header class="source-detail-header"><span><i></i>AUTHORIZATION DETAIL</span>${sourceStatusLabel(source)}<h2>${source.name}</h2><p>${source.type} · ${source.method}</p></header>
+      <header class="source-detail-header"><span><i></i>AUTHORIZATION DETAIL</span>${sourceStatusLabel(source)}<h2 id="sourceInspectorTitle">${source.name}</h2><p>${source.type} · ${source.method}</p></header>
       ${revoked ? '<div class="revoked-banner"><i></i><span><strong>Access revoked</strong><small>This source is excluded from every future AI task.</small></span></div>' : ''}
-      <section class="source-detail-block"><header><strong>Authorized scope</strong><span>Minimum access</span></header>${source.scopes.map((scope, index) => `<button class="scope-toggle${revoked ? '' : ' on'}" type="button" data-scope-index="${index}" aria-pressed="${String(!revoked)}"><span><i></i>${scope}</span><em></em></button>`).join('')}</section>
+      <section class="source-availability"><span><strong>Available to Weeple</strong><small>${revoked ? 'Reconnect this source to make it available.' : 'Allow this source in future authorized AI tasks.'}</small></span><button class="source-adapter-toggle" type="button" aria-pressed="${String(!revoked && source.aiEnabled !== false)}" aria-label="${source.aiEnabled === false ? 'Resume' : 'Pause'} ${source.name}" ${revoked ? 'disabled' : ''}><i></i></button></section>
+      <section class="source-detail-block"><header><strong>Authorized scope</strong><span>Minimum access</span></header>${source.scopes.map((scope, index) => `<button class="scope-toggle${!revoked && source.scopeEnabled[index] ? ' on' : ''}" type="button" data-scope-index="${index}" aria-pressed="${String(!revoked && source.scopeEnabled[index])}" ${revoked ? 'disabled' : ''}><span><i></i>${scope}</span><em></em></button>`).join('')}</section>
       <section class="source-detail-block"><header><strong>Allowed purposes</strong><span>You control this</span></header><div class="purpose-chips">${source.purposes.map(purpose => `<span>${purpose}</span>`).join('')}</div></section>
       <section class="source-use-log"><small>RECENT AI USE</small><strong>${source.usedBy}</strong><span>Last synchronization: ${source.lastSync}</span></section>
       <section class="source-processing"><span><i></i><b>Processing location</b><small>${source.category === 'identity' ? 'Public discovery with review gate' : 'Encrypted local processing where available'}</small></span><em>${source.assets}</em></section>
-      <div class="source-detail-actions">${revoked ? '<button class="source-sync source-reconnect" type="button">Reconnect source</button>' : '<button class="source-sync" type="button">Sync now</button>'}<button class="source-revoke" type="button" ${revoked ? 'disabled' : ''}>Revoke access</button></div>
+      <div class="source-detail-actions">${revoked ? '<button class="source-sync source-reconnect" type="button">Connect source</button>' : '<button class="source-sync" type="button">Sync now</button><button class="source-revoke" type="button">Disconnect</button>'}</div>
     `;
+    const availabilityButton = sourceInspectorContent.querySelector('.source-availability .source-adapter-toggle');
+    availabilityButton.addEventListener('click', () => {
+      if (revoked) return;
+      source.aiEnabled = source.aiEnabled === false;
+      renderSourceGrid();
+      renderSourceInspector(source);
+      window.requestAnimationFrame(() => sourceInspectorContent.querySelector('.source-availability .source-adapter-toggle')?.focus());
+      showToast(`${source.name} ${source.aiEnabled ? 'is available to Weeple' : 'is paused'}`);
+    });
     sourceInspectorContent.querySelectorAll('.scope-toggle').forEach(button => button.addEventListener('click', () => {
       if (revoked) return;
       const on = button.classList.toggle('on');
       button.setAttribute('aria-pressed', String(on));
+      source.scopeEnabled[Number(button.dataset.scopeIndex)] = on;
       showToast(`${button.textContent.trim()} ${on ? 'allowed' : 'excluded from future tasks'}`);
     }));
     const syncButton = sourceInspectorContent.querySelector('.source-sync');
@@ -3944,24 +3969,39 @@
       window.setTimeout(() => { syncButton.classList.remove('is-loading'); syncButton.textContent = 'Sync now'; showToast(`${source.name} synchronized securely`); }, 760);
     });
     const revokeButton = sourceInspectorContent.querySelector('.source-revoke');
-    revokeButton.addEventListener('click', () => {
-      if (revokeButton.disabled) return;
+    revokeButton?.addEventListener('click', () => {
       if (!revokeButton.classList.contains('confirming')) {
         revokeButton.classList.add('confirming');
-        revokeButton.textContent = 'Confirm revoke';
-        showToast('Confirm to stop all future AI use of this source');
+        revokeButton.textContent = 'Confirm disconnect';
+        showToast(`Confirm to disconnect ${source.name}`);
         return;
       }
-      source.status = 'Revoked'; source.statusType = 'revoked'; source.aiEnabled = false; source.lastSync = 'Access stopped'; source.usedBy = 'Future AI use is blocked';
-      renderSourceGrid(); renderSourceInspector(source); showToast(`${source.name} access revoked`);
+      source.status = 'Revoked'; source.statusType = 'revoked'; source.aiEnabled = false; source.scopeEnabled = source.scopes.map(() => false); source.lastSync = 'Access stopped'; source.usedBy = 'Future AI use is blocked';
+      renderSourceGrid(); renderSourceInspector(source); showToast(`${source.name} disconnected`);
     });
   }
 
-  function selectSource(id) {
+  let sourceInspectorTriggerId = '';
+
+  function selectSource(id, trigger = null) {
     const source = dataSources.find(item => item.id === id) || dataSources[0];
     state.selectedSourceId = source.id;
-    renderSourceGrid();
+    sourceInspectorTriggerId = trigger?.dataset.sourceManage || source.id;
     renderSourceInspector(source);
+    sourceInspector.classList.add('visible');
+    sourceInspector.setAttribute('aria-hidden', 'false');
+    dataWorkspace.classList.add('inspector-open');
+    window.requestAnimationFrame(() => sourceInspectorClose.focus());
+  }
+
+  function closeSourceInspector(restoreFocus = true) {
+    if (!sourceInspector.classList.contains('visible')) return;
+    sourceInspector.classList.remove('visible');
+    sourceInspector.setAttribute('aria-hidden', 'true');
+    dataWorkspace.classList.remove('inspector-open');
+    if (restoreFocus && sourceInspectorTriggerId) {
+      window.requestAnimationFrame(() => sourceGrid.querySelector(`[data-source-manage="${sourceInspectorTriggerId}"]`)?.focus());
+    }
   }
 
   function openConnectionWizard() {
@@ -4050,9 +4090,9 @@
 
   function openDataWorkspace(announce = true) {
     state.dataWorkspaceActive = true; stopTopologyLoop(); dataWorkspace.classList.add('visible'); dataWorkspace.setAttribute('aria-hidden', 'false'); osShell.classList.add('data-page');
-    selectSource(state.selectedSourceId); focusCluster('data', false); if (announce) showToast('Personal data control center opened');
+    renderSourceGrid(); focusCluster('data', false); if (announce) showToast('Personal data control center opened');
   }
-  function closeDataWorkspace() { state.dataWorkspaceActive = false; dataWorkspace.classList.remove('visible'); dataWorkspace.setAttribute('aria-hidden', 'true'); osShell.classList.remove('data-page'); closeConnectionWizard(); }
+  function closeDataWorkspace() { state.dataWorkspaceActive = false; dataWorkspace.classList.remove('visible'); dataWorkspace.setAttribute('aria-hidden', 'true'); osShell.classList.remove('data-page'); closeSourceInspector(false); closeConnectionWizard(); }
   function openUseWorkspace(announce = true) {
     state.useWorkspaceActive = true; stopTopologyLoop(); useWorkspace.classList.add('visible'); useWorkspace.setAttribute('aria-hidden', 'false'); osShell.classList.add('use-page'); focusCluster('memory', false); if (announce) showToast('Active AI workspace opened');
   }
@@ -4239,6 +4279,57 @@
     return 'downloaded';
   }
 
+  function navigateGoalPlanBy(direction) {
+    const normalizedDirection = direction < 0 ? -1 : direction > 0 ? 1 : 0;
+    const nextIndex = state.currentGoalIndex + normalizedDirection;
+    if (!normalizedDirection || nextIndex < 0 || nextIndex >= goalProfiles.length) {
+      haptic(4);
+      return false;
+    }
+
+    goalPlanListOpen = false;
+    goalPlanMoreOpen = false;
+    goalPlanIntelDetail = null;
+    goalPlanShareOpen = false;
+    goalPlanTaskEditor = null;
+    goalPlanSubgoalEditor = null;
+    goalPlanFocusedTaskId = '';
+    goalPlanTransitionDirection = normalizedDirection;
+    window.clearTimeout(goalPlanTransitionTimer);
+    selectGoal(nextIndex);
+
+    window.requestAnimationFrame(() => {
+      const preferredArrow = goalGameContent.querySelector(`[data-goal-direction="${normalizedDirection}"]`)
+        || goalGameContent.querySelector(`[data-goal-direction="${normalizedDirection * -1}"]`);
+      preferredArrow?.focus({ preventScroll: true });
+    });
+
+    goalPlanTransitionTimer = window.setTimeout(() => {
+      goalPlanTransitionDirection = 0;
+      goalGameContent.querySelector('.goal-plan-visual')?.classList.remove('goal-switch-previous', 'goal-switch-next');
+    }, reduceMotion ? 0 : 430);
+    haptic(8);
+    return true;
+  }
+
+  function goalPlanDirectionAtPoint(clientX, clientY) {
+    const arrows = [...goalGameContent.querySelectorAll('[data-goal-direction]')];
+    const matchedArrow = arrows.find((arrow) => {
+      const bounds = arrow.getBoundingClientRect();
+      return clientX >= bounds.left && clientX <= bounds.right && clientY >= bounds.top && clientY <= bounds.bottom;
+    });
+    return matchedArrow ? Number(matchedArrow.dataset.goalDirection) : 0;
+  }
+
+  goalGameContent?.addEventListener('click', (event) => {
+    if (!event.target.closest('.goal-plan-intel-scrim,.goal-plan-share-scrim')) return;
+    const direction = goalPlanDirectionAtPoint(event.clientX, event.clientY);
+    if (!direction) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    navigateGoalPlanBy(direction);
+  }, true);
+
   goalGameContent?.addEventListener('click', (event) => {
     if (event.target.closest('[data-empty-goal-add]')) { openGoalCreateSheet(); return; }
     const goal = goalProfiles[state.currentGoalIndex];
@@ -4248,28 +4339,11 @@
     if (event.target.closest('[data-goal-list-close]')) { goalPlanListOpen = false; renderGoalGameBoard(goal); return; }
     const directionButton = event.target.closest('[data-goal-direction]');
     if (directionButton) {
-      const direction = Number(directionButton.dataset.goalDirection);
-      const nextIndex = state.currentGoalIndex + direction;
-      if (!direction || nextIndex < 0 || nextIndex >= goalProfiles.length) return;
-      goalPlanListOpen = false;
-      goalPlanMoreOpen = false;
-      goalPlanIntelDetail = null;
-      goalPlanShareOpen = false;
-      goalPlanTaskEditor = null;
-      goalPlanSubgoalEditor = null;
-      goalPlanTransitionDirection = direction;
-      window.clearTimeout(goalPlanTransitionTimer);
-      selectGoal(nextIndex);
-      goalPlanTransitionTimer = window.setTimeout(() => {
-        goalPlanTransitionDirection = 0;
-        const currentGoal = goalProfiles[state.currentGoalIndex];
-        if (currentGoal && state.goalWorkspaceActive) renderGoalGameBoard(currentGoal);
-      }, reduceMotion ? 0 : 430);
-      haptic(8);
+      navigateGoalPlanBy(Number(directionButton.dataset.goalDirection));
       return;
     }
     const goalSelect = event.target.closest('[data-goal-plan-select]');
-    if (goalSelect) { goalPlanListOpen = false; goalPlanMoreOpen = false; goalPlanIntelDetail = null; goalPlanFocusedTaskId = ''; selectGoal(Number(goalSelect.dataset.goalPlanSelect)); haptic(8); return; }
+    if (goalSelect) { window.clearTimeout(goalPlanTransitionTimer); goalPlanTransitionDirection = 0; goalPlanListOpen = false; goalPlanMoreOpen = false; goalPlanIntelDetail = null; goalPlanFocusedTaskId = ''; selectGoal(Number(goalSelect.dataset.goalPlanSelect)); haptic(8); return; }
     if (event.target.closest('[data-goal-create]')) { goalPlanListOpen = false; openGoalCreateSheet(); return; }
     if (event.target.closest('[data-goal-plan-more]')) {
       goalPlanMoreOpen = !goalPlanMoreOpen;
@@ -4511,6 +4585,11 @@
     });
   });
   goalGameContent?.addEventListener('keydown', (event) => {
+    if (event.target.closest('.goal-plan-art-navigation') && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+      event.preventDefault();
+      navigateGoalPlanBy(event.key === 'ArrowLeft' ? -1 : 1);
+      return;
+    }
     const observationNode = event.target.closest('[data-goal-observation-index]');
     if (!observationNode || (event.key !== 'Enter' && event.key !== ' ')) return;
     event.preventDefault();
@@ -5212,7 +5291,8 @@
     renderSourceGrid();
   }));
   addSourceButton.addEventListener('click', openConnectionWizard);
-  addAdapterButton?.addEventListener('click', openConnectionWizard);
+  sourceInspectorClose.addEventListener('click', () => closeSourceInspector());
+  sourceInspectorBackdrop.addEventListener('click', () => closeSourceInspector());
   connectionWizardClose.addEventListener('click', closeConnectionWizard);
   wizardCancel.addEventListener('click', closeConnectionWizard);
   connectionWizard.querySelectorAll('[data-wizard-source]').forEach(button => button.addEventListener('click', () => {
@@ -5420,7 +5500,13 @@
     { label: 'FOUND 3 INSIGHTS', detail: 'Useful patterns were discovered', badge: 'AI Discovery', icon: 'spark' },
     { label: 'AI IS PREPARING', detail: 'Materials are being assembled', badge: 'AI Planning', icon: 'clock' }
   ];
-  const calendarCardColors = ['16,185,129', '139,92,246', '255,183,3'];
+  // Day-state accents keep the carousel easy to scan without coloring the
+  // surrounding Overview background.
+  const calendarCardColors = {
+    past: '100,116,139',
+    today: '255,107,44',
+    upcoming: '139,92,246'
+  };
 
   function sameCalendarDay(a, b) {
     return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -5574,11 +5660,7 @@
       const isPast = !isToday && date < calendarReferenceDate;
       const setIndex = sameCalendarDay(date, calendarReferenceDate)
         ? 0
-        : Math.abs(date.getDate() + date.getMonth()) % calendarAgendaSets.length;
-      const baseAgenda = calendarAgendaSets[setIndex];
-      const backgroundAgenda = isFuture
-        ? baseAgenda.map(item => ({ ...item, type: 'planning', label: 'AI IS PREPARING', status: 'Preparing', icon: 'clock' }))
-        : baseAgenda;
+        : Math.abs(date.getDate() + date.getMonth()) % sideDayStories.length;
       const scheduledGoals = scheduledGoalsForDate(date);
       const linkedTasks = linkedGoalTasksForDate(date).map(({ goal, goalIndex, subgoal, subgoalIndex, task, taskIndex }) => ({
         type: task.owner === 'ai' ? 'planning' : 'action',
@@ -5611,17 +5693,32 @@
         detail: 'Tap to open this goal and its current context', status: `${goal.progress}%`, icon: 'target', goalIndex: index,
         timelineTime: goal.scheduledTime || 'GOAL', rgb: goal.accent || '255,94,0'
       }));
-      const agenda = [...linkedTasks, ...addedTasks, ...goalAgenda, ...backgroundAgenda].slice(0, 3);
-      const story = scheduledGoals.length
-        ? { label: 'GOAL SCHEDULED', detail: scheduledGoals[0].goal.title, badge: scheduledGoals[0].goal.scheduledTime || 'Open goal', icon: 'target' }
-        : isFuture
+      // A day should reflect its actual assignments. Do not pad it with demo
+      // entries or truncate it to three items: some days are empty and busy
+      // days need to expose every task.
+      const agenda = [...linkedTasks, ...addedTasks, ...goalAgenda].sort((a, b) => {
+        const aTime = /^\d{2}:\d{2}$/.test(a.timelineTime || '') ? a.timelineTime : '99:99';
+        const bTime = /^\d{2}:\d{2}$/.test(b.timelineTime || '') ? b.timelineTime : '99:99';
+        return aTime.localeCompare(bTime);
+      });
+      const agendaCount = agenda.length;
+      // Keep adjacent day cards visually distinct. Goal accents belong to the
+      // agenda item inside the card, not to the calendar day itself.
+      const cardRgb = isToday
+        ? calendarCardColors.today
+        : isPast
+          ? calendarCardColors.past
+          : calendarCardColors.upcoming;
+      // Side cards describe the day state. Scheduled goals remain available
+      // in the expanded agenda when that day moves to the center.
+      const story = isFuture
         ? sideDayStories[2]
         : isPast
           ? sideDayStories[0]
-          : sideDayStories[setIndex];
-      // Keep adjacent day cards visually distinct. Goal accents belong to the
-      // agenda item inside the card, not to the calendar day itself.
-      const cardRgb = isToday ? '255,94,0' : calendarCardColors[setIndex];
+          : scheduledGoals.length
+            ? { label: 'GOAL SCHEDULED', detail: scheduledGoals[0].goal.title, badge: scheduledGoals[0].goal.scheduledTime || 'Open goal', icon: 'target' }
+            : sideDayStories[setIndex];
+      const storyRgb = isPast ? '16,185,129' : isFuture ? '139,92,246' : cardRgb;
       const heading = isToday
         ? `Today · ${new Intl.DateTimeFormat(undefined, { month: 'long', day: 'numeric' }).format(date)}`
         : new Intl.DateTimeFormat(undefined, { month: 'long', day: 'numeric' }).format(date);
@@ -5629,12 +5726,13 @@
       card.className = `calendar-day-card ${isFuture ? 'is-upcoming' : isPast ? 'is-past' : 'is-today'}`;
       card.dataset.position = String(offset);
       card.style.setProperty('--card-rgb', cardRgb);
+      card.style.setProperty('--story-rgb', storyRgb);
       card.setAttribute('aria-label', new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(date));
       card.innerHTML = `
         <header class="day-card-heading">
-          <small>${offset === 0 ? (linkedTasks.length ? `${linkedTasks.length} GOAL TASK${linkedTasks.length === 1 ? '' : 'S'}` : addedTasks.length ? `${addedTasks.length} TASK${addedTasks.length === 1 ? '' : 'S'} ADDED` : scheduledGoals.length ? `${scheduledGoals.length} GOAL${scheduledGoals.length === 1 ? '' : 'S'} SCHEDULED` : isFuture ? 'YOU + AI PLAN' : `${agenda.length} TASKS PLANNED`) : new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(date).toUpperCase()}</small>
+          <small>${offset === 0 ? `${agendaCount} ${agendaCount === 1 ? 'TASK' : 'TASKS'} SCHEDULED` : new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(date).toUpperCase()}</small>
           <strong>${heading}</strong>
-          <p>${linkedTasks.length ? 'Goal work stays synced with this calendar' : addedTasks.length ? 'Your actions and AI work are organized together' : scheduledGoals.length ? 'Scheduled goals are connected to your Goals workspace' : isFuture ? 'Your actions and AI support are ready for this day' : 'See what you will do and what AI will handle'}</p>
+          <p>${agendaCount ? 'Your actions and AI work are organized by time' : 'No tasks or goals are assigned to this day'}</p>
         </header>
         <div class="side-day-overview">
           <span class="side-orb"><svg viewBox="0 0 24 24" aria-hidden="true">${calendarIcons[story.icon]}</svg></span>
@@ -5644,7 +5742,7 @@
           ${isFuture ? '<span class="preparing-loader" aria-label="AI preparation in progress"><i></i><i></i><i></i></span>' : ''}
         </div>
         <div class="expanded-agenda">
-          ${agenda.map(item => {
+          ${agenda.length ? agenda.map(item => {
             const owner = calendarItemOwner(item);
             const itemRgb = item.rgb || (owner === 'ai' ? '139,92,246' : '255,94,0');
             const timeMatch = String(item.title).match(/(?:^|[^\d])(\d{1,2}:\d{2})(?:\b|$)/);
@@ -5657,7 +5755,12 @@
             return item.goalIndex !== undefined
               ? `<button class="carousel-agenda-item calendar-goal-item${item.linkedTask ? ' linked-task' : ''}" type="button" data-calendar-goal="${item.goalIndex}"${item.linkedTask ? ` data-calendar-task="${item.taskId}" data-calendar-task-owner="${item.owner}"` : ''} style="--item-rgb:${itemRgb}" aria-label="Open goal: ${escapeGoalText(goalProfiles[item.goalIndex]?.title || item.title)}">${itemContent}</button>`
               : `<div class="carousel-agenda-item" style="--item-rgb:${itemRgb}">${itemContent}</div>`;
-          }).join('')}
+          }).join('') : `
+            <div class="calendar-empty-agenda">
+              <span><svg viewBox="0 0 24 24" aria-hidden="true">${calendarIcons.check}</svg></span>
+              <strong>Nothing scheduled</strong>
+              <p>This day is clear. Add a task when you are ready.</p>
+            </div>`}
         </div>
       `;
       card.querySelectorAll('[data-calendar-goal]').forEach(goalButton => {
@@ -5946,6 +6049,14 @@
     }
   });
   document.addEventListener('keydown', (event) => {
+    if (event.key === 'Tab' && sourceInspector.classList.contains('visible')) {
+      const focusable = [...sourceInspector.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+        .filter(element => element.offsetParent !== null && element !== sourceInspectorBackdrop);
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (first && last && event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (first && last && !event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
     if (event.key === 'Escape') {
       const goalPlanMoreWasOpen = goalPlanMoreOpen;
       const goalPlanWasOpen = goalPlanListOpen || goalPlanMoreOpen || goalPlanIntelDetail || goalPlanShareOpen || goalPlanTaskEditor || goalPlanSubgoalEditor !== null;
@@ -5965,6 +6076,7 @@
       closeGoalDeleteSheet();
       closeCollaborationSheet();
       closeGoalCreateSheet();
+      closeSourceInspector();
       closeConnectionWizard();
       closeMemoryProposal();
       closeMemoryDrawer();
