@@ -1,0 +1,90 @@
+<canvas class="page--overview" data-page-root="overview" id="topologyCanvas" aria-label="Interactive 3D map of goals, connected data, and long-term memory"></canvas>
+      <div class="canvas-fade page--overview" data-page-root="overview"></div>
+      <div class="topology-hit-layer page--overview" data-page-root="overview" id="topologyHitLayer" aria-hidden="true"></div>
+
+      <section class="calendar-panel page--overview" data-page-root="overview" aria-label="AI calendar">
+        <header class="calendar-toolbar">
+          <div><span><i></i>YOU + AI CALENDAR</span><button class="month-selector" id="calendarMonthButton" type="button" aria-expanded="false"><strong id="calendarMonth">July 2026</strong><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button></div>
+          <div class="calendar-controls">
+            <button class="calendar-add-task" id="calendarAddTask" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Task</span></button>
+            <button class="today-button" id="calendarToday" type="button">Today</button>
+            <button class="calendar-arrow" id="calendarPrevious" type="button" aria-label="Previous day"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+            <button class="calendar-arrow" id="calendarNext" type="button" aria-label="Next day"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+          </div>
+        </header>
+        <section class="month-popover" id="monthPopover" aria-label="Choose a specific date">
+          <header>
+            <button id="monthPickerPrevious" type="button" aria-label="Previous month"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></button>
+            <strong id="monthPickerTitle">August 2026</strong>
+            <button id="monthPickerNext" type="button" aria-label="Next month"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button>
+          </header>
+          <div class="month-weekdays" aria-hidden="true"><span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span></div>
+          <div class="month-days" id="monthDays"></div>
+          <footer><button id="monthPickerToday" type="button">Jump to today</button></footer>
+        </section>
+        <div class="calendar-stage" id="calendarStage" aria-label="Swipe between calendar days"></div>
+        <div class="calendar-swipe-hint"><span></span>Swipe to explore your days<span></span></div>
+      </section>
+
+      <section class="calendar-task-modal page--overview" data-page-root="overview" id="calendarTaskModal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="calendarTaskTitle">
+        <button class="calendar-task-backdrop" id="calendarTaskBackdrop" type="button" aria-label="Close task form"></button>
+        <div class="calendar-task-sheet">
+          <header>
+            <span><i></i>NEW CALENDAR TASK</span>
+            <button id="calendarTaskClose" type="button" aria-label="Close task form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
+          </header>
+          <h2 id="calendarTaskTitle">Add the next move</h2>
+          <p>Choose who owns it. Weeple keeps your work and AI work clear.</p>
+          <form id="calendarTaskForm">
+            <label class="calendar-task-title-field"><span>TASK</span><input id="calendarTaskName" type="text" maxlength="60" required placeholder="What needs to happen?"></label>
+            <div class="calendar-task-link">
+              <label><span>LINK TO GOAL <em>OPTIONAL</em></span><select id="calendarTaskGoal"><option value="">Standalone task</option></select></label>
+              <label><span>SUBGOAL</span><select id="calendarTaskSubgoal" disabled><option value="">Choose a goal first</option></select></label>
+            </div>
+            <div class="calendar-task-schedule">
+              <label><span>DATE</span><input id="calendarTaskDate" type="date" required></label>
+              <label><span id="calendarTaskTimeLabel">DUE TIME</span><input id="calendarTaskTime" type="time" required></label>
+              <label class="calendar-task-end-field" id="calendarTaskEndField"><span>EXPECTED FINISH</span><input id="calendarTaskEndTime" type="time"></label>
+            </div>
+            <fieldset class="calendar-task-owner">
+              <legend>WHO WILL DO IT?</legend>
+              <label><input type="radio" name="calendarTaskOwner" value="human" checked><span class="owner-choice-human"><i>YOU</i><b>My task</b><small>I will take action</small></span></label>
+              <label><input type="radio" name="calendarTaskOwner" value="ai"><span class="owner-choice-ai"><i>AI</i><b>AI task</b><small>Weeple will prepare it</small></span></label>
+            </fieldset>
+            <footer><button id="calendarTaskCancel" type="button">Cancel</button><button class="calendar-task-submit" type="submit">Add task</button></footer>
+          </form>
+        </div>
+      </section>
+
+
+      <div class="topology-meta page--overview" data-page-root="overview" aria-hidden="true">
+        <span><i class="meta-pulse"></i>Goal intelligence active</span><b id="topologyConnectionCount">24</b><small>RELEVANT LINKS</small>
+        <div class="topology-key"><span><i class="key-goal"></i>Goal</span><span><i class="key-data"></i>Live data</span><span><i class="key-memory"></i>Memory</span></div>
+      </div>
+
+      <div class="interaction-hint page--overview" data-page-root="overview" id="interactionHint">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11V6.5a1.5 1.5 0 0 1 3 0V10m0-2.5a1.5 1.5 0 0 1 3 0V10m0-1a1.5 1.5 0 0 1 3 0v4.5c0 4-2 6.5-6 6.5h-1c-2.2 0-3.5-1-4.5-2.5L4 14a1.4 1.4 0 0 1 2.2-1.7L9 15"/></svg>
+        <span>Drag to explore <i>·</i> Pinch to zoom <i>·</i> Tap any node to understand it</span>
+      </div>
+
+      <section class="focus-mode-panel page--overview" data-page-root="overview" id="focusModePanel" aria-hidden="true" aria-live="polite">
+        <header>
+          <span><i></i>FOCUS MODE</span>
+          <button class="focus-back" id="focusBack" type="button" aria-label="Back to universe overview">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+            Back to Overview
+          </button>
+        </header>
+        <div class="focus-copy">
+          <small id="focusEyebrow">PRIMARY INTELLIGENCE</small>
+          <strong id="focusTitle">Goal Management</strong>
+          <p id="focusDescription">Turn your connected context into clear, achievable next actions.</p>
+        </div>
+        <div class="focus-actions" id="focusActions"></div>
+      </section>
+
+      <aside class="node-tooltip page--overview" data-page-root="overview" id="nodeTooltip" aria-live="polite">
+        <div class="tooltip-orb"></div>
+        <div class="tooltip-copy"><small id="tooltipType">CONNECTED DATA</small><strong id="tooltipTitle">Apple Fitness</strong><p id="tooltipDetail">Current evidence connected to this goal.</p><dl><div><dt>Source</dt><dd id="tooltipSource">Connected source</dd></div><div><dt>Why connected</dt><dd id="tooltipReason">Supports the selected subgoal.</dd></div></dl></div>
+        <span><b id="tooltipStrength">94</b>%<small>relevance</small></span>
+      </aside>

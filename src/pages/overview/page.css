@@ -1,0 +1,3 @@
+/* Requesting-developer workstream: Overview additions belong below this root. Existing rules remain in
+   shared/legacy.css during the parity-preserving structural migration. */
+.page--overview { --page-accent: var(--orange); }

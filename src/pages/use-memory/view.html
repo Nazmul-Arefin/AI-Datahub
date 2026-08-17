@@ -1,0 +1,71 @@
+<section class="use-workspace use-mission-workspace page--use-memory" data-page-root="use-memory" id="useWorkspace" aria-label="Use Data mission workspace" aria-hidden="true" data-od-id="use-data-workspace">
+        <div class="use-mission-shell" id="useMissionShell">
+          <section class="use-mission-stage" id="useMissionStage" aria-live="polite" data-od-id="use-data-mission-stage"></section>
+          <nav class="mission-progress" id="missionProgress" aria-label="Mission progress" data-od-id="mission-progress"></nav>
+        </div>
+        <button class="use-report-drawer-scrim" id="useReportDrawerScrim" type="button" aria-label="Close detailed result report" tabindex="-1"></button>
+        <aside class="mission-detail-drawer use-result-report-drawer" id="missionDetailDrawer" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="useResultReportTitle" inert data-od-id="mission-detail-drawer">
+          <header>
+            <span><small id="useResultReportEyebrow">LIVE OUTCOME REPORT</small><strong id="useResultReportTitle">Detailed report</strong></span>
+            <button id="missionDetailClose" type="button" aria-label="Close detailed report">&times;</button>
+          </header>
+          <div class="use-result-report-content" id="useResultReportContent"></div>
+          <footer class="use-result-report-actions"><span><i></i><small>Generated from authorized goal data</small></span><button id="useResultReportDownload" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M5 20h14"/></svg>Download PDF</button></footer>
+        </aside>
+        <div class="legacy-use-workspace" aria-hidden="true">
+        <header class="workspace-heading use-heading">
+          <span><i></i>ACTIVE AI WORKSPACE · EXAMPLE SESSION</span>
+          <strong>Ask, understand, decide.</strong>
+          <small>Every answer shows its data, tools, reasoning type, and confirmation status.</small>
+        </header>
+
+        <aside class="use-task-rail" aria-label="AI workspace modes">
+          <strong>WORKSPACE</strong>
+          <button class="active" type="button" data-use-mode="assistant"><i>AI</i><span>Assistant</span></button>
+          <button type="button" data-use-prompt="Analyze my week"><i>↗</i><span>Analyze</span></button>
+          <button type="button" data-use-prompt="Plan my highest-priority work"><i>✓</i><span>Plan</span></button>
+          <button type="button" data-use-prompt="Research the latest information"><i>⌕</i><span>DeepSearch</span></button>
+          <button type="button" id="memoryOpenButton"><i>∞</i><span>Memory</span></button>
+        </aside>
+
+        <main class="assistant-stage">
+          <section class="conversation-stream" id="conversationStream" aria-live="polite">
+            <div class="assistant-welcome"><span><i></i>WEEPLE PERSONAL AI</span><h1>What should we move forward?</h1><p>I can work with your authorized context while keeping every source, tool, and decision visible.</p></div>
+            <article class="conversation-message user-message"><span>YOU</span><p>Review my product goal and tell me the most useful action for today.</p></article>
+            <article class="conversation-message ai-message">
+              <header><span class="output-type recommendation"><i></i>RECOMMENDATION</span><time>Prepared now</time></header>
+              <p>Your highest-leverage action is to confirm a five-person prototype test before expanding the feature set.</p>
+              <div class="answer-why"><strong>Why this recommendation</strong><span>Three recent research notes show uncertainty around the first-value experience, while your calendar has a two-hour open block today.</span></div>
+              <div class="answer-evidence"><small>DATA USED</small><span>Product goal</span><span>Calendar</span><span>Research notes</span><span>4 confirmed memories</span></div>
+              <div class="answer-tools"><small>TOOLS</small><span><i></i>Calendar read</span><span><i></i>Local semantic search</span><em>No external action taken</em></div>
+              <section class="decision-request"><span><i></i><b>Your confirmation is required</b><small>Create a protected research block and draft the interview plan?</small></span><div><button type="button" data-decision="reject">Reject</button><button type="button" data-decision="adjust">Adjust</button><button class="confirm" type="button" data-decision="accept">Confirm</button></div></section>
+            </article>
+          </section>
+          <form class="assistant-composer" id="assistantComposer">
+            <button type="button" id="assistantAttach" aria-label="Attach authorized context"><svg viewBox="0 0 24 24"><path d="M8.5 12.5 14 7a3 3 0 0 1 4.2 4.2l-7.1 7.1a5 5 0 0 1-7.1-7.1L11.2 4"/></svg></button>
+            <input id="assistantInput" type="text" placeholder="Ask Weeple to analyze, plan, or use a tool…" autocomplete="off">
+            <button type="button" id="assistantVoice" aria-label="Edit by voice"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
+            <button class="assistant-send" type="submit" aria-label="Send to Weeple"><svg viewBox="0 0 24 24"><path d="m5 12 14-7-4 14-3-6-7-1Z"/></svg></button>
+          </form>
+        </main>
+
+        <aside class="ai-context-panel" aria-label="Current AI context and controls">
+          <header><span><i></i>TRANSPARENCY</span><strong>Context in this answer</strong></header>
+          <section class="context-section"><small>AUTHORIZED DATA</small><button type="button"><span><i class="orange"></i>Product goal</span><em>Read</em></button><button type="button"><span><i class="amber"></i>Calendar</span><em>Read</em></button><button type="button"><span><i class="violet"></i>Research notes</span><em>Read</em></button></section>
+          <section class="context-section"><small>ACTIVE TOOLS</small><button type="button"><span><i class="green"></i>Local search</span><em>On-device</em></button><button type="button"><span><i class="gray"></i>External tools</span><em>Not used</em></button></section>
+          <section class="classification-legend"><small>OUTPUT CLARITY</small><span><i class="fact"></i><b>Fact</b><em>Directly supported</em></span><span><i class="inference"></i><b>Inference</b><em>AI interpretation</em></span><span><i class="recommendation"></i><b>Recommendation</b><em>Your decision</em></span><span><i class="executed"></i><b>Executed</b><em>Action completed</em></span></section>
+          <button class="memory-entry" id="memoryEntry" type="button"><span><i>∞</i><b>Long-term memory</b><small>View, correct, delete, and control future use</small></span><em>24</em></button>
+        </aside>
+
+        <aside class="memory-drawer" id="memoryDrawer" aria-label="Long-term memory management" aria-hidden="true">
+          <header><span><i></i>LONG-TERM MEMORY</span><button id="memoryClose" type="button" aria-label="Close memory manager"><svg viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"/></svg></button><h2>What Weeple remembers</h2><p>Only stable, useful information retained by rule or your confirmation.</p></header>
+          <div class="memory-controls"><button class="active" type="button" data-memory-filter="all">All</button><button type="button" data-memory-filter="goal">Goals</button><button type="button" data-memory-filter="preference">Preferences</button><button type="button" data-memory-filter="relationship">People</button></div>
+          <div class="memory-list" id="memoryList"></div>
+          <button class="voice-memory-edit" id="voiceMemoryEdit" type="button"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg><span><b>Adjust memory by voice</b><small>Describe a change, then review it before saving.</small></span></button>
+        </aside>
+
+        <section class="memory-proposal" id="memoryProposal" role="dialog" aria-modal="true" aria-hidden="true">
+          <span><i></i>PROPOSED MEMORY CHANGE</span><h2>Update your focus preference?</h2><p>“My best deep-work time is now 8:30–11:00 on weekdays.”</p><div><small>CURRENT MEMORY</small><s>Best focus time is 9:30–11:30.</s><small>PROPOSED</small><strong>Best focus time is 8:30–11:00 on weekdays.</strong></div><footer><button id="memoryProposalCancel" type="button">Cancel</button><button id="memoryProposalConfirm" type="button">Confirm change</button></footer>
+        </section>
+        </div>
+      </section>
