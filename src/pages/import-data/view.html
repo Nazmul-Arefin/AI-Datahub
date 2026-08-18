@@ -1,0 +1,80 @@
+<!-- Import Data page fragment -->
+<section class="data-workspace visible visible" id="dataWorkspace" aria-label="Personal data import and authorization workspace" aria-hidden="false">
+        <div class="data-space-ambient" aria-hidden="true"><i></i><i></i><i></i></div>
+        <header class="workspace-heading data-heading">
+          <div class="data-heading-copy">
+            <span><i></i>PRIVATE CONNECTIONS</span>
+            <h1>Import Data</h1>
+            <p>Choose what Weeple can access.</p>
+          </div>
+          <div class="data-heading-actions">
+            <span class="data-privacy-state"><i></i><b>Protected</b><small>Minimum access active</small></span>
+            <button id="addSourceButton" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Add source</span></button>
+          </div>
+        </header>
+
+        <main class="data-main">
+          <section class="data-command-hero" aria-label="Personal context network overview">
+            <div class="data-command-copy">
+              <span><i></i>PRIVATE CONTEXT</span>
+              <h2>Connect what matters.</h2>
+              <p>Add trusted sources and control exactly what Weeple can use.</p>
+            </div>
+            <div class="data-core-visual" aria-hidden="true">
+              <span class="data-core-ring ring-one"></span><span class="data-core-ring ring-two"></span>
+              <i class="data-orbit-node node-one"></i><i class="data-orbit-node node-two"></i><i class="data-orbit-node node-three"></i><i class="data-orbit-node node-four"></i>
+              <strong><i></i><b>12</b><small>CONNECTED</small></strong>
+            </div>
+            <div class="data-command-metrics">
+              <span><small>CONNECTION HEALTH</small><b><i></i>All systems ready</b></span>
+              <span><small>PROCESSED TODAY</small><b>42 assets</b></span>
+              <span><small>LAST ACTIVITY</small><b>2 minutes ago</b></span>
+            </div>
+          </section>
+
+          <aside class="data-category-rail" aria-label="Filter data sources">
+            <strong>FILTER</strong>
+            <button class="active" type="button" data-source-filter="all"><i>12</i><span>All sources</span></button>
+            <button type="button" data-source-filter="device"><i>03</i><span>Devices</span></button>
+            <button type="button" data-source-filter="files"><i>03</i><span>Files</span></button>
+            <button type="button" data-source-filter="productivity"><i>02</i><span>Work</span></button>
+            <button type="button" data-source-filter="health"><i>01</i><span>Health</span></button>
+            <button type="button" data-source-filter="identity"><i>02</i><span>Identity</span></button>
+            <button type="button" data-source-filter="communication"><i>01</i><span>Social</span></button>
+          </aside>
+
+          <header class="source-toolbar adapter-toolbar">
+            <div class="adapter-toolbar-copy">
+              <small>YOUR SOURCES</small>
+              <strong>Connections</strong>
+            </div>
+            <div class="adapter-toolbar-actions">
+              <span class="source-health-summary" aria-label="Connection health"><span><i></i><b>8</b> active</span><span><i></i><b>2</b> need review</span></span>
+              <button class="adapter-add" id="addAdapterButton" type="button"><i>+</i>Add adapter</button>
+            </div>
+            <span class="adapter-count" id="sourceCount">12 adapters shown</span>
+          </header>
+          <section class="source-grid" id="sourceGrid" aria-live="polite"></section>
+        </main>
+
+        <aside class="source-inspector" id="sourceInspector" aria-label="Selected source authorization details">
+          <div id="sourceInspectorContent"></div>
+        </aside>
+
+        <section class="connection-wizard" id="connectionWizard" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="connectionWizardTitle">
+          <button class="wizard-close" id="connectionWizardClose" type="button" aria-label="Close source connection wizard"><svg viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
+          <span><i></i>MINIMUM-ACCESS CONNECTION</span>
+          <h2 id="connectionWizardTitle">Where should your AI learn from?</h2>
+          <p>Choose a source. Weeple will explain the minimum permission needed before anything is connected.</p>
+          <div class="wizard-source-types">
+            <button type="button" data-wizard-source="Device"><i>01</i><b>Personal device</b><small>USB · LAN · Bluetooth</small></button>
+            <button type="button" data-wizard-source="Files"><i>02</i><b>Files &amp; folders</b><small>Explicit local selection</small></button>
+            <button type="button" data-wizard-source="Account"><i>03</i><b>Account or API</b><small>Official authorization</small></button>
+            <button type="button" data-wizard-source="Identity"><i>04</i><b>Digital identity</b><small>Public candidates first</small></button>
+            <button type="button" data-wizard-source="Extension"><i>05</i><b>Plugin or MCP</b><small>Extended tools &amp; sources</small></button>
+            <button type="button" data-wizard-source="Relay"><i>06</i><b>Authorized relay</b><small>Adapter or virtual environment</small></button>
+          </div>
+          <div class="wizard-permission-preview" id="wizardPermissionPreview"><i></i><span><strong>Select a connection type</strong><small>The required scope and processing purpose will appear here.</small></span></div>
+          <footer><button id="wizardCancel" type="button">Cancel</button><button class="wizard-continue" id="wizardContinue" type="button" disabled>Review permissions</button></footer>
+        </section>
+      </section>

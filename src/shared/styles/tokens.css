@@ -1,0 +1,13 @@
+:root {
+  --orange: #ff5e00;
+  --amber: #ffb703;
+  --coral: #ff8c42;
+  --green: #10b981;
+  --active-color: #ff5e00;
+  --active-rgb: 255, 94, 0;
+  --ink: #111827;
+  --muted: #6b7280;
+  --glass: rgba(255, 255, 255, .6);
+  --line: rgba(17, 24, 39, .08);
+  --font-ui: Bahnschrift, "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif;
+}

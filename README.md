@@ -1,19 +1,33 @@
 # Weeple AI OS Dashboard
 
-A dependency-free, responsive landing screen for a dedicated personal AI touchscreen terminal.
+A dependency-free, hash-routed personal AI OS shell with modular pages.
 
 ## Run locally
 
-Open `index.html` directly, or serve the folder with any static web server. For example:
+Page fragments load dynamically, so the app must be served over HTTP (opening `index.html` via `file://` is not supported).
 
 ```powershell
 npx serve .
 ```
 
-## Interactions
+Then open the printed local URL (for example `http://localhost:3000`).
 
-- Drag the topology to rotate it.
-- Scroll or pinch to zoom.
-- Hover or tap nodes to inspect connection details.
-- Tap a core orb, navigation tab, CTA, or feature card to focus a cluster.
-- Use Search (or `Ctrl/Cmd + K`), Voice, and the Action Center in the top bar.
+## Routes
+
+| Hash | Page |
+|------|------|
+| `#/overview` | Overview (topology + calendar) |
+| `#/goals` | Goals |
+| `#/import-data` | Import Data |
+| `#/use-data` | Use Data |
+
+## Project layout
+
+```
+index.html                 Shared shell (topbar, outlet, toast, activity dock)
+src/app/                   Router, routes registry, bootstrap
+src/shared/                Tokens, shell styles, store, storage, UI helpers
+src/pages/<page>/          view.html + page.css + page.js per page
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for ownership and Git workflow.

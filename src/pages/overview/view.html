@@ -1,0 +1,160 @@
+<!-- Overview page fragment -->
+<div class="universe" aria-label="Personal AI universe and calendar">
+<canvas id="topologyCanvas" aria-label="Interactive 3D map of goals, connected data, and long-term memory"></canvas>
+      <div class="canvas-fade"></div>
+      <div class="topology-hit-layer" id="topologyHitLayer" aria-hidden="true"></div>
+
+      <section class="calendar-panel" aria-label="AI calendar">
+        <header class="calendar-toolbar">
+          <div><span><i></i>YOU + AI CALENDAR</span><button class="month-selector" id="calendarMonthButton" type="button" aria-expanded="false"><strong id="calendarMonth">July 2026</strong><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button></div>
+          <div class="calendar-controls">
+            <button class="calendar-add-task" id="calendarAddTask" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Task</span></button>
+            <button class="today-button" id="calendarToday" type="button">Today</button>
+            <button class="calendar-arrow" id="calendarPrevious" type="button" aria-label="Previous day"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+            <button class="calendar-arrow" id="calendarNext" type="button" aria-label="Next day"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+          </div>
+        </header>
+        <section class="month-popover" id="monthPopover" aria-label="Choose a specific date">
+          <header>
+            <button id="monthPickerPrevious" type="button" aria-label="Previous month"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></button>
+            <strong id="monthPickerTitle">August 2026</strong>
+            <button id="monthPickerNext" type="button" aria-label="Next month"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button>
+          </header>
+          <div class="month-weekdays" aria-hidden="true"><span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span></div>
+          <div class="month-days" id="monthDays"></div>
+          <footer><button id="monthPickerToday" type="button">Jump to today</button></footer>
+        </section>
+        <div class="calendar-stage" id="calendarStage" aria-label="Swipe between calendar days"></div>
+        <div class="calendar-swipe-hint"><span></span>Swipe to explore your days<span></span></div>
+      </section>
+
+      <section class="calendar-task-modal" id="calendarTaskModal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="calendarTaskTitle">
+        <button class="calendar-task-backdrop" id="calendarTaskBackdrop" type="button" aria-label="Close task form"></button>
+        <div class="calendar-task-sheet">
+          <header>
+            <span><i></i>NEW CALENDAR TASK</span>
+            <button id="calendarTaskClose" type="button" aria-label="Close task form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
+          </header>
+          <h2 id="calendarTaskTitle">Add the next move</h2>
+          <p>Choose who owns it. Weeple keeps your work and AI work clear.</p>
+          <form id="calendarTaskForm">
+            <label class="calendar-task-title-field"><span>TASK</span><input id="calendarTaskName" type="text" maxlength="60" required placeholder="What needs to happen?"></label>
+            <div class="calendar-task-link">
+              <label><span>LINK TO GOAL <em>OPTIONAL</em></span><select id="calendarTaskGoal"><option value="">Standalone task</option></select></label>
+              <label><span>SUBGOAL</span><select id="calendarTaskSubgoal" disabled><option value="">Choose a goal first</option></select></label>
+            </div>
+            <div class="calendar-task-schedule">
+              <label><span>DATE</span><input id="calendarTaskDate" type="date" required></label>
+              <label><span id="calendarTaskTimeLabel">DUE TIME</span><input id="calendarTaskTime" type="time" required></label>
+              <label class="calendar-task-end-field" id="calendarTaskEndField"><span>EXPECTED FINISH</span><input id="calendarTaskEndTime" type="time"></label>
+            </div>
+            <fieldset class="calendar-task-owner">
+              <legend>WHO WILL DO IT?</legend>
+              <label><input type="radio" name="calendarTaskOwner" value="human" checked><span class="owner-choice-human"><i>YOU</i><b>My task</b><small>I will take action</small></span></label>
+              <label><input type="radio" name="calendarTaskOwner" value="ai"><span class="owner-choice-ai"><i>AI</i><b>AI task</b><small>Weeple will prepare it</small></span></label>
+            </fieldset>
+            <footer><button id="calendarTaskCancel" type="button">Cancel</button><button class="calendar-task-submit" type="submit">Add task</button></footer>
+          </form>
+        </div>
+      </section>
+
+<div class="topology-meta" aria-hidden="true">
+        <span><i class="meta-pulse"></i>Goal intelligence active</span><b id="topologyConnectionCount">24</b><small>RELEVANT LINKS</small>
+        <div class="topology-key"><span><i class="key-goal"></i>Goal</span><span><i class="key-data"></i>Live data</span><span><i class="key-memory"></i>Memory</span></div>
+      </div>
+
+      <div class="interaction-hint" id="interactionHint">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11V6.5a1.5 1.5 0 0 1 3 0V10m0-2.5a1.5 1.5 0 0 1 3 0V10m0-1a1.5 1.5 0 0 1 3 0v4.5c0 4-2 6.5-6 6.5h-1c-2.2 0-3.5-1-4.5-2.5L4 14a1.4 1.4 0 0 1 2.2-1.7L9 15"/></svg>
+        <span>Drag to explore <i>·</i> Pinch to zoom <i>·</i> Tap any node to understand it</span>
+      </div>
+
+      <section class="focus-mode-panel" id="focusModePanel" aria-hidden="true" aria-live="polite">
+        <header>
+          <span><i></i>FOCUS MODE</span>
+          <button class="focus-back" id="focusBack" type="button" aria-label="Back to universe overview">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+            Back to Overview
+          </button>
+        </header>
+        <div class="focus-copy">
+          <small id="focusEyebrow">PRIMARY INTELLIGENCE</small>
+          <strong id="focusTitle">Goal Management</strong>
+          <p id="focusDescription">Turn your connected context into clear, achievable next actions.</p>
+        </div>
+        <div class="focus-actions" id="focusActions"></div>
+      </section>
+
+      <aside class="node-tooltip" id="nodeTooltip" aria-live="polite">
+        <div class="tooltip-orb"></div>
+        <div class="tooltip-copy"><small id="tooltipType">CONNECTED DATA</small><strong id="tooltipTitle">Apple Fitness</strong><p id="tooltipDetail">Current evidence connected to this goal.</p><dl><div><dt>Source</dt><dd id="tooltipSource">Connected source</dd></div><div><dt>Why connected</dt><dd id="tooltipReason">Supports the selected subgoal.</dd></div></dl></div>
+        <span><b id="tooltipStrength">94</b>%<small>relevance</small></span>
+      </aside>
+
+      <section class="command-panel" id="commandPanel" aria-label="AI command center">
+        <div class="command-icon">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.4-4.4m2.4-5.1a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z"/></svg>
+        </div>
+        <input id="commandInput" type="text" placeholder="Ask Weeple anything…" autocomplete="off">
+        <kbd>ESC</kbd>
+      </section>
+
+      <aside class="notification-panel" id="notificationPanel" aria-label="Notifications">
+        <div class="panel-heading"><strong>Action center</strong><span>3 updates</span></div>
+        <button type="button" data-notification-action="Review today’s goal plan"><i class="priority-important"></i><span><em>Important</em><b>Morning brief is ready</b><small>3 goals prioritized for today</small></span><time>Now</time></button>
+        <button type="button" data-notification-action="Open meeting preparation"><i class="priority-progress"></i><span><em>In progress</em><b>Meeting preparation</b><small>AI is assembling the final context</small></span><time>2m</time></button>
+        <button type="button" data-notification-action="View synchronized sources"><i class="priority-completed"></i><span><em>Completed</em><b>Health data synced</b><small>Apple Fitness · 42 metrics</small></span><time>8m</time></button>
+      </aside>
+    </section>
+
+    <section class="activity-dock" aria-label="Live AI activity ledger">
+      <div class="activity-identity">
+        <span class="activity-symbol">
+          <i></i>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1m0-12.8-2.1 2.1m-8.6 8.6-2.1 2.1"/></svg>
+        </span>
+        <span><small>EXAMPLE DATA</small><strong>AI Activity</strong><em>Continuously learning</em></span>
+      </div>
+      <div class="activity-feed">
+        <button class="activity-item priority status-progress" type="button" data-activity-action="Review plan" data-action-target="goals" aria-label="Goal plan recalibrated. In progress. Touch to reveal Review plan action.">
+          <span class="activity-dot"><i></i></span>
+          <span><strong id="liveActivityTitle">Goal plan recalibrated</strong><small id="liveActivityDetail">3 next actions prioritized for today</small><em class="activity-action">Review plan <b>→</b></em></span>
+          <span class="activity-meta"><time>Now</time><em>In progress</em></span>
+        </button>
+        <button class="activity-item status-important" type="button" data-activity-action="Open preparation" data-action-target="calendar" aria-label="Client Meeting at 14:00. Important. Touch to reveal Open preparation action.">
+          <span class="activity-dot amber"><i></i></span>
+          <span><strong>Client Meeting · 14:00</strong><small>Agenda, notes, and documents are ready</small><em class="activity-action">Open preparation <b>→</b></em></span>
+          <span class="activity-meta"><time>2h</time><em>Important</em></span>
+        </button>
+        <button class="activity-item status-completed" type="button" data-activity-action="View sources" data-action-target="data" aria-label="Personal data synchronized. Completed. Touch to reveal View sources action.">
+          <span class="activity-dot violet"><i></i></span>
+          <span><strong>Personal data synchronized</strong><small>42 new signals connected securely</small><em class="activity-action">View sources <b>→</b></em></span>
+          <span class="activity-meta"><time>8m</time><em>Completed</em></span>
+        </button>
+        <button class="activity-item status-progress" type="button" data-activity-action="View insight" data-action-target="memory" aria-label="Memory insight prepared. In progress. Touch to reveal View insight action.">
+          <span class="activity-dot coral"><i></i></span>
+          <span><strong>Memory insight prepared</strong><small>6 relevant notes linked to today’s goals</small><em class="activity-action">View insight <b>→</b></em></span>
+          <span class="activity-meta"><time>12m</time><em>In progress</em></span>
+        </button>
+      </div>
+      <button class="activity-expand" id="activityExpand" type="button" aria-label="View all notifications">
+        <span>View all</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg>
+      </button>
+    </section>
+  </main>
+
+  <section class="onboarding-overlay" id="onboardingOverlay" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="onboardingTitle">
+    <div class="onboarding-card">
+      <button class="onboarding-close" id="onboardingClose" type="button" aria-label="Close first value setup"><svg viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
+      <header><span><i></i>FIRST VALUE SETUP</span><small id="onboardingProgressLabel">STEP 1 OF 4</small><h2 id="onboardingTitle">What would be useful first?</h2><p id="onboardingDescription">Choose one outcome. Weeple will request only the minimum data needed to produce a real, verifiable result.</p></header>
+      <div class="onboarding-progress"><i></i><i></i><i></i><i></i></div>
+      <div class="onboarding-body" id="onboardingBody"></div>
+      <footer><button id="onboardingBack" type="button">Back</button><button class="onboarding-next" id="onboardingNext" type="button">Continue</button></footer>
+    </div>
+  </section>
+
+  <div class="toast" id="toast" role="status"><i></i><span>Goals hub focused</span><button id="toastAction" type="button" hidden>Undo</button></div>
+  <script src="app.js?v=20260813-4"></script>
+</body>
+</html>
+</div>

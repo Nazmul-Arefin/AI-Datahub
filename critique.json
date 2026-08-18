@@ -1,0 +1,26 @@
+{
+  "kind": "critique-panel",
+  "score": 4.6,
+  "axes": {
+    "clarity": {
+      "score": 4.7,
+      "notes": "A 19/58/21 desktop grid, compact stacked side panels, and explicit gutters make the Working State easy to scan without overlap."
+    },
+    "hierarchy": {
+      "score": 4.8,
+      "notes": "The goal string leads into a wide center stage where the static avatar, compact composer, and agent dock remain the dominant composition."
+    },
+    "typography": {
+      "score": 4.5,
+      "notes": "Existing Weeple type hierarchy and compact metadata sizing are preserved across goals, sources, tasks, guidelines, and results."
+    },
+    "motion": {
+      "score": 5,
+      "notes": "The Working State uses a static avatar frame, no entrance or hover motion, no timed progress rerenders, and no automatic source scrolling."
+    },
+    "brand": {
+      "score": 4.6,
+      "notes": "Brand orange remains primary while blue, green, violet, and coral provide restrained information roles on light Weeple surfaces."
+    }
+  }
+}

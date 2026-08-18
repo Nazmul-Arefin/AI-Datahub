@@ -1,0 +1,32 @@
+html, body { width: 100%; min-height: 100%; margin: 0; }
+
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: hidden;
+  color: var(--ink);
+  background: #f5f5f1;
+  font-family: var(--font-ui);
+  font-optical-sizing: auto;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  touch-action: none;
+}
+
+button, input { font: inherit; }
+
+button { color: inherit; }
+
+.ambient {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(50px);
+  pointer-events: none;
+  opacity: .7;
+}
+
+.ambient-one { width: 36vw; height: 36vw; right: -10vw; top: -18vw; background: rgba(var(--active-rgb), .17); transition: background 1.2s ease; }
+
+.ambient-two { width: 32vw; height: 32vw; left: -12vw; bottom: -18vw; background: rgba(16, 185, 129, .09); }
+
+button.touch-feedback { isolation: isolate; }
