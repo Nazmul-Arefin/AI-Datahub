@@ -3369,7 +3369,7 @@ function __install() {
     goalGameContent.innerHTML = `<div class="goal-plan-shell${goalPlanTaskDrawerOpen ? ' task-open' : ''}${goalPlanListOpen ? ' goal-list-open' : ''}" style="--observation-count:${scoredObservations.length};--suggestion-count:${Math.min(3, suggestions.length)}">
       ${goalSwitcherMarkup}
       <main class="goal-plan-stage">
-        <section class="goal-plan-visual${goalPlanTransitionDirection < 0 ? ' goal-switch-previous' : goalPlanTransitionDirection > 0 ? ' goal-switch-next' : ''}" aria-label="Goal visualization">
+        <section class="goal-plan-visual${goalPlanTransitionDirection < 0 ? ' goal-switch-previous' : goalPlanTransitionDirection > 0 ? ' goal-switch-next' : ' goal-artwork-enter'}" aria-label="Goal visualization">
           <img src="${artwork.url}" alt="${artwork.alt}">
           <div class="goal-plan-image-shade"></div>
           <div class="goal-plan-image-title"><small>${escapeGoalText(goal.category)} GOAL</small><h1 title="${escapeGoalText(goal.title)}">${escapeGoalText(goal.title)}</h1></div>
@@ -5878,22 +5878,8 @@ closeDataWorkspace();
     const directionButton = event.target.closest('[data-goal-direction]');
     if (directionButton) {
       const direction = Number(directionButton.dataset.goalDirection);
-      const nextIndex = state.currentGoalIndex + direction;
-      if (!direction || nextIndex < 0 || nextIndex >= goalProfiles.length) return;
-      goalPlanListOpen = false;
-      goalPlanMoreOpen = false;
-      goalPlanIntelDetail = null;
-      goalPlanShareOpen = false;
-      goalPlanTaskEditor = null;
-      goalPlanSubgoalEditor = null;
-      goalPlanTransitionDirection = direction;
-      window.clearTimeout(goalPlanTransitionTimer);
-      selectGoal(nextIndex, false);
-      goalPlanTransitionTimer = window.setTimeout(() => {
-        goalPlanTransitionDirection = 0;
-        goalGameContent?.querySelector('.goal-plan-visual')?.classList.remove('goal-switch-previous', 'goal-switch-next');
-      }, reduceMotion ? 0 : 430);
-      haptic(8);
+      if (!direction) return;
+      navigateGoalBy(direction);
       return;
     }
     const goalSelect = event.target.closest('[data-goal-plan-select]');
@@ -6431,17 +6417,34 @@ closeDataWorkspace();
     renderGoalCollection();
   });
 
-  function navigateGoalBy(direction) {
+  function navigateGoalBy(direction, options = {}) {
     const nextIndex = state.currentGoalIndex + direction;
     if (nextIndex < 0 || nextIndex >= goalProfiles.length) {
       haptic(4);
       __showToast(direction < 0 ? 'This is your first goal' : 'This is your last goal');
       return;
     }
+    if (options.transition !== false) {
+      goalPlanListOpen = false;
+      goalPlanMoreOpen = false;
+      goalPlanIntelDetail = null;
+      goalPlanShareOpen = false;
+      goalPlanTaskEditor = null;
+      goalPlanSubgoalEditor = null;
+      goalPlanTransitionDirection = direction;
+      window.clearTimeout(goalPlanTransitionTimer);
+      selectGoal(nextIndex, false);
+      goalPlanTransitionTimer = window.setTimeout(() => {
+        goalPlanTransitionDirection = 0;
+        goalGameContent?.querySelector('.goal-plan-visual')?.classList.remove('goal-switch-previous', 'goal-switch-next');
+      }, reduceMotion ? 0 : 430);
+      haptic(8);
+      return;
+    }
     goalCommandHero.classList.remove('swipe-left', 'swipe-right');
     void goalCommandHero.offsetWidth;
     goalCommandHero.classList.add(direction > 0 ? 'swipe-left' : 'swipe-right');
-    selectGoal(nextIndex);
+    selectGoal(nextIndex, false);
     window.setTimeout(() => goalCommandHero.classList.remove('swipe-left', 'swipe-right'), reduceMotion ? 0 : 360);
     haptic(8);
   }
