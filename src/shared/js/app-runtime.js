@@ -2227,6 +2227,7 @@ function __install() {
   let goalPlanMoreOpen = false;
   let goalPlanTransitionDirection = 0;
   let goalPlanTransitionTimer = 0;
+  let goalPlanVisualEnter = false;
   let goalPlanTaskEditor = null;
   let goalPlanSubgoalEditor = null;
   let goalPlanFocusedTaskId = '';
@@ -3333,6 +3334,30 @@ function __install() {
     `;
   }
 
+  function goalVisualTransitionState() {
+    if (goalPlanTransitionDirection < 0) return 'previous';
+    if (goalPlanTransitionDirection > 0) return 'next';
+    if (goalPlanVisualEnter) return 'enter';
+    return 'idle';
+  }
+
+  function finishGoalVisualTransition() {
+    goalPlanTransitionDirection = 0;
+    goalPlanVisualEnter = false;
+    const visual = goalGameContent?.querySelector('.goal-plan-visual');
+    if (visual) visual.dataset.goalTransition = 'idle';
+  }
+
+  function replayGoalVisualTransition(direction) {
+    if (reduceMotion) return;
+    const visual = goalGameContent?.querySelector('.goal-plan-visual');
+    if (!visual) return;
+    const transition = direction < 0 ? 'previous' : 'next';
+    visual.dataset.goalTransition = 'idle';
+    void visual.offsetWidth;
+    visual.dataset.goalTransition = transition;
+  }
+
   function renderGoalGameBoard(goal) {
     if (!goalGameContent) return;
     ensureGoalCommandModel(goal);
@@ -3369,7 +3394,7 @@ function __install() {
     goalGameContent.innerHTML = `<div class="goal-plan-shell${goalPlanTaskDrawerOpen ? ' task-open' : ''}${goalPlanListOpen ? ' goal-list-open' : ''}" style="--observation-count:${scoredObservations.length};--suggestion-count:${Math.min(3, suggestions.length)}">
       ${goalSwitcherMarkup}
       <main class="goal-plan-stage">
-        <section class="goal-plan-visual${goalPlanTransitionDirection < 0 ? ' goal-switch-previous' : goalPlanTransitionDirection > 0 ? ' goal-switch-next' : ' goal-artwork-enter'}" aria-label="Goal visualization">
+        <section class="goal-plan-visual" data-goal-transition="${goalVisualTransitionState()}" aria-label="Goal visualization">
           <img src="${artwork.url}" alt="${artwork.alt}">
           <div class="goal-plan-image-shade"></div>
           <div class="goal-plan-image-title"><small>${escapeGoalText(goal.category)} GOAL</small><h1 title="${escapeGoalText(goal.title)}">${escapeGoalText(goal.title)}</h1></div>
@@ -3418,6 +3443,7 @@ function __install() {
       ${goalPlanIntelligenceDrawerMarkup(goal, scoredObservations)}
       ${goalPlanShareMarkup(goal, artwork, progress)}
     </div>`;
+    if (goalPlanVisualEnter && !goalPlanTransitionDirection) goalPlanVisualEnter = false;
   }
 
   function renderGoalCommandCenter(goal) {
@@ -3866,6 +3892,7 @@ function __install() {
     goalsWorkspace.classList.add('visible');
     goalsWorkspace.setAttribute('aria-hidden', 'false');
     osShell.classList.add('goals-page');
+    goalPlanVisualEnter = true;
     selectGoal(goalIndex, false);
     focusCluster('goals', false);
     showGoalUseHint();
@@ -5886,11 +5913,12 @@ closeDataWorkspace();
     if (goalSelect) {
       window.clearTimeout(goalPlanTransitionTimer);
       goalPlanTransitionDirection = 0;
+      goalPlanVisualEnter = true;
       goalPlanListOpen = false;
       goalPlanMoreOpen = false;
       goalPlanIntelDetail = null;
       goalPlanFocusedTaskId = '';
-      selectGoal(Number(goalSelect.dataset.goalPlanSelect));
+      selectGoal(Number(goalSelect.dataset.goalPlanSelect), false);
       haptic(8);
       return;
     }
@@ -6434,10 +6462,8 @@ closeDataWorkspace();
       goalPlanTransitionDirection = direction;
       window.clearTimeout(goalPlanTransitionTimer);
       selectGoal(nextIndex, false);
-      goalPlanTransitionTimer = window.setTimeout(() => {
-        goalPlanTransitionDirection = 0;
-        goalGameContent?.querySelector('.goal-plan-visual')?.classList.remove('goal-switch-previous', 'goal-switch-next');
-      }, reduceMotion ? 0 : 430);
+      window.requestAnimationFrame(() => replayGoalVisualTransition(direction));
+      goalPlanTransitionTimer = window.setTimeout(finishGoalVisualTransition, reduceMotion ? 0 : 460);
       haptic(8);
       return;
     }

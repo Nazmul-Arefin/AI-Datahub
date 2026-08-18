@@ -1175,9 +1175,13 @@
 
 .goal-plan-visual { position:relative;min-width:0;min-height:0;width:100%;overflow:hidden;border-radius:27px;background:#111827;box-shadow:0 18px 44px rgba(19,26,42,.14);isolation:isolate; }
 
-.goal-plan-visual > img { width:100%;height:100%;display:block;object-fit:cover;transition:opacity .35s,transform .65s cubic-bezier(.2,.8,.2,1); }
+.goal-plan-visual > img { width:100%;height:100%;display:block;object-fit:cover; }
 
-.goal-plan-visual.goal-artwork-enter > img { animation:goalArtworkIn .65s ease both; }
+.goal-plan-visual[data-goal-transition="enter"] > img { animation:goalArtworkIn .65s ease both; }
+
+.goal-plan-visual[data-goal-transition="next"] > img,.goal-plan-visual[data-goal-transition="next"] > .goal-plan-image-shade { animation:goalArtworkFromRight .42s cubic-bezier(.2,.82,.2,1) both; }
+
+.goal-plan-visual[data-goal-transition="previous"] > img,.goal-plan-visual[data-goal-transition="previous"] > .goal-plan-image-shade { animation:goalArtworkFromLeft .42s cubic-bezier(.2,.82,.2,1) both; }
 
 .goal-plan-image-shade { position:absolute;inset:0;background:linear-gradient(90deg,rgba(9,15,26,.62),rgba(9,15,26,.08) 58%,rgba(9,15,26,.17)),linear-gradient(0deg,rgba(8,13,23,.56),transparent 42%); }
 
@@ -1957,8 +1961,9 @@
   max-width:min(650px,58%);
   color:#fff;
   pointer-events:none;
-  animation:goalImageTitleIn .55s cubic-bezier(.2,.8,.2,1) both;
 }
+
+.goal-plan-visual[data-goal-transition="enter"] > .goal-plan-image-title { animation:goalImageTitleIn .55s cubic-bezier(.2,.8,.2,1) both; }
 
 .goal-plan-image-title > small {
   display:block;
@@ -2390,13 +2395,13 @@
 
 .goal-plan-art-navigation > button:active { scale:.94; }
 
-.goal-plan-visual.goal-switch-next > img,.goal-plan-visual.goal-switch-next > .goal-plan-image-shade { animation:goalArtworkFromRight .42s cubic-bezier(.2,.82,.2,1) both; }
+.goal-plan-visual[data-goal-transition="next"] > .goal-plan-image-title,.goal-plan-visual[data-goal-transition="next"] > .goal-plan-image-progress,.goal-plan-visual[data-goal-transition="next"] > .goal-plan-next { animation:goalContentFromRight .36s .05s cubic-bezier(.2,.82,.2,1) both; }
 
-.goal-plan-visual.goal-switch-previous > img,.goal-plan-visual.goal-switch-previous > .goal-plan-image-shade { animation:goalArtworkFromLeft .42s cubic-bezier(.2,.82,.2,1) both; }
+.goal-plan-visual[data-goal-transition="previous"] > .goal-plan-image-title,.goal-plan-visual[data-goal-transition="previous"] > .goal-plan-image-progress,.goal-plan-visual[data-goal-transition="previous"] > .goal-plan-next { animation:goalContentFromLeft .36s .05s cubic-bezier(.2,.82,.2,1) both; }
 
-.goal-plan-visual.goal-switch-next > .goal-plan-image-title,.goal-plan-visual.goal-switch-next > .goal-plan-image-progress,.goal-plan-visual.goal-switch-next > .goal-plan-next { animation:goalContentFromRight .36s .05s cubic-bezier(.2,.82,.2,1) both; }
-
-.goal-plan-visual.goal-switch-previous > .goal-plan-image-title,.goal-plan-visual.goal-switch-previous > .goal-plan-image-progress,.goal-plan-visual.goal-switch-previous > .goal-plan-next { animation:goalContentFromLeft .36s .05s cubic-bezier(.2,.82,.2,1) both; }
+@media (prefers-reduced-motion:reduce) {
+  .goal-plan-visual[data-goal-transition="enter"] > img,.goal-plan-visual[data-goal-transition="enter"] > .goal-plan-image-title,.goal-plan-visual[data-goal-transition="next"] > img,.goal-plan-visual[data-goal-transition="next"] > .goal-plan-image-shade,.goal-plan-visual[data-goal-transition="next"] > .goal-plan-image-title,.goal-plan-visual[data-goal-transition="next"] > .goal-plan-image-progress,.goal-plan-visual[data-goal-transition="next"] > .goal-plan-next,.goal-plan-visual[data-goal-transition="previous"] > img,.goal-plan-visual[data-goal-transition="previous"] > .goal-plan-image-shade,.goal-plan-visual[data-goal-transition="previous"] > .goal-plan-image-title,.goal-plan-visual[data-goal-transition="previous"] > .goal-plan-image-progress,.goal-plan-visual[data-goal-transition="previous"] > .goal-plan-next { animation:none !important; }
+}
 
 .use-dashboard.goal-switch-static,.use-dashboard.goal-switch-static .stage-item { animation:none; }
 
