@@ -4,18 +4,18 @@
 
 | Folder | Owner |
 |--------|--------|
-| `src/pages/overview` | Primary maintainer |
-| `src/pages/goals` | Primary maintainer |
-| `src/pages/import-data` | Primary maintainer |
-| `src/pages/use-data` | Teammate |
+| `frontend/src/pages/overview` | Primary maintainer |
+| `frontend/src/pages/goals` | Primary maintainer |
+| `frontend/src/pages/import-data` | Primary maintainer |
+| `frontend/src/pages/use-data` | Teammate |
 
 Keep routine feature work inside your page folder (`view.html`, `page.css`, `page.js`).
 
 ## Shared code
 
-Changes under `src/shared/` or `src/app/routes.js` affect every page. Prefer a **separate PR** and coordinate with the other maintainer before merging.
+Changes under `frontend/src/shared/` or `frontend/src/app/routes.js` affect every page. Prefer a **separate PR** and coordinate with the other maintainer before merging.
 
-The route registry in `src/app/routes.js` is defined up front — do not edit it for normal page work.
+The route registry in `frontend/src/app/routes.js` is defined up front — do not edit it for normal page work.
 
 ## Branch workflow
 
@@ -30,12 +30,22 @@ The route registry in `src/app/routes.js` is defined up front — do not edit it
 ## Useful commands
 
 ```powershell
-# Serve the app (required — no file://)
-npx serve .
+# Serve the UI (required — no file://)
+npx serve frontend
 
-# Syntax-check modules
-Get-ChildItem -Recurse src -Filter *.js | ForEach-Object { node --check $_.FullName }
+# Syntax-check frontend modules
+Get-ChildItem -Recurse frontend/src -Filter *.js | ForEach-Object { node --check $_.FullName }
+
+# Backend API (optional)
+cd backend
+.\scripts\dev.ps1
+pytest
 ```
+
+## Backend
+
+API lives in `backend/`. Contracts: `backend/app/schemas/` and `docs/api-contracts.md`.  
+Do not call the API directly from page folders — use `frontend/src/shared/js/api/` and `repositories/`.
 
 ## Line endings
 

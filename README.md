@@ -1,16 +1,49 @@
-# Weeple AI OS Dashboard
+# Weeple AI OS
 
-A dependency-free, hash-routed personal AI OS shell with modular pages.
+Monorepo: modular dashboard UI + FastAPI backend.
+
+## Repository layout
+
+```
+frontend/          Hash-routed UI (index.html, src/, assets/)
+backend/           FastAPI API (schemas, services, adapters)
+docs/              Architecture, API contracts, dev guides
+docker-compose.yml Local stack (Postgres + API + adapter placeholders)
+```
 
 ## Run locally
 
-Page fragments load dynamically, so the app must be served over HTTP (opening `index.html` via `file://` is not supported).
+### Frontend
 
 ```powershell
-npx serve .
+npx serve frontend
 ```
 
-Then open the printed local URL (for example `http://localhost:3000`).
+Open the printed URL (for example `http://localhost:3000`).
+
+### Backend (optional — mock API)
+
+```powershell
+cd backend
+.\scripts\dev.ps1
+```
+
+- API docs: http://localhost:8000/docs  
+- Health: http://localhost:8000/api/v1/health
+
+To point the UI at the API, add to `frontend/index.html` before bootstrap:
+
+```html
+<script>window.__WEEple_API__ = 'http://localhost:8000/api/v1';</script>
+```
+
+Repositories in `frontend/src/shared/js/repositories/` fall back to in-memory mocks when the API is unreachable.
+
+### Docker stack
+
+```powershell
+docker compose up postgres api
+```
 
 ## Routes
 
@@ -21,13 +54,4 @@ Then open the printed local URL (for example `http://localhost:3000`).
 | `#/import-data` | Import Data |
 | `#/use-data` | Use Data |
 
-## Project layout
-
-```
-index.html                 Shared shell (topbar, outlet, toast, activity dock)
-src/app/                   Router, routes registry, bootstrap
-src/shared/                Tokens, shell styles, store, storage, UI helpers
-src/pages/<page>/          view.html + page.css + page.js per page
-```
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for ownership and Git workflow.
+See [frontend/README.md](frontend/README.md), [CONTRIBUTING.md](CONTRIBUTING.md), [docs/architecture.md](docs/architecture.md), and [docs/api-contracts.md](docs/api-contracts.md).
