@@ -5888,17 +5888,26 @@ closeDataWorkspace();
       goalPlanSubgoalEditor = null;
       goalPlanTransitionDirection = direction;
       window.clearTimeout(goalPlanTransitionTimer);
-      selectGoal(nextIndex);
+      selectGoal(nextIndex, false);
       goalPlanTransitionTimer = window.setTimeout(() => {
         goalPlanTransitionDirection = 0;
-        const currentGoal = goalProfiles[state.currentGoalIndex];
-        if (currentGoal && state.goalWorkspaceActive) renderGoalGameBoard(currentGoal);
+        goalGameContent?.querySelector('.goal-plan-visual')?.classList.remove('goal-switch-previous', 'goal-switch-next');
       }, reduceMotion ? 0 : 430);
       haptic(8);
       return;
     }
     const goalSelect = event.target.closest('[data-goal-plan-select]');
-    if (goalSelect) { goalPlanListOpen = false; goalPlanMoreOpen = false; goalPlanIntelDetail = null; goalPlanFocusedTaskId = ''; selectGoal(Number(goalSelect.dataset.goalPlanSelect)); haptic(8); return; }
+    if (goalSelect) {
+      window.clearTimeout(goalPlanTransitionTimer);
+      goalPlanTransitionDirection = 0;
+      goalPlanListOpen = false;
+      goalPlanMoreOpen = false;
+      goalPlanIntelDetail = null;
+      goalPlanFocusedTaskId = '';
+      selectGoal(Number(goalSelect.dataset.goalPlanSelect));
+      haptic(8);
+      return;
+    }
     if (event.target.closest('[data-goal-create]')) { goalPlanListOpen = false; openGoalCreateSheet(); return; }
     if (event.target.closest('[data-goal-plan-more]')) {
       goalPlanMoreOpen = !goalPlanMoreOpen;
