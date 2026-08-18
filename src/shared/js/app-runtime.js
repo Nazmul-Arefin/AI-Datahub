@@ -3345,17 +3345,25 @@ function __install() {
     goalPlanTransitionDirection = 0;
     goalPlanVisualEnter = false;
     const visual = goalGameContent?.querySelector('.goal-plan-visual');
-    if (visual) visual.dataset.goalTransition = 'idle';
+    if (!visual) return;
+    visual.classList.remove('goal-switch-previous', 'goal-switch-next');
+    visual.dataset.goalTransition = 'idle';
   }
 
-  function replayGoalVisualTransition(direction) {
+  function kickGoalVisualAnimation() {
     if (reduceMotion) return;
-    const visual = goalGameContent?.querySelector('.goal-plan-visual');
-    if (!visual) return;
-    const transition = direction < 0 ? 'previous' : 'next';
-    visual.dataset.goalTransition = 'idle';
-    void visual.offsetWidth;
-    visual.dataset.goalTransition = transition;
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const visual = goalGameContent?.querySelector('.goal-plan-visual');
+        if (!visual) return;
+        visual.querySelectorAll('img, .goal-plan-image-shade, .goal-plan-image-title, .goal-plan-image-progress, .goal-plan-next').forEach((element) => {
+          if (getComputedStyle(element).animationName === 'none') return;
+          element.style.animation = 'none';
+          void element.offsetWidth;
+          element.style.removeProperty('animation');
+        });
+      });
+    });
   }
 
   function renderGoalGameBoard(goal) {
@@ -3394,7 +3402,7 @@ function __install() {
     goalGameContent.innerHTML = `<div class="goal-plan-shell${goalPlanTaskDrawerOpen ? ' task-open' : ''}${goalPlanListOpen ? ' goal-list-open' : ''}" style="--observation-count:${scoredObservations.length};--suggestion-count:${Math.min(3, suggestions.length)}">
       ${goalSwitcherMarkup}
       <main class="goal-plan-stage">
-        <section class="goal-plan-visual" data-goal-transition="${goalVisualTransitionState()}" aria-label="Goal visualization">
+        <section class="goal-plan-visual${goalPlanTransitionDirection < 0 ? ' goal-switch-previous' : goalPlanTransitionDirection > 0 ? ' goal-switch-next' : ''}" data-goal-transition="${goalVisualTransitionState()}" aria-label="Goal visualization">
           <img src="${artwork.url}" alt="${artwork.alt}">
           <div class="goal-plan-image-shade"></div>
           <div class="goal-plan-image-title"><small>${escapeGoalText(goal.category)} GOAL</small><h1 title="${escapeGoalText(goal.title)}">${escapeGoalText(goal.title)}</h1></div>
@@ -3443,7 +3451,9 @@ function __install() {
       ${goalPlanIntelligenceDrawerMarkup(goal, scoredObservations)}
       ${goalPlanShareMarkup(goal, artwork, progress)}
     </div>`;
+    const shouldAnimate = goalPlanTransitionDirection !== 0 || goalPlanVisualEnter;
     if (goalPlanVisualEnter && !goalPlanTransitionDirection) goalPlanVisualEnter = false;
+    if (shouldAnimate) kickGoalVisualAnimation();
   }
 
   function renderGoalCommandCenter(goal) {
@@ -6462,7 +6472,6 @@ closeDataWorkspace();
       goalPlanTransitionDirection = direction;
       window.clearTimeout(goalPlanTransitionTimer);
       selectGoal(nextIndex, false);
-      window.requestAnimationFrame(() => replayGoalVisualTransition(direction));
       goalPlanTransitionTimer = window.setTimeout(finishGoalVisualTransition, reduceMotion ? 0 : 460);
       haptic(8);
       return;
