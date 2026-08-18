@@ -81,9 +81,9 @@
 
 .source-card footer { display: flex; justify-content: space-between; margin-top: auto; padding-top: 8px; border-top: 1px solid rgba(17,24,39,.05); }
 
-.source-card footer b { font-size: 6.5px; }
+.source-card > footer > span:first-child b { font-size: 6.5px; }
 
-.source-card footer span { color: var(--orange); font-size: 6px; }
+.source-card > footer > span:first-child small { color: #969da7; font-size: 6px; }
 
 /* Sidebar inspector fallback — modal layout overrides below when gallery toolbar is present. */
 .source-inspector:not(.visible) { pointer-events: none; }
@@ -319,10 +319,32 @@
   align-items: center;
   gap: 0 12px;
   padding: 14px;
+  overflow: hidden;
   border: 1px solid rgba(255,255,255,.88);
   border-radius: 19px;
   background: linear-gradient(145deg, rgba(255,255,255,.82), rgba(255,248,244,.48));
   box-shadow: inset 0 1px 0 #fff, 0 9px 24px rgba(48,54,61,.055);
+  cursor: default;
+  transform: none;
+  backdrop-filter: none;
+}
+
+.os-shell.data-page .data-main:has(.data-gallery-toolbar) .source-card::before,
+.os-shell.data-page .data-main:has(.data-gallery-toolbar) .source-card::after {
+  display: none;
+}
+
+.os-shell.data-page .data-main:has(.data-gallery-toolbar) .source-card:hover,
+.os-shell.data-page .data-main:has(.data-gallery-toolbar) .source-card:focus-within {
+  border-color: rgba(255,94,0,.14);
+  background: linear-gradient(145deg, rgba(255,255,255,.94), rgba(255,247,241,.65));
+  box-shadow: inset 0 1px 0 #fff, 0 13px 29px rgba(59,48,43,.08);
+  transform: translateY(-2px);
+}
+
+.os-shell.data-page .data-main:has(.data-gallery-toolbar) .source-card.is-paused {
+  filter: none;
+  opacity: .72;
 }
 
 .os-shell.data-page .data-main:has(.data-gallery-toolbar) .source-card > .source-mini-icon {
@@ -330,6 +352,14 @@
   height: 44px;
   align-self: center;
   border-radius: 14px;
+  color: #f15c17;
+  border: 1px solid rgba(255,94,0,.12);
+  background: rgba(255,94,0,.075);
+}
+
+.os-shell.data-page .data-main:has(.data-gallery-toolbar) .source-card > .source-mini-icon svg {
+  width: 24px;
+  height: 24px;
 }
 
 .os-shell.data-page .data-main:has(.data-gallery-toolbar) .source-card-copy {
@@ -350,6 +380,11 @@
   white-space: nowrap;
 }
 
+.os-shell.data-page .data-main:has(.data-gallery-toolbar) .source-card-copy > .source-status {
+  padding: 5px 7px;
+  font-size: 9px;
+}
+
 .os-shell.data-page .data-main:has(.data-gallery-toolbar) .source-card > footer {
   grid-column: 1 / 3;
   width: 100%;
@@ -363,21 +398,91 @@
   border-top: 1px solid rgba(45,70,86,.065);
 }
 
-.os-shell.data-page .data-main:has(.data-gallery-toolbar) .source-card > footer > button.manage {
-  min-width: 70px;
-  min-height: 31px;
-  display: grid;
-  place-items: center;
-  padding: 0 12px;
-  border: 1px solid #28343f;
-  border-radius: 9px;
-  color: #fff;
-  background: #28343f;
-  font: 780 10px inherit;
-  cursor: pointer;
+.os-shell.data-page .data-main:has(.data-gallery-toolbar) .source-card > footer > span:first-child {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.os-shell.data-page .data-gallery-toolbar { min-width:0; display:flex; align-items:center; justify-content:space-between; gap:18px; border-bottom:1px solid rgba(42,55,67,.07); }
+.os-shell.data-page .data-main:has(.data-gallery-toolbar) .source-card > footer > span:first-child small {
+  color: #9aa3ac;
+  font-size: 8px;
+}
+
+.os-shell.data-page .data-main:has(.data-gallery-toolbar) .source-card > footer > span:first-child b {
+  max-width: 125px;
+  overflow: hidden;
+  color: #687580;
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.os-shell.data-page .data-main:has(.data-gallery-toolbar) .source-card > footer > button.manage {
+  position: relative;
+  flex: none;
+  min-width: 102px;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px 0 12px;
+  border: 1px solid rgba(66,74,76,.13);
+  border-radius: 11px;
+  color: #303a40;
+  background: linear-gradient(145deg, rgba(255,255,255,.72), rgba(241,239,234,.48));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.92), 0 7px 18px rgba(48,55,55,.075);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform .2s, border-color .2s, box-shadow .2s, background .2s;
+}
+
+.os-shell.data-page .data-main:has(.data-gallery-toolbar) .source-card > footer > button.manage > span {
+  display: block;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.os-shell.data-page .data-main:has(.data-gallery-toolbar) .source-card > footer > button.manage > svg {
+  width: 25px;
+  height: 25px;
+  flex: 0 0 25px;
+  padding: 6px;
+  overflow: visible;
+  border-radius: 8px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: #fff;
+  background: linear-gradient(145deg, #ff7800, #f04400);
+  box-shadow: 0 4px 10px rgba(184,63,16,.2), inset 0 1px 0 rgba(255,255,255,.25);
+}
+
+.os-shell.data-page .data-main:has(.data-gallery-toolbar) .source-card > footer > button.manage:hover,
+.os-shell.data-page .data-main:has(.data-gallery-toolbar) .source-card > footer > button.manage:focus-visible {
+  color: #171b1e;
+  border-color: rgba(255,101,0,.28);
+  background: linear-gradient(145deg, rgba(255,255,255,.94), rgba(255,237,225,.72));
+  box-shadow: 0 10px 24px rgba(43,47,49,.11), 0 0 0 3px rgba(255,101,0,.045), inset 0 1px 0 #fff;
+  transform: translateY(-2px);
+}
+
+.os-shell.data-page .data-main:has(.data-gallery-toolbar) .source-card > footer > button.manage:hover > svg,
+.os-shell.data-page .data-main:has(.data-gallery-toolbar) .source-card > footer > button.manage:focus-visible > svg {
+  background: linear-gradient(145deg, #ff8424, #d93d00);
+  transform: translateX(2px);
+}
+
+.os-shell.data-page .data-gallery-toolbar { min-width:0; flex:none; display:flex; align-items:center; justify-content:space-between; gap:18px; padding-bottom:8px; border-bottom:1px solid rgba(42,55,67,.07); }
 .os-shell.data-page .data-category-rail {
   position:static; width:auto; height:auto; min-width:0; display:flex; flex-direction:row; align-items:center; gap:6px; padding:0;
   overflow-x:auto; border:0; border-radius:0; background:transparent; box-shadow:none; backdrop-filter:none; scrollbar-width:none;
