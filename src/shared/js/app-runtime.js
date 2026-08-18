@@ -187,7 +187,10 @@ function __install() {
   const dataWorkspace = document.getElementById('dataWorkspace');
   const sourceGrid = document.getElementById('sourceGrid');
   const sourceCount = document.getElementById('sourceCount');
+  const sourceInspector = document.getElementById('sourceInspector');
   const sourceInspectorContent = document.getElementById('sourceInspectorContent');
+  const sourceInspectorBackdrop = document.getElementById('sourceInspectorBackdrop');
+  const sourceInspectorClose = document.getElementById('sourceInspectorClose');
   const addSourceButton = document.getElementById('addSourceButton');
   const addAdapterButton = document.getElementById('addAdapterButton');
   const connectionWizard = document.getElementById('connectionWizard');
@@ -3964,7 +3967,7 @@ function __install() {
         if ((event.key === 'Enter' || event.key === ' ') && event.target === card) { event.preventDefault(); selectSource(card.dataset.sourceId); }
       });
     });
-    sourceGrid.querySelectorAll('[data-source-manage]').forEach(button => button.addEventListener('click', () => selectSource(button.dataset.sourceManage)));
+    sourceGrid.querySelectorAll('[data-source-manage]').forEach(button => button.addEventListener('click', () => selectSource(button.dataset.sourceManage, button)));
     sourceGrid.querySelectorAll('[data-source-reconnect]').forEach(button => button.addEventListener('click', () => {
       reconnectSource(dataSources.find(item => item.id === button.dataset.sourceReconnect), button);
     }));
@@ -3995,7 +3998,7 @@ function __install() {
   function renderSourceInspector(source) {
     const revoked = source.statusType === 'revoked';
     sourceInspectorContent.innerHTML = `
-      <header class="source-detail-header"><span><i></i>AUTHORIZATION DETAIL</span>${sourceStatusLabel(source)}<h2>${source.name}</h2><p>${source.type} · ${source.method}</p></header>
+      <header class="source-detail-header"><span><i></i>AUTHORIZATION DETAIL</span>${sourceStatusLabel(source)}<h2 id="sourceInspectorTitle">${source.name}</h2><p>${source.type} · ${source.method}</p></header>
       ${revoked ? '<div class="revoked-banner"><i></i><span><strong>Access revoked</strong><small>This source is excluded from every future AI task.</small></span></div>' : ''}
       <section class="source-detail-block"><header><strong>Authorized scope</strong><span>Minimum access</span></header>${source.scopes.map((scope, index) => `<button class="scope-toggle${revoked ? '' : ' on'}" type="button" data-scope-index="${index}" aria-pressed="${String(!revoked)}"><span><i></i>${scope}</span><em></em></button>`).join('')}</section>
       <section class="source-detail-block"><header><strong>Allowed purposes</strong><span>You control this</span></header><div class="purpose-chips">${source.purposes.map(purpose => `<span>${purpose}</span>`).join('')}</div></section>
@@ -4031,11 +4034,27 @@ function __install() {
     });
   }
 
-  function selectSource(id) {
+  let sourceInspectorTriggerId = '';
+
+  function selectSource(id, trigger = null) {
     const source = dataSources.find(item => item.id === id) || dataSources[0];
     state.selectedSourceId = source.id;
-    renderSourceGrid();
+    sourceInspectorTriggerId = trigger?.dataset.sourceManage || source.id;
     renderSourceInspector(source);
+    sourceInspector.classList.add('visible');
+    sourceInspector.setAttribute('aria-hidden', 'false');
+    dataWorkspace.classList.add('inspector-open');
+    window.requestAnimationFrame(() => sourceInspectorClose?.focus());
+  }
+
+  function closeSourceInspector(restoreFocus = true) {
+    if (!sourceInspector?.classList.contains('visible')) return;
+    sourceInspector.classList.remove('visible');
+    sourceInspector.setAttribute('aria-hidden', 'true');
+    dataWorkspace.classList.remove('inspector-open');
+    if (restoreFocus && sourceInspectorTriggerId) {
+      window.requestAnimationFrame(() => sourceGrid.querySelector(`[data-source-manage="${sourceInspectorTriggerId}"]`)?.focus());
+    }
   }
 
   function openConnectionWizard() {
@@ -5685,9 +5704,9 @@ function __install() {
 
   function openDataWorkspace(announce = true) {
     state.dataWorkspaceActive = true; stopTopologyLoop(); dataWorkspace.classList.add('visible'); dataWorkspace.setAttribute('aria-hidden', 'false'); osShell.classList.add('data-page');
-    selectSource(state.selectedSourceId); focusCluster('data', false); if (announce) __showToast('Personal data control center opened');
+    renderSourceGrid(); focusCluster('data', false); if (announce) __showToast('Personal data control center opened');
   }
-  function closeDataWorkspace() { state.dataWorkspaceActive = false; dataWorkspace.classList.remove('visible'); dataWorkspace.setAttribute('aria-hidden', 'true'); osShell.classList.remove('data-page'); closeConnectionWizard(); }
+  function closeDataWorkspace() { state.dataWorkspaceActive = false; dataWorkspace.classList.remove('visible'); dataWorkspace.setAttribute('aria-hidden', 'true'); osShell.classList.remove('data-page'); closeSourceInspector(false); closeConnectionWizard(); }
   function openUseWorkspace(announce = true) {
     state.useWorkspaceActive = true; stopTopologyLoop(); useWorkspace.classList.add('visible'); useWorkspace.setAttribute('aria-hidden', 'false'); osShell.classList.add('use-page'); focusCluster('memory', false); renderUseMission(); if (announce) __showToast('Use Data mission workspace opened');
   }
@@ -6847,6 +6866,8 @@ closeDataWorkspace();
   }));
   addSourceButton.addEventListener('click', openConnectionWizard);
   addAdapterButton?.addEventListener('click', openConnectionWizard);
+  sourceInspectorClose?.addEventListener('click', () => closeSourceInspector());
+  sourceInspectorBackdrop?.addEventListener('click', () => closeSourceInspector());
   connectionWizardClose.addEventListener('click', closeConnectionWizard);
   wizardCancel.addEventListener('click', closeConnectionWizard);
   connectionWizard.querySelectorAll('[data-wizard-source]').forEach(button => button.addEventListener('click', () => {
@@ -7625,6 +7646,7 @@ closeDataWorkspace();
       closeGoalDeleteSheet();
       closeCollaborationSheet();
       closeGoalCreateSheet();
+      closeSourceInspector();
       closeConnectionWizard();
       closeMemoryProposal();
       closeMemoryDrawer();

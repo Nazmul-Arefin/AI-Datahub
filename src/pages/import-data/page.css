@@ -262,3 +262,55 @@
 .collection-screen .source-lane:first-child::after { right:10px; }
 
 .collection-screen .source-lane:nth-of-type(2)::after { left:10px; }
+
+/* Import Data gallery layout and modal inspector */
+.os-shell.data-page .data-main {
+  left: clamp(26px, 3.7vw, 60px);
+  right: clamp(26px, 3.7vw, 60px);
+  top: clamp(158px, 21vh, 188px);
+  bottom: clamp(22px, 3.5vh, 34px);
+}
+
+.os-shell.data-page .data-gallery-toolbar { min-width:0; display:flex; align-items:center; justify-content:space-between; gap:18px; border-bottom:1px solid rgba(42,55,67,.07); }
+.os-shell.data-page .data-category-rail {
+  position:static; width:auto; height:auto; min-width:0; display:flex; flex-direction:row; align-items:center; gap:6px; padding:0;
+  overflow-x:auto; border:0; border-radius:0; background:transparent; box-shadow:none; backdrop-filter:none; scrollbar-width:none;
+}
+.os-shell.data-page .data-category-rail::-webkit-scrollbar { display:none; }
+.os-shell.data-page .data-category-rail > strong { display:none; }
+.os-shell.data-page .data-category-rail > button { min-width:max-content; min-height:34px; flex:0 0 auto; padding:0 13px; border:1px solid transparent; border-radius:11px; color:#77838e; background:transparent; font-size:11px; font-weight:730; }
+.os-shell.data-page .data-category-rail > button i { display:none; }
+.os-shell.data-page .data-category-rail > button:hover,
+.os-shell.data-page .data-category-rail > button.active { color:#d85418; border-color:rgba(255,94,0,.11); background:rgba(255,255,255,.82); box-shadow:0 6px 16px rgba(62,53,48,.055); transform:none; }
+.os-shell.data-page .adapter-count { display:block; flex:none; color:#8b959f; font-size:11px; font-weight:700; white-space:nowrap; }
+
+.os-shell.data-page .source-inspector {
+  position:absolute; z-index:60; inset:0; width:auto; padding:20px; display:grid; place-items:center; overflow:visible; visibility:hidden; opacity:0;
+  border:0; border-radius:0; background:transparent; box-shadow:none; backdrop-filter:none; pointer-events:none; transition:opacity .22s ease,visibility 0s linear .22s;
+}
+.os-shell.data-page .source-inspector.visible { visibility:visible; opacity:1; pointer-events:auto; transition:opacity .22s ease; }
+.os-shell.data-page .source-inspector-backdrop { position:absolute; inset:0; background:rgba(27,34,41,.38); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
+.os-shell.data-page .source-inspector-panel {
+  position:relative; z-index:1; width:min(570px,calc(100vw - 40px)); max-height:min(760px,calc(100vh - 40px)); padding:28px; overflow-y:auto;
+  border:1px solid rgba(255,255,255,.9); border-radius:28px; background:linear-gradient(145deg,rgba(255,255,255,.96),rgba(247,250,251,.91));
+  box-shadow:0 34px 100px rgba(24,34,43,.26),inset 0 1px 0 #fff; transform:translateY(12px) scale(.98); transition:transform .22s ease;
+}
+.os-shell.data-page .source-inspector.visible .source-inspector-panel { transform:none; }
+.os-shell.data-page .source-inspector-close { position:absolute; z-index:3; right:20px; top:20px; width:38px; height:38px; display:grid; place-items:center; padding:0; border:1px solid rgba(40,52,63,.08); border-radius:12px; color:#65727d; background:rgba(255,255,255,.74); cursor:pointer; }
+.os-shell.data-page .source-inspector-close:hover { color:#1d2730; background:#fff; }
+.os-shell.data-page .source-inspector-close svg { width:18px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; }
+.os-shell.data-page .source-detail-header { padding-right:54px; }
+
+@media (max-width:900px) {
+  .os-shell.data-page .data-main { left:92px; right:18px; top:154px; }
+  .os-shell.data-page .source-inspector { display:grid; }
+}
+@media (max-width:610px) {
+  .os-shell.data-page .data-main { left:14px; right:14px; top:146px; bottom:12px; }
+  .os-shell.data-page .data-gallery-toolbar { gap:10px; }
+  .os-shell.data-page .data-category-rail > button { padding-inline:10px; font-size:10px; }
+  .os-shell.data-page .source-inspector { padding:0; align-items:end; }
+  .os-shell.data-page .source-inspector-panel { width:100%; max-height:calc(100vh - 18px); padding:24px 20px; border-radius:26px 26px 0 0; }
+  .os-shell.data-page .source-inspector-close { right:16px; top:16px; }
+}
+@media (prefers-reduced-motion:reduce) { .os-shell.data-page .source-inspector, .os-shell.data-page .source-inspector-panel { transition:none; } }

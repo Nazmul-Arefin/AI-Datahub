@@ -8,57 +8,32 @@
             <p>Choose what Weeple can access.</p>
           </div>
           <div class="data-heading-actions">
-            <span class="data-privacy-state"><i></i><b>Protected</b><small>Minimum access active</small></span>
             <button id="addSourceButton" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Add source</span></button>
           </div>
         </header>
 
         <main class="data-main">
-          <section class="data-command-hero" aria-label="Personal context network overview">
-            <div class="data-command-copy">
-              <span><i></i>PRIVATE CONTEXT</span>
-              <h2>Connect what matters.</h2>
-              <p>Add trusted sources and control exactly what Weeple can use.</p>
-            </div>
-            <div class="data-core-visual" aria-hidden="true">
-              <span class="data-core-ring ring-one"></span><span class="data-core-ring ring-two"></span>
-              <i class="data-orbit-node node-one"></i><i class="data-orbit-node node-two"></i><i class="data-orbit-node node-three"></i><i class="data-orbit-node node-four"></i>
-              <strong><i></i><b>12</b><small>CONNECTED</small></strong>
-            </div>
-            <div class="data-command-metrics">
-              <span><small>CONNECTION HEALTH</small><b><i></i>All systems ready</b></span>
-              <span><small>PROCESSED TODAY</small><b>42 assets</b></span>
-              <span><small>LAST ACTIVITY</small><b>2 minutes ago</b></span>
-            </div>
-          </section>
-
-          <aside class="data-category-rail" aria-label="Filter data sources">
-            <strong>FILTER</strong>
-            <button class="active" type="button" data-source-filter="all"><i>12</i><span>All sources</span></button>
-            <button type="button" data-source-filter="device"><i>03</i><span>Devices</span></button>
-            <button type="button" data-source-filter="files"><i>03</i><span>Files</span></button>
-            <button type="button" data-source-filter="productivity"><i>02</i><span>Work</span></button>
-            <button type="button" data-source-filter="health"><i>01</i><span>Health</span></button>
-            <button type="button" data-source-filter="identity"><i>02</i><span>Identity</span></button>
-            <button type="button" data-source-filter="communication"><i>01</i><span>Social</span></button>
-          </aside>
-
-          <header class="source-toolbar adapter-toolbar">
-            <div class="adapter-toolbar-copy">
-              <small>YOUR SOURCES</small>
-              <strong>Connections</strong>
-            </div>
-            <div class="adapter-toolbar-actions">
-              <span class="source-health-summary" aria-label="Connection health"><span><i></i><b>8</b> active</span><span><i></i><b>2</b> need review</span></span>
-              <button class="adapter-add" id="addAdapterButton" type="button"><i>+</i>Add adapter</button>
-            </div>
-            <span class="adapter-count" id="sourceCount">12 adapters shown</span>
+          <header class="data-gallery-toolbar">
+            <nav class="data-category-rail" aria-label="Filter data sources">
+              <button class="active" type="button" data-source-filter="all"><span>All sources</span></button>
+              <button type="button" data-source-filter="device"><span>Devices</span></button>
+              <button type="button" data-source-filter="files"><span>Files</span></button>
+              <button type="button" data-source-filter="productivity"><span>Work</span></button>
+              <button type="button" data-source-filter="health"><span>Health</span></button>
+              <button type="button" data-source-filter="identity"><span>Identity</span></button>
+              <button type="button" data-source-filter="communication"><span>Social</span></button>
+            </nav>
+            <span class="adapter-count" id="sourceCount">12 sources</span>
           </header>
           <section class="source-grid" id="sourceGrid" aria-live="polite"></section>
         </main>
 
-        <aside class="source-inspector" id="sourceInspector" aria-label="Selected source authorization details">
-          <div id="sourceInspectorContent"></div>
+        <aside class="source-inspector" id="sourceInspector" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="sourceInspectorTitle">
+          <div class="source-inspector-backdrop" id="sourceInspectorBackdrop" aria-hidden="true"></div>
+          <section class="source-inspector-panel">
+            <button class="source-inspector-close" id="sourceInspectorClose" type="button" aria-label="Close authorization detail"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
+            <div id="sourceInspectorContent"></div>
+          </section>
         </aside>
 
         <section class="connection-wizard" id="connectionWizard" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="connectionWizardTitle">
