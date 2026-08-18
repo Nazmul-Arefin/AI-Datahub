@@ -3941,58 +3941,34 @@ function __install() {
 
   function renderSourceGrid() {
     const visibleSources = state.sourceFilter === 'all' ? dataSources : dataSources.filter(source => source.category === state.sourceFilter);
-    sourceCount.textContent = `${visibleSources.length} adapters shown - 42 assets processed today`;
-    sourceGrid.innerHTML = visibleSources.map(source => `
-      <article class="source-card${source.id === state.selectedSourceId ? ' active' : ''}${source.aiEnabled === false ? ' is-paused' : ''}" data-source-id="${source.id}" tabindex="0" role="button" aria-label="Manage ${source.name} adapter">
-        <header>
-          <span class="source-identity"><span class="source-mini-icon ${source.category}">${sourceAdapterIcon(source)}</span><span><strong>${source.name}</strong><small>${source.method}</small></span></span>
-          <button class="source-adapter-toggle" type="button" data-source-toggle="${source.id}" aria-pressed="${String(source.aiEnabled !== false && source.statusType !== 'revoked')}" aria-label="${source.aiEnabled === false ? 'Resume' : 'Pause'} ${source.name}"><i></i></button>
-        </header>
-        <div class="source-card-visual ${source.category}">
-          <span>${sourceAdapterIcon(source)}</span>
-        </div>
-        <div class="source-card-summary">
-          ${sourceStatusLabel(source)}
-          <span><b>${source.assets}</b></span>
-        </div>
+    sourceCount.textContent = `${visibleSources.length} source${visibleSources.length === 1 ? '' : 's'}`;
+    sourceGrid.innerHTML = visibleSources.map((source, index) => `
+      <article class="source-card${source.aiEnabled === false ? ' is-paused' : ''}" data-source-id="${source.id}" style="--card-order:${index}">
+        <span class="source-mini-icon ${source.category}">${sourceAdapterIcon(source)}</span>
+        <span class="source-card-copy"><strong>${source.name}</strong>${sourceStatusLabel(source)}</span>
         <footer>
-          <span><b>${source.lastSync}</b></span>
-          <span class="source-card-actions">${source.statusType === 'revoked' ? `<button class="reconnect" type="button" data-source-reconnect="${source.id}">Reconnect</button>` : `<button type="button" data-source-remove="${source.id}">Disconnect</button>`}<button class="manage" type="button" data-source-manage="${source.id}">Manage</button></span>
+          <span><small>Last sync</small><b>${source.lastSync}</b></span>
+          <button class="manage" type="button" data-source-manage="${source.id}" aria-haspopup="dialog"><span>Manage</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7.5 5 5 5-5 5"/></svg></button>
         </footer>
       </article>
     `).join('');
-    sourceGrid.querySelectorAll('[data-source-id]').forEach(card => {
-      card.addEventListener('click', event => { if (!event.target.closest('button')) selectSource(card.dataset.sourceId); });
-      card.addEventListener('keydown', event => {
-        if ((event.key === 'Enter' || event.key === ' ') && event.target === card) { event.preventDefault(); selectSource(card.dataset.sourceId); }
+    sourceGrid.querySelectorAll('.source-card').forEach(card => {
+      card.addEventListener('pointermove', event => {
+        if (event.pointerType === 'touch') return;
+        const bounds = card.getBoundingClientRect();
+        const x = (event.clientX - bounds.left) / bounds.width;
+        const y = (event.clientY - bounds.top) / bounds.height;
+        card.style.setProperty('--glass-x', `${x * 100}%`);
+        card.style.setProperty('--glass-y', `${y * 100}%`);
+        card.style.setProperty('--tilt-x', `${(0.5 - y) * 3.5}deg`);
+        card.style.setProperty('--tilt-y', `${(x - 0.5) * 4.5}deg`);
+      });
+      card.addEventListener('pointerleave', () => {
+        card.style.removeProperty('--tilt-x');
+        card.style.removeProperty('--tilt-y');
       });
     });
     sourceGrid.querySelectorAll('[data-source-manage]').forEach(button => button.addEventListener('click', () => selectSource(button.dataset.sourceManage, button)));
-    sourceGrid.querySelectorAll('[data-source-reconnect]').forEach(button => button.addEventListener('click', () => {
-      reconnectSource(dataSources.find(item => item.id === button.dataset.sourceReconnect), button);
-    }));
-    sourceGrid.querySelectorAll('[data-source-toggle]').forEach(button => button.addEventListener('click', () => {
-      const source = dataSources.find(item => item.id === button.dataset.sourceToggle);
-      if (!source || source.statusType === 'revoked') { __showToast('Reconnect this adapter before enabling it'); return; }
-      source.aiEnabled = source.aiEnabled === false;
-      renderSourceGrid();
-      if (state.selectedSourceId === source.id) renderSourceInspector(source);
-      __showToast(`${source.name} ${source.aiEnabled ? 'is available to Weeple' : 'is paused'}`);
-    }));
-    sourceGrid.querySelectorAll('[data-source-remove]').forEach(button => button.addEventListener('click', () => {
-      const source = dataSources.find(item => item.id === button.dataset.sourceRemove);
-      if (!source || source.statusType === 'revoked') return;
-      if (button.dataset.confirming !== 'true') {
-        button.dataset.confirming = 'true';
-        button.textContent = 'Confirm';
-        __showToast(`Confirm to disconnect ${source.name}`);
-        return;
-      }
-      source.status = 'Revoked'; source.statusType = 'revoked'; source.aiEnabled = false; source.lastSync = 'Access stopped'; source.usedBy = 'Future AI use is blocked';
-      renderSourceGrid();
-      if (state.selectedSourceId === source.id) renderSourceInspector(source);
-      __showToast(`${source.name} disconnected`);
-    }));
   }
 
   function renderSourceInspector(source) {
