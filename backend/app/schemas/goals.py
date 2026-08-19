@@ -58,6 +58,8 @@ class Goal(BaseModel):
     suggestions: list[GoalSuggestion] = Field(default_factory=list)
     monitoring_paused: bool = Field(default=False, alias="monitoringPaused")
     custom: bool = False
+    category: str | None = None
+    updated: str | None = None
 
     model_config = {"populate_by_name": True}
 
@@ -65,6 +67,23 @@ class Goal(BaseModel):
 class GoalListResponse(BaseModel):
     goals: list[Goal]
     total: int
+
+
+class GoalCreateRequest(BaseModel):
+    title: str
+    short: str | None = None
+    status: str = "On track"
+    progress: int = 0
+    schedule_offset: int | None = Field(default=None, alias="scheduleOffset")
+    scheduled_time: str | None = Field(default=None, alias="scheduledTime")
+    description: str | None = None
+    accent: str | None = None
+    category: str | None = None
+    subgoals: list[Subgoal] = Field(default_factory=list)
+    task_labels: list[str] = Field(default_factory=list, alias="taskLabels")
+    custom: bool = True
+
+    model_config = {"populate_by_name": True}
 
 
 class GoalUpdateRequest(BaseModel):

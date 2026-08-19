@@ -13,4 +13,5 @@ class TokenResponse(BaseModel):
 
 class UserProfile(BaseModel):
     id: str
+    username: str | None = None
     display_name: str

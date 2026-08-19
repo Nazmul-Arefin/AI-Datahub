@@ -15,6 +15,7 @@ class Source(BaseModel):
     purposes: list[str] = Field(default_factory=list)
     used_by: str | None = Field(default=None, alias="usedBy")
     ai_enabled: bool = Field(default=True, alias="aiEnabled")
+    connection_id: str | None = Field(default=None, alias="connectionId")
 
     model_config = {"populate_by_name": True}
 
@@ -42,10 +43,27 @@ class IntegrationCatalogItem(BaseModel):
     method: str
     description: str | None = None
     scopes: list[str] = Field(default_factory=list)
+    auth_type: str = Field(default="nango", alias="authType")
+    nango_provider_key: str | None = Field(default=None, alias="nangoProviderKey")
+    logo_url: str | None = Field(default=None, alias="logoUrl")
+
+    model_config = {"populate_by_name": True}
 
 
 class IntegrationCatalogResponse(BaseModel):
     items: list[IntegrationCatalogItem]
+    total: int = 0
+
+
+class IntegrationConnection(BaseModel):
+    id: str
+    catalog_key: str = Field(alias="catalogKey")
+    auth_provider: str = Field(alias="authProvider")
+    external_connection_id: str | None = Field(default=None, alias="externalConnectionId")
+    status: str = "pending"
+    error_message: str | None = Field(default=None, alias="errorMessage")
+
+    model_config = {"populate_by_name": True}
 
 
 class ConnectStartRequest(BaseModel):

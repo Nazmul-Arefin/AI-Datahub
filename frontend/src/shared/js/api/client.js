@@ -1,4 +1,4 @@
-const DEFAULT_BASE = 'http://localhost:8000/api/v1';
+const DEFAULT_BASE = 'http://127.0.0.1:8000/api/v1';
 
 export function getApiBase() {
   return (typeof window !== 'undefined' && window.__WEEple_API__) || DEFAULT_BASE;
@@ -47,7 +47,8 @@ export async function apiFetch(path, options = {}) {
   }
 
   if (!response.ok) {
-    const detail = data?.detail || data?.message || response.statusText;
+    const nested = data?.error;
+    const detail = nested?.message || data?.detail || data?.message || response.statusText;
     throw new ApiError(typeof detail === 'string' ? detail : 'Request failed', {
       status: response.status,
       body: data,
@@ -61,4 +62,5 @@ export const api = {
   get: (path) => apiFetch(path),
   post: (path, body) => apiFetch(path, { method: 'POST', body: JSON.stringify(body) }),
   patch: (path, body) => apiFetch(path, { method: 'PATCH', body: JSON.stringify(body) }),
+  delete: (path) => apiFetch(path, { method: 'DELETE' }),
 };

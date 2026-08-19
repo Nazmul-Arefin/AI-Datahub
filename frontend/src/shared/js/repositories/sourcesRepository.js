@@ -1,5 +1,12 @@
-import { ApiError, fetchSources, patchSource, disconnectSource, reconnectSource } from '../api/sources.js';
-import { isApiEnabled } from '../api/client.js';
+import { ApiError, isApiEnabled } from '../api/client.js';
+import {
+  fetchSources,
+  patchSource,
+  disconnectSource,
+  reconnectSource,
+  fetchIntegrationCatalog,
+  startIntegrationConnect,
+} from '../api/sources.js';
 
 export async function loadSourcesFromApi(category = 'all') {
   if (!isApiEnabled()) return null;
@@ -25,4 +32,20 @@ export async function disconnectSourceOnApi(sourceId) {
 export async function reconnectSourceOnApi(sourceId) {
   if (!isApiEnabled()) return null;
   return reconnectSource(sourceId);
+}
+
+export async function loadCatalogFromApi(q = '', category = '') {
+  if (!isApiEnabled()) return null;
+  try {
+    return await fetchIntegrationCatalog(q, category);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 0) return null;
+    console.warn('[sourcesRepository] catalog unavailable', error);
+    return null;
+  }
+}
+
+export async function startConnectOnApi(integrationId, redirectUri) {
+  if (!isApiEnabled()) return null;
+  return startIntegrationConnect(integrationId, redirectUri);
 }

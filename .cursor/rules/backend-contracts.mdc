@@ -1,0 +1,14 @@
+---
+description: Shared backend API contracts (errors, naming, camelCase).
+globs: backend/app/schemas/**/*.py,backend/app/api/**/*.py,docs/api-contracts.md
+alwaysApply: false
+---
+
+# Backend contracts
+
+- Resources are plural under `/api/v1/...`. IDs are UUIDs or stable slugs, never titles as PKs.
+- Enums and DB columns use `snake_case`. JSON uses camelCase aliases for the frontend.
+- Errors always return `{ "error": { "code", "message", "details" } }`. Do not return raw FastAPI `{ "detail": ... }` from new handlers.
+- Shared schemas live in `backend/app/schemas/`. Coordinate schema edits with the day-owner (Dev1 owns catalog/connection/goal CRUD schemas).
+- Routers stay thin. Business logic belongs in `backend/app/services/`.
+- Do not import Nango, AstrBot, Harness, or MCP adapter clients from `backend/app/api/`.

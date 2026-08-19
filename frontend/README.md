@@ -16,7 +16,9 @@ Or from this folder:
 npx serve .
 ```
 
-Open the printed URL (for example `http://localhost:3000`).
+Open the printed URL (for example `http://localhost:3000/#/overview`).
+
+If you see `Index of AI-Datahub/` you ran `npx serve` / `npx serve .` in the repo root. That is the wrong folder — use `npx serve frontend` or `frontend\dev.cmd`.
 
 ## Optional: connect to backend API
 

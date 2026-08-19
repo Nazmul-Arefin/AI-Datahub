@@ -1,22 +1,28 @@
 # MCP connector catalog
 
-How to add a new Import Data connector.
+How to add a new Import Data connector (no new FastAPI router).
 
-## Steps
+## Three steps
 
-1. Add catalog entry in `backend/app/services/seed_data.py` (`INTEGRATION_CATALOG`) or DB catalog table.
-2. Register OAuth config in Nango (or device-bridge adapter for local sources).
-3. Expose scopes in `IntegrationCatalogItem.scopes`.
-4. Implement fetch/sync in `source_service` or a dedicated adapter module.
-5. Document in this file and update `docs/api-contracts.md`.
+1. Add a catalog row in [`backend/app/services/seed_data.py`](../backend/app/services/seed_data.py) (`INTEGRATION_CATALOG`) with:
+   - `id` (stable key)
+   - `category` matching an Import filter slug
+   - `authType`: `nango` | `astrbot` | `mcp_url` | `api_key`
+   - `nangoProviderKey` when `authType` is `nango`
+2. Map the catalog key to a source card id in `CATALOG_SOURCE_IDS` (optional; defaults to the catalog key).
+3. Re-seed: `python backend/scripts/seed_db.py` (Postgres) or restart the API (in-memory).
+
+Dev2 then maps Nango provider / AstrBot platform / raw MCP URL. The connect API already routes by `authType` through `AuthConnector` or `MessagingService`.
 
 ## Categories
 
 - `device` — local bridge (phone, laptop, USB)
 - `files` — explicit folder selection
-- `productivity` — calendar, Notion, etc.
+- `productivity` — calendar, Notion, GitHub, Linear, Slack, Gmail
 - `health` — fitness APIs
-- `communication` — chat adapters
+- `communication` — chat adapters (WeChat, Telegram, Discord)
 - `identity` — public discovery tools
+
+Messaging connectors (`telegram`, `discord`) use `authType: astrbot`. OAuth SaaS connectors use `nango`.
 
 Frontend icons live in `frontend/src/shared/js/app-runtime.js` (`sourceAdapterIcon`).

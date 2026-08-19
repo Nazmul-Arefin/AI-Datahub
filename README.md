@@ -13,31 +13,37 @@ docker-compose.yml Local stack (Postgres + API + adapter placeholders)
 
 ## Run locally
 
-### Frontend
-
-```powershell
-npx serve frontend
-```
-
-Open the printed URL (for example `http://localhost:3000`).
-
-### Backend (optional — mock API)
+### Backend
 
 ```powershell
 cd backend
-.\scripts\dev.ps1
+$env:PYTHONPATH = (Get-Location).Path
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-- API docs: http://localhost:8000/docs  
-- Health: http://localhost:8000/api/v1/health
+Or double-click / run `backend\scripts\dev.cmd` (avoids PowerShell script blocking).
 
-To point the UI at the API, add to `frontend/index.html` before bootstrap:
+- Root: http://127.0.0.1:8000/
+- Docs: http://127.0.0.1:8000/docs
+- Health: http://127.0.0.1:8000/api/v1/health
 
-```html
-<script>window.__WEEple_API__ = 'http://localhost:8000/api/v1';</script>
+Use **127.0.0.1**, not `localhost`, if Windows resolves `localhost` to IPv6 (`::1`) and you get a 404 from another process.
+
+### Frontend
+
+From the **repo root** (not `backend/`):
+
+```powershell
+npx serve frontend -l 3000
 ```
 
-Repositories in `frontend/src/shared/js/repositories/` fall back to in-memory mocks when the API is unreachable.
+Or double-click `frontend\dev.cmd`.
+
+Open the URL the command prints (usually `http://localhost:3000/#/overview`).
+
+If the page is a folder listing (`backend/`, `docs/`, `.cursor/`), port 3000 is serving the **repo root** instead of `frontend/`. Stop that other `serve` process and use the URL printed by `npx serve frontend`.
+
+The UI already points at `http://127.0.0.1:8000/api/v1`. Repositories fall back to in-memory mocks when the API is unreachable.
 
 ### Docker stack
 

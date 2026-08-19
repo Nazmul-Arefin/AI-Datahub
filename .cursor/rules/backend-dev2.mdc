@@ -1,0 +1,24 @@
+---
+description: Developer 2 owns AI sidecars, adapters, and Agent/Messaging/MCP services.
+globs: backend/app/adapters/**/*.py,backend/app/services/{agent_service,messaging_service,memory_service,mcp_service,auth_connector,context_builder}.py,frontend/src/pages/use-data/**
+alwaysApply: false
+---
+
+# Developer 2 — AI + sidecars
+
+## Owns
+
+Adapters for DeepSeek Harness, AstrBot, Nango, MCP gateway/registry, TencentDB memory, LLM, ContextBuilder, AgentService, MessagingService, AuthConnector implementations, Compose sidecar wiring, fake/mock modes.
+
+## Forbidden
+
+- Inventing parallel Goal/Source/catalog schemas
+- Product Goals/Use agent loops inside AstrBot
+- Changing Dev1 CRUD routers except to call `ActivityService.record()`
+
+## Isolation
+
+- Harness only via `AgentService`
+- AstrBot only via `MessagingService`
+- Nango only via `AuthConnector`
+- Never put OAuth tokens in agent prompts or frontend payloads

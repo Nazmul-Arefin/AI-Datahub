@@ -1,0 +1,36 @@
+---
+description: Developer 1 owns core platform APIs, Postgres models, and Import/Goals/Overview wiring.
+globs: backend/app/api/{auth,goals,tasks,sources,integrations,overview}.py,backend/app/services/{auth_service,goal_service,task_service,source_service,overview_service,activity_service,seed_data,seed_db,runtime_store}.py,backend/app/models/**/*.py,backend/alembic/**/*.py,frontend/src/pages/{overview,goals,import-data}/**,frontend/src/shared/js/{api,repositories}/**
+alwaysApply: false
+---
+
+# Developer 1 — Core platform
+
+## Owns
+
+Auth, goals, tasks, overview, calendar data, integrations catalog/connect API surface, Postgres models/migrations, seed catalog, frontend Import/Goals/Overview repository wiring.
+
+## Allowed paths
+
+- `backend/app/api/auth.py`, `goals.py`, `tasks.py`, `sources.py`, `integrations.py`, `overview.py`
+- `backend/app/services/auth_service.py`, `goal_service.py`, `task_service.py`, `source_service.py`, `overview_service.py`, `activity_service.py`, `seed_data.py`, `seed_db.py`, `runtime_store.py`
+- `backend/app/models/`, `backend/app/schemas/`, `backend/alembic/`, `backend/tests/`
+- `frontend/src/shared/js/api/`, `frontend/src/shared/js/repositories/`
+- `frontend/src/pages/overview/`, `frontend/src/pages/goals/`, `frontend/src/pages/import-data/`
+
+## Forbidden
+
+- `backend/app/adapters/` (Dev2)
+- Implementing Nango/AstrBot/Harness/TencentDB clients
+- A second Goals/Use agent loop
+- Collaboration/social endpoints
+
+## Integration rules
+
+Call Dev2 through interfaces only:
+
+- `AuthConnector` for Nango OAuth
+- `MessagingService.connect_platform` for AstrBot
+- `MCPService.register_connection` / `unregister` after connect/revoke
+
+Adding a connector is a catalog row (`auth_type` + optional `nango_provider_key`), not a new router.

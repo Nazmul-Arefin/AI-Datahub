@@ -2,6 +2,15 @@
  * Application runtime adapted from the V2.3.2 monolith.
  * Expects overview/goals/import-data/use-data page roots to exist under #page-outlet.
  */
+import { loadGoalsFromApi, updateGoalOnApi } from './repositories/goalsRepository.js';
+import {
+  loadSourcesFromApi,
+  disconnectSourceOnApi,
+  reconnectSourceOnApi,
+  startConnectOnApi,
+} from './repositories/sourcesRepository.js';
+import { loadOverviewFromApi } from './repositories/overviewRepository.js';
+
 let __navigate = (id) => { window.location.hash = '#/' + id; };
 let __showToastExternal = null;
 let __store = null;
@@ -2284,6 +2293,23 @@ function __install() {
     try { localStorage.setItem('weeple-paused-goal-monitoring', JSON.stringify([...pausedMonitoringGoalTitles])); } catch (error) { /* storage is optional */ }
   }
 
+  async function hydrateGoalsFromApi() {
+    const remoteGoals = await loadGoalsFromApi();
+    if (!Array.isArray(remoteGoals) || !remoteGoals.length) return;
+    const byTitle = new Map(goalProfiles.map((goal) => [goal.title, goal]));
+    remoteGoals.forEach((remote) => {
+      const local = byTitle.get(remote.title);
+      if (local) {
+        Object.assign(local, remote);
+        return;
+      }
+      goalProfiles.push(remote);
+    });
+    try { renderGoalCollection(); } catch (_error) { /* collection may not be ready */ }
+  }
+
+  void hydrateGoalsFromApi();
+
   const goalCategorySymbols = { Travel: 'TR', Wellbeing: 'WB', Learning: 'LN', Finance: 'FN', Relationships: 'FM', Project: 'PJ' };
 
   function buildAdaptiveGoalProfile(outcome, situation, constraints) {
@@ -3920,7 +3946,7 @@ function __install() {
     resetGoalNodes();
   }
 
-  const dataSources = [
+  let dataSources = [
     { id: 'iphone', name: 'Xiaomi Phone', category: 'device', type: 'Personal device', method: 'Local device bridge', status: 'Connected', statusType: 'connected', lastSync: '2m ago', assets: '286 signals', scopes: ['App activity', 'Selected photos', 'Device health'], purposes: ['Daily context', 'Goal support'], usedBy: 'Morning brief · 09:10' },
     { id: 'macbook', name: 'Work Laptop', category: 'device', type: 'Personal device', method: 'Encrypted LAN', status: 'Connected', statusType: 'connected', lastSync: '6m ago', assets: '42 work items', scopes: ['Selected folders', 'Work activity'], purposes: ['Project planning'], usedBy: 'Product recommendation · Now' },
     { id: 'dashcam', name: 'Dash Cam', category: 'device', type: 'Storage device', method: 'USB connection', status: 'Needs attention', statusType: 'attention', lastSync: 'Failed 1h ago', assets: '0 new assets', scopes: ['Selected recordings'], purposes: ['Travel archive'], usedBy: 'No AI task used this source' },
@@ -3934,6 +3960,19 @@ function __install() {
     { id: 'drive', name: 'Cloud Drive', category: 'files', type: 'Third-party service', method: 'Official API', status: 'Connected', statusType: 'connected', lastSync: '33m ago', assets: '86 files', scopes: ['Selected folders'], purposes: ['Document retrieval'], usedBy: 'Meeting preparation · Today' },
     { id: 'web', name: 'DeepSearch', category: 'identity', type: 'External public information', method: 'On-demand tool', status: 'Available on demand', statusType: 'idle', lastSync: 'Never runs automatically', assets: '0 retained results', scopes: ['Per-task query only'], purposes: ['Current research'], usedBy: 'External use always disclosed' }
   ];
+
+  function applyRemoteSources(remoteSources) {
+    if (!Array.isArray(remoteSources) || !remoteSources.length) return;
+    dataSources.splice(0, dataSources.length, ...remoteSources);
+    try { renderSourceGrid(); } catch (_error) { /* grid may not be ready */ }
+  }
+
+  async function hydrateSourcesFromApi() {
+    const remote = await loadSourcesFromApi(state.sourceFilter || 'all');
+    if (remote?.sources?.length) applyRemoteSources(remote.sources);
+  }
+
+  void hydrateSourcesFromApi();
 
   function sourceStatusLabel(source) {
     if (source.aiEnabled === false && source.statusType !== 'revoked') return '<span class="source-status paused"><i></i>Paused</span>';
@@ -3964,16 +4003,19 @@ function __install() {
       button.disabled = true;
       button.textContent = 'Reconnecting...';
     }
-    window.setTimeout(() => {
-      source.status = 'Connected';
-      source.statusType = 'connected';
-      source.aiEnabled = true;
-      source.lastSync = 'Reconnected now';
-      source.usedBy = 'Available for future authorized AI tasks';
+    const finish = (updated) => {
+      Object.assign(source, updated || {
+        status: 'Connected',
+        statusType: 'connected',
+        aiEnabled: true,
+        lastSync: 'Reconnected now',
+        usedBy: 'Available for future authorized AI tasks',
+      });
       renderSourceGrid();
       if (state.selectedSourceId === source.id) renderSourceInspector(source);
       __showToast(`${source.name} reconnected securely`);
-    }, 650);
+    };
+    reconnectSourceOnApi(source.id).then((remote) => finish(remote)).catch(() => finish());
   }
 
   function renderSourceGrid() {
@@ -4043,6 +4085,7 @@ function __install() {
         return;
       }
       source.status = 'Revoked'; source.statusType = 'revoked'; source.aiEnabled = false; source.lastSync = 'Access stopped'; source.usedBy = 'Future AI use is blocked';
+      void disconnectSourceOnApi(source.id).then((remote) => { if (remote) Object.assign(source, remote); renderSourceGrid(); renderSourceInspector(source); });
       renderSourceGrid(); renderSourceInspector(source); __showToast(`${source.name} access revoked`);
     });
   }
@@ -6430,6 +6473,9 @@ closeDataWorkspace();
       persistCustomGoals();
       haptic(9);
       __showToast(goal.monitoringPaused ? 'AI monitoring paused for this goal' : 'AI monitoring resumed');
+      if (goal.id) {
+        void updateGoalOnApi(goal.id, { monitoringPaused: goal.monitoringPaused }).catch(() => {});
+      }
       return;
     }
     closeGoalMonitoringPopover();
@@ -6887,13 +6933,13 @@ closeDataWorkspace();
     document.querySelectorAll('[data-source-filter]').forEach(item => item.classList.toggle('active', item === button));
     renderSourceGrid();
   }));
-  addSourceButton.addEventListener('click', openConnectionWizard);
+  addSourceButton?.addEventListener('click', openConnectionWizard);
   addAdapterButton?.addEventListener('click', openConnectionWizard);
   sourceInspectorClose?.addEventListener('click', () => closeSourceInspector());
   sourceInspectorBackdrop?.addEventListener('click', () => closeSourceInspector());
-  connectionWizardClose.addEventListener('click', closeConnectionWizard);
-  wizardCancel.addEventListener('click', closeConnectionWizard);
-  connectionWizard.querySelectorAll('[data-wizard-source]').forEach(button => button.addEventListener('click', () => {
+  connectionWizardClose?.addEventListener('click', closeConnectionWizard);
+  wizardCancel?.addEventListener('click', closeConnectionWizard);
+  connectionWizard?.querySelectorAll('[data-wizard-source]').forEach(button => button.addEventListener('click', () => {
     connectionWizard.querySelectorAll('[data-wizard-source]').forEach(item => item.classList.toggle('active', item === button));
     const source = button.dataset.wizardSource;
     const guidance = {
@@ -6907,7 +6953,35 @@ closeDataWorkspace();
     wizardPermissionPreview.innerHTML = `<i></i><span><strong>${source} permission preview</strong><small>${guidance[source]}</small></span>`;
     wizardContinue.disabled = false;
   }));
-  wizardContinue.addEventListener('click', () => { closeConnectionWizard(); __showToast('Permission review opened — nothing connected yet'); });
+  wizardContinue?.addEventListener('click', () => {
+    const selected = connectionWizard.querySelector('[data-wizard-source].active');
+    const wizardType = selected?.dataset.wizardSource;
+    const catalogByType = {
+      Device: 'local-device-bridge',
+      Files: 'local-folder',
+      Account: 'google-calendar',
+      Identity: 'deepsearch',
+      Extension: 'notion',
+      Relay: 'telegram',
+    };
+    const integrationId = catalogByType[wizardType];
+    closeConnectionWizard();
+    if (!integrationId) {
+      __showToast('Permission review opened — nothing connected yet');
+      return;
+    }
+    const redirectUri = `${window.location.origin}${window.location.pathname}#/import-data`;
+    startConnectOnApi(integrationId, redirectUri).then((result) => {
+      if (result?.authorizationUrl && /^https?:/i.test(result.authorizationUrl)) {
+        window.location.href = result.authorizationUrl;
+        return;
+      }
+      __showToast(`${wizardType} connect started`);
+      void hydrateSourcesFromApi();
+    }).catch(() => {
+      __showToast('Could not start connect — using local preview');
+    });
+  });
 
   document.getElementById('memoryOpenButton').addEventListener('click', openMemoryDrawer);
   document.getElementById('memoryEntry').addEventListener('click', openMemoryDrawer);
@@ -6969,7 +7043,37 @@ closeDataWorkspace();
   const notificationPanel = document.getElementById('notificationPanel');
   const voiceButton = document.getElementById('voiceButton');
   const activityExpand = document.getElementById('activityExpand');
-  const activityItems = [...document.querySelectorAll('.activity-item[data-activity-action]')];
+  const activityFeed = document.querySelector('.activity-feed');
+  let activityItems = [...document.querySelectorAll('.activity-item[data-activity-action]')];
+  function bindActivityItems() {
+    activityItems = [...document.querySelectorAll('.activity-item[data-activity-action]')];
+    activityItems.forEach((item) => {
+      item.addEventListener('click', (event) => {
+        const hoverInterface = window.matchMedia('(hover: hover)').matches;
+        if (!hoverInterface && event.detail !== 0 && !item.classList.contains('expanded')) {
+          activityItems.forEach(other => other.classList.toggle('expanded', other === item));
+          haptic();
+          return;
+        }
+        performActivityAction(item);
+      });
+    });
+  }
+  async function hydrateOverviewFromApi() {
+    const overview = await loadOverviewFromApi();
+    if (!overview?.activity?.length || !activityFeed) return;
+    const items = overview.activity.slice(0, 4);
+    activityFeed.innerHTML = items.map((item, index) => {
+      const status = index === 0 ? 'status-progress' : index === 1 ? 'status-important' : 'status-completed';
+      const target = item.route === 'import-data' ? 'data' : item.route === 'use-data' ? 'memory' : item.route || 'goals';
+      return `<button class="activity-item ${status}" type="button" data-activity-action="${item.label}" data-action-target="${target}">
+          <span class="activity-dot"><i></i></span>
+          <span><strong>${item.label}</strong><small>${item.detail || ''}</small><em class="activity-action">Open <b>→</b></em></span>
+          <span class="activity-meta"><time>${item.timestamp || ''}</time><em>Live</em></span>
+        </button>`;
+    }).join('');
+    bindActivityItems();
+  }
   const deviceClock = document.querySelector('.device-clock');
   const deviceTime = document.getElementById('deviceTime');
   const deviceDate = document.getElementById('deviceDate');
@@ -7255,6 +7359,7 @@ closeDataWorkspace();
   }
 
   function renderCalendar(direction = 'left', animate = true) {
+    if (!calendarStage || !calendarMonth) return;
     calendarMonth.textContent = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(selectedCalendarDate);
     calendarStage.innerHTML = '';
     const selectedSchedule = scheduledGoalsForDate(selectedCalendarDate)[0];
@@ -7411,14 +7516,14 @@ closeDataWorkspace();
     }, 480);
   }
 
-  calendarPrevious.addEventListener('click', () => moveCalendar(-1));
-  calendarNext.addEventListener('click', () => moveCalendar(1));
-  calendarAddTask.addEventListener('click', openCalendarTaskModal);
-  calendarTaskBackdrop.addEventListener('click', closeCalendarTaskModal);
-  calendarTaskClose.addEventListener('click', closeCalendarTaskModal);
-  calendarTaskCancel.addEventListener('click', closeCalendarTaskModal);
-  calendarTaskGoal.addEventListener('change', updateCalendarSubgoalOptions);
-  calendarTaskForm.querySelectorAll('input[name="calendarTaskOwner"]').forEach(input => input.addEventListener('change', () => {
+  calendarPrevious?.addEventListener('click', () => moveCalendar(-1));
+  calendarNext?.addEventListener('click', () => moveCalendar(1));
+  calendarAddTask?.addEventListener('click', openCalendarTaskModal);
+  calendarTaskBackdrop?.addEventListener('click', closeCalendarTaskModal);
+  calendarTaskClose?.addEventListener('click', closeCalendarTaskModal);
+  calendarTaskCancel?.addEventListener('click', closeCalendarTaskModal);
+  calendarTaskGoal?.addEventListener('change', updateCalendarSubgoalOptions);
+  calendarTaskForm?.querySelectorAll('input[name="calendarTaskOwner"]').forEach(input => input.addEventListener('change', () => {
     const isAi = input.checked && input.value === 'ai';
     if (!input.checked) return;
     calendarTaskEndField.classList.toggle('visible', isAi);
@@ -7429,7 +7534,7 @@ closeDataWorkspace();
   calendarTaskTime.addEventListener('change', () => {
     if (calendarTaskEndField.classList.contains('visible')) calendarTaskEndTime.value = shiftGoalTime(calendarTaskTime.value || '09:00', 45);
   });
-  calendarTaskForm.addEventListener('submit', (event) => {
+  calendarTaskForm?.addEventListener('submit', (event) => {
     event.preventDefault();
     const title = calendarTaskName.value.trim();
     const date = calendarTaskDate.value;
@@ -7463,39 +7568,39 @@ closeDataWorkspace();
     renderCalendar('left');
     __showToast(goal && subgoal ? 'Task linked to Goal and Calendar' : owner === 'ai' ? 'AI task added to the calendar' : 'Your task was added to the calendar');
   });
-  calendarMonthButton.addEventListener('click', () => toggleMonthPicker());
-  monthPickerPrevious.addEventListener('click', () => {
+  calendarMonthButton?.addEventListener('click', () => toggleMonthPicker());
+  monthPickerPrevious?.addEventListener('click', () => {
     monthPickerCursor.setMonth(monthPickerCursor.getMonth() - 1);
     renderMonthPicker();
   });
-  monthPickerNext.addEventListener('click', () => {
+  monthPickerNext?.addEventListener('click', () => {
     monthPickerCursor.setMonth(monthPickerCursor.getMonth() + 1);
     renderMonthPicker();
   });
-  monthPickerToday.addEventListener('click', () => {
+  monthPickerToday?.addEventListener('click', () => {
     selectedCalendarDate = new Date(calendarReferenceDate);
     monthPickerCursor = new Date(calendarReferenceDate.getFullYear(), calendarReferenceDate.getMonth(), 1, 12);
     toggleMonthPicker(false);
     renderCalendar('left');
   });
-  calendarToday.addEventListener('click', () => {
+  calendarToday?.addEventListener('click', () => {
     const direction = selectedCalendarDate > calendarReferenceDate ? 'right' : 'left';
     selectedCalendarDate = new Date(calendarReferenceDate);
     toggleMonthPicker(false);
     renderCalendar(direction);
   });
-  calendarStage.addEventListener('pointerdown', (event) => {
+  calendarStage?.addEventListener('pointerdown', (event) => {
     calendarPointerStart = event.clientX;
     calendarStage.classList.add('is-dragging');
     calendarStage.setPointerCapture(event.pointerId);
     if (event.pointerType !== 'mouse') haptic();
   });
-  calendarStage.addEventListener('pointermove', (event) => {
+  calendarStage?.addEventListener('pointermove', (event) => {
     if (calendarPointerStart === null) return;
     const movement = Math.max(-80, Math.min(80, event.clientX - calendarPointerStart));
     calendarStage.style.transform = `translateX(${movement * .16}px)`;
   });
-  calendarStage.addEventListener('pointerup', (event) => {
+  calendarStage?.addEventListener('pointerup', (event) => {
     if (calendarPointerStart === null) return;
     const movement = event.clientX - calendarPointerStart;
     calendarPointerStart = null;
@@ -7507,13 +7612,13 @@ closeDataWorkspace();
       window.setTimeout(() => { calendarSuppressClick = false; }, 260);
     }
   });
-  calendarStage.addEventListener('pointercancel', () => {
+  calendarStage?.addEventListener('pointercancel', () => {
     calendarPointerStart = null;
     calendarStage.classList.remove('is-dragging');
     calendarStage.style.transform = '';
   });
   document.addEventListener('pointerdown', (event) => {
-    if (!monthPopover.contains(event.target) && !calendarMonthButton.contains(event.target)) toggleMonthPicker(false);
+    if (!monthPopover?.contains(event.target) && !calendarMonthButton?.contains(event.target)) toggleMonthPicker(false);
   });
   renderCalendar();
   window.addEventListener('weeple:goals-changed', () => {
@@ -7572,17 +7677,8 @@ closeDataWorkspace();
     }, 620);
   }
 
-  activityItems.forEach((item) => {
-    item.addEventListener('click', (event) => {
-      const hoverInterface = window.matchMedia('(hover: hover)').matches;
-      if (!hoverInterface && event.detail !== 0 && !item.classList.contains('expanded')) {
-        activityItems.forEach(other => other.classList.toggle('expanded', other === item));
-        haptic();
-        return;
-      }
-      performActivityAction(item);
-    });
-  });
+  bindActivityItems();
+  void hydrateOverviewFromApi();
 
   document.querySelectorAll('[data-notification-action]').forEach((button) => {
     button.addEventListener('click', () => {
@@ -7754,10 +7850,27 @@ closeDataWorkspace();
     });
 
     openPrimaryView(legacy, false);
+    if (pageId === 'overview') {
+      window.requestAnimationFrame(() => {
+        try {
+          resize();
+          startTopologyLoop();
+          renderCalendar('left', false);
+        } catch (_error) { /* overview canvas may still be mounting */ }
+      });
+    }
 
     if (pageId === 'goals' && params.get('sheet') === 'create') openGoalCreateSheet();
     if (pageId === 'goals' && params.get('drawer') === 'plan') renderGoalResultDrawer('plan');
     if (pageId === 'import-data' && params.get('wizard') === '1') openConnectionWizard();
+    if (pageId === 'import-data' && params.get('connected')) {
+      void hydrateSourcesFromApi().then(() => {
+        const connectedId = params.get('connected');
+        const source = dataSources.find((item) => item.id === connectedId);
+        if (source) selectSource(source.id);
+        __showToast(`${source?.name || 'Source'} connected`);
+      });
+    }
     if (pageId === 'use-data' && params.get('memory') === '1') openMemoryDrawer();
     if (params.get('onboarding') === '1') openOnboarding();
   };

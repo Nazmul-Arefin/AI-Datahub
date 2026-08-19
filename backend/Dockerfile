@@ -2,8 +2,10 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md alembic.ini ./
+COPY alembic ./alembic
 COPY app ./app
+COPY scripts ./scripts
 
 RUN pip install --no-cache-dir .
 

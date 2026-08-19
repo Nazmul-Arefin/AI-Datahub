@@ -22,9 +22,13 @@ export async function reconnectSource(sourceId) {
   return api.post(`/sources/${encodeURIComponent(sourceId)}/reconnect`, {});
 }
 
-export async function fetchIntegrationCatalog() {
-  const data = await api.get('/integrations/catalog');
-  return data.items || [];
+export async function fetchIntegrationCatalog(q = '', category = '') {
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (category && category !== 'all') params.set('category', category);
+  const query = params.toString();
+  const data = await api.get(`/integrations/catalog${query ? `?${query}` : ''}`);
+  return { items: data.items || [], total: data.total ?? (data.items || []).length };
 }
 
 export async function startIntegrationConnect(integrationId, redirectUri) {

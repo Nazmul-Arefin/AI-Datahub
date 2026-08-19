@@ -26,8 +26,10 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://weeple:weeple@postgres:5432/weeple
       CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
-      USE_DATABASE: "false"
-      USE_MOCK_DATA: "true"
+      USE_DATABASE: "true"
+      USE_MOCK_DATA: "false"
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: weeple
     depends_on:
       postgres:
         condition: service_healthy

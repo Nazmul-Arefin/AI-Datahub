@@ -15,3 +15,12 @@ class ExecutionTask(BaseModel):
 class TaskListResponse(BaseModel):
     tasks: list[ExecutionTask]
     total: int
+
+
+class TaskUpdateRequest(BaseModel):
+    name: str | None = None
+    state: str | None = None
+    due_at: str | None = Field(default=None, alias="dueAt")
+    subgoal_name: str | None = Field(default=None, alias="subgoalName")
+
+    model_config = {"populate_by_name": True}

@@ -18,3 +18,13 @@ class PaginatedMeta(BaseModel):
     page_size: int = Field(default=50, alias="pageSize")
 
     model_config = {"populate_by_name": True}
+
+
+class ErrorDetail(BaseModel):
+    code: str
+    message: str
+    details: dict | list | None = None
+
+
+class ErrorResponse(BaseModel):
+    error: ErrorDetail

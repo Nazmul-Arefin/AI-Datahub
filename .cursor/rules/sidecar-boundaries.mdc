@@ -1,0 +1,15 @@
+---
+description: Isolation rules for Harness, AstrBot, Nango, and MCP sidecars.
+globs: backend/app/adapters/**/*.py,backend/app/services/{agent_service,messaging_service,mcp_service,auth_connector}.py,docker-compose.yml
+alwaysApply: false
+---
+
+# Sidecar boundaries
+
+Product business agents always go `API → AgentService → DeepSeek Harness`.
+
+- AstrBot must not become a second Goals/Use brain.
+- Harness must not own Telegram/Discord protocol stacks.
+- Nango must not be called from routers; use `AuthConnector`.
+- Do not remove AstrBot/Nango from Compose to "simplify" without updating docs and architecture.
+- Credentials stay in the connector/gateway. Agents call tools through `MCPService` only.
