@@ -1,0 +1,20 @@
+{
+  "store": {
+    "id": "mem-d8f5b83f-dd9e-49da-beba-4a376ea9158a",
+    "title": "T4 demo",
+    "content": "User prefers deep work before 10:00.",
+    "source": "demo",
+    "mode": "mock"
+  },
+  "recall": {
+    "id": "mem-d8f5b83f-dd9e-49da-beba-4a376ea9158a",
+    "title": "T4 demo",
+    "content": "User prefers deep work before 10:00.",
+    "source": "demo",
+    "mode": "mock"
+  },
+  "search": {
+    "total": 1,
+    "hit": true
+  }
+}

@@ -1,0 +1,46 @@
+# Standalone TencentDB Agent Memory (Memory Core)
+# Official image: agentmemory/memory-core
+# Env TDAI_LLM_* overrides this file.
+
+deployMode: standalone
+stateBackend: "local"
+
+server:
+  port: 8420
+  host: "0.0.0.0"
+
+data:
+  baseDir: "/data/memory"
+
+llm:
+  baseUrl: "https://api.deepseek.com/v1"
+  apiKey: "${TDAI_LLM_API_KEY}"
+  model: "deepseek-v4-pro"
+  maxTokens: 4096
+  timeoutMs: 120000
+
+memory:
+  capture:
+    enabled: true
+  extraction:
+    enabled: true
+    enableDedup: true
+    maxMemoriesPerSession: 20
+  pipeline:
+    everyNConversations: 5
+    enableWarmup: true
+  recall:
+    enabled: true
+    maxResults: 5
+    scoreThreshold: 0.3
+    # Keyword/BM25 only — this Compose profile has embedding.provider: none.
+    # hybrid requires EmbeddingService and returns code 10001 otherwise.
+    # Official enum: keyword | embedding | hybrid (not "fts").
+    strategy: "keyword"
+    timeoutMs: 5000
+  storeBackend: "sqlite"
+  embedding:
+    provider: "none"
+  bm25:
+    enabled: true
+    language: "zh"

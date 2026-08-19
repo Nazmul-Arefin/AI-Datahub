@@ -12,6 +12,26 @@ class HealthResponse(BaseModel):
     environment: str
 
 
+class SidecarStatus(BaseModel):
+    name: str
+    mode: str
+    status: str
+    url: str
+    detail: str | None = None
+
+
+class SidecarHealthResponse(BaseModel):
+    status: str
+    sidecars: list[SidecarStatus]
+
+
+class LlmHealthResponse(BaseModel):
+    status: str
+    mode: str
+    model: str
+    preview: str | None = None
+
+
 class PaginatedMeta(BaseModel):
     total: int
     page: int = 1

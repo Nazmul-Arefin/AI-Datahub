@@ -1,3 +1,12 @@
+# Real local sidecars. Interpolate secrets with:
+#   docker compose --env-file backend/.env up -d
+#
+# Official sources:
+#   https://github.com/TencentCloud/TencentDB-Agent-Memory
+#   https://github.com/NangoHQ/nango
+#   https://github.com/deepseek-ai/deepseek-harness
+#   https://github.com/AstrBotDevs/AstrBot
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -13,7 +22,152 @@ services:
       test: ["CMD-SHELL", "pg_isready -U weeple"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 8
+
+  nango-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: nango
+      POSTGRES_PASSWORD: nango
+      POSTGRES_DB: nango
+    volumes:
+      - nango_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nango"]
+      interval: 5s
+      timeout: 5s
+      retries: 8
+
+  nango-redis:
+    image: redis:7.2.4-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 8
+
+  nango:
+    image: nangohq/nango-server:hosted
+    platform: linux/amd64
+    env_file:
+      - ./backend/.env
+    environment:
+      NANGO_DB_HOST: nango-db
+      NANGO_DB_USER: nango
+      NANGO_DB_PASSWORD: nango
+      NANGO_DB_NAME: nango
+      NANGO_ENCRYPTION_KEY: ${NANGO_ENCRYPTION_KEY:-}
+      RECORDS_DATABASE_URL: postgresql://nango:nango@nango-db:5432/nango
+      SERVER_PORT: "3003"
+      NANGO_SERVER_URL: http://localhost:3003
+      NANGO_PUBLIC_SERVER_URL: http://localhost:3003
+      FLAG_SERVE_CONNECT_UI: "true"
+      NANGO_CONNECT_UI_PORT: "3009"
+      FLAG_AUTH_ENABLED: "false"
+      NANGO_LOGS_ENABLED: "false"
+      LOG_LEVEL: info
+    ports:
+      - "3003:3003"
+      - "3009:3009"
+    depends_on:
+      nango-db:
+        condition: service_healthy
+      nango-redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  memory-core:
+    image: agentmemory/memory-core:latest
+    profiles: ["owned-memory"]
+    env_file:
+      - ./backend/.env
+    environment:
+      TDAI_DEPLOY_MODE: standalone
+      TDAI_GATEWAY_CONFIG: /data/config/tdai-gateway.yaml
+      TDAI_LLM_BASE_URL: https://api.deepseek.com/v1
+      TDAI_LLM_MODEL: deepseek-v4-pro
+      TDAI_LLM_API_KEY: ${DEEPSEEK_API_KEY:-}
+    volumes:
+      - ./deploy/memory-core/tdai-gateway.yaml:/data/config/tdai-gateway.yaml:ro
+      - memory_core_data:/data/memory
+    ports:
+      - "8420:8420"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8420/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 40s
+    restart: unless-stopped
+
+  memory-hub:
+    image: agentmemory/memory-hub:latest
+    profiles: ["owned-memory"]
+    env_file:
+      - ./backend/.env
+    environment:
+      PANEL_PORT: "8125"
+      KNOWLEDGE_PORT: "8424"
+      KNOWLEDGE_PUBLIC_BASE_URL: http://host.docker.internal:8424/v3
+      REMOTE_INSTANCE_ID: default
+      REMOTE_INSTANCE_NAME: default
+      REMOTE_INSTANCE_URL: http://memory-core:8420
+      REMOTE_INSTANCE_KEY: local
+      LLM_MODE: custom
+      LLM_PROTOCOL: openai
+      LLM_BASE_URL: https://api.deepseek.com/v1
+      LLM_MODEL: deepseek-v4-pro
+      LLM_API_KEY: ${DEEPSEEK_API_KEY:-}
+      KNOWLEDGE_LLM_BINDING_SYNC: "0"
+    ports:
+      - "8125:8125"
+      - "8424:8424"
+    volumes:
+      - memory_hub_data:/data/knowledge
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      memory-core:
+        condition: service_healthy
+    restart: unless-stopped
+
+  agent-harness:
+    build:
+      context: ./backend/sidecars/harness
+      dockerfile: Dockerfile
+    env_file:
+      - ./backend/.env
+    environment:
+      HOST: 0.0.0.0
+      PORT: "3080"
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      OPENAI_API_KEY: ${DEEPSEEK_API_KEY:-}
+      OPENAI_BASE_URL: https://api.deepseek.com
+      DEEPSEEK_BASE_URL: https://api.deepseek.com
+    ports:
+      - "3080:3080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  astrbot:
+    image: soulter/astrbot:latest
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "6185:6185"
+      - "6199:6199"
+    volumes:
+      - astrbot_data:/AstrBot/data
+    restart: unless-stopped
 
   api:
     build:
@@ -22,43 +176,59 @@ services:
     ports:
       - "8000:8000"
     env_file:
-      - ./backend/.env.example
+      - ./backend/.env
     environment:
       DATABASE_URL: postgresql+psycopg://weeple:weeple@postgres:5432/weeple
       CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
       USE_DATABASE: "false"
       USE_MOCK_DATA: "true"
+      NANGO_URL: http://nango:3003
+      MEMORY_SERVICE_URL: http://host.docker.internal:8420
+      AGENT_HARNESS_URL: http://agent-harness:3080
+      ASTRBOT_URL: http://astrbot:6185
+      MCP_GATEWAY_URL: http://mcp-gateway:8080
+      HARNESS_MODE: live
+      ASTRBOT_MODE: live
+      NANGO_MODE: live
+      MEMORY_MODE: live
+      MCP_GATEWAY_MODE: live
+      LLM_DEEPSEEK_MODEL: deepseek-v4-pro
+      SIDECAR_HEALTH_TIMEOUT_SECONDS: "3"
     depends_on:
       postgres:
         condition: service_healthy
+      nango:
+        condition: service_started
+      agent-harness:
+        condition: service_started
+      astrbot:
+        condition: service_started
+      mcp-gateway:
+        condition: service_started
     volumes:
       - ./backend/app:/app/app:ro
-
-  # Placeholder services — replace with real images when adapters are wired
-  nango:
-    image: nginx:alpine
-    ports:
-      - "3003:80"
-
-  memory:
-    image: nginx:alpine
-    ports:
-      - "8081:80"
-
-  agent-harness:
-    image: nginx:alpine
-    ports:
-      - "8082:80"
-
-  astrbot:
-    image: nginx:alpine
-    ports:
-      - "8083:80"
+      - ./backend/data:/app/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   mcp-gateway:
-    image: nginx:alpine
+    build:
+      context: ./backend/sidecars
+      dockerfile: Dockerfile
+    environment:
+      SIDECAR_NAME: mcp_gateway
+      PORT: "8080"
+      DATA_DIR: /data
     ports:
-      - "8080:80"
+      - "8080:8080"
+    volumes:
+      - mcp_gateway_data:/data
+    command: ["python", "/sidecar/mcp_gateway.py"]
 
 volumes:
   postgres_data:
+  nango_db_data:
+  memory_core_data:
+  memory_hub_data:
+  astrbot_data:
+  mcp_gateway_data:

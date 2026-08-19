@@ -1,6 +1,9 @@
 from functools import lru_cache
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+SidecarMode = Literal["mock", "live"]
 
 
 class Settings(BaseSettings):
@@ -23,10 +26,25 @@ class Settings(BaseSettings):
 
     nango_url: str = "http://localhost:3003"
     mcp_gateway_url: str = "http://localhost:8080"
-    memory_service_url: str = "http://localhost:8081"
-    agent_harness_url: str = "http://localhost:8082"
-    astrbot_url: str = "http://localhost:8083"
+    memory_service_url: str = "http://localhost:8420"
+    agent_harness_url: str = "http://localhost:3080"
+    astrbot_url: str = "http://localhost:6185"
+    astrbot_public_url: str = "http://localhost:6185"
     llm_deepseek_base_url: str = "https://api.deepseek.com"
+    llm_deepseek_model: str = "deepseek-v4-pro"
+    deepseek_api_key: str = ""
+    nango_secret_key: str = ""
+    nango_connect_url: str = "http://localhost:3009"
+
+    telegram_bot_token: str = ""
+    astrbot_dashboard_token: str = ""
+
+    harness_mode: SidecarMode = "live"
+    astrbot_mode: SidecarMode = "live"
+    nango_mode: SidecarMode = "live"
+    memory_mode: SidecarMode = "mock"
+    mcp_gateway_mode: SidecarMode = "mock"
+    sidecar_health_timeout_seconds: float = 3.0
 
     @property
     def cors_origin_list(self) -> list[str]:

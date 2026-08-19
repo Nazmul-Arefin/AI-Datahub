@@ -19,7 +19,8 @@ async def start_connect(
     payload: ConnectStartRequest,
     _user_id: CurrentUserId,
 ) -> ConnectStartResponse:
-    return source_service.start_connect(payload)
+    result = await auth_connector.authorize(payload.integration_id, payload.redirect_uri)
+    return ConnectStartResponse.model_validate(result)
 
 
 @router.get("/callback")

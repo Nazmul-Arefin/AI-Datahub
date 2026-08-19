@@ -1,0 +1,34 @@
+{
+  "register": {
+    "serverId": "srv-d4397bc5",
+    "name": "github",
+    "connectionId": "conn-github-t6",
+    "tools": [
+      {"name": "list_repos", "description": "List repositories for the connected GitHub account"},
+      {"name": "get_user", "description": "Get the authenticated GitHub user profile"}
+    ],
+    "mode": "live"
+  },
+  "tools": {
+    "serverId": "srv-d4397bc5",
+    "tools": [
+      {"name": "list_repos", "description": "List repositories for the connected GitHub account"},
+      {"name": "get_user", "description": "Get the authenticated GitHub user profile"}
+    ],
+    "mode": "live"
+  },
+  "invoke": {
+    "ok": true,
+    "tool": "list_repos",
+    "args": {"org": "acme"},
+    "result": {"repos": [{"fullName": "acme/demo", "private": false}]},
+    "auditId": "aud-7bd69367a1",
+    "mode": "live"
+  },
+  "agentToolsCount": 4,
+  "audit": {
+    "total": 1,
+    "sink": "local_file",
+    "lastTool": "list_repos"
+  }
+}

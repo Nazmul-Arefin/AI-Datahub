@@ -1,5 +1,29 @@
 # AI Data Hub — 5-Day Backend Plan + Team Guidelines (Revised)
 
+> **You are Developer 2** (AI + sidecars). **Live todo:** [docs/cursor/TODO.md](docs/cursor/TODO.md).  
+> Details: [docs/cursor/DEV2-TASKS.md](docs/cursor/DEV2-TASKS.md). Allowlist: [docs/cursor/DEV2.md](docs/cursor/DEV2.md). Team rules: [docs/cursor/AGENTS.md](docs/cursor/AGENTS.md).  
+> Branch: `dev2/harness-astrbot-nango`. Do **not** invent Goal schemas or Postgres catalog models (Dev1).
+
+## This repo — current baseline (2026-08-18)
+
+Skeleton exists; adapters are stubs. Sidecars in Compose are nginx placeholders, not real/mock APIs.
+
+| Area | Status | Owner |
+|------|--------|--------|
+| FastAPI app, `/docs`, `/health`, route stubs | Present (mock JSON) | Shared |
+| Pydantic schemas + mock services | Present (in-memory) | Shared / Dev1 day-owner for `schemas/` |
+| Postgres models / Alembic | Scaffold only | **Dev1** |
+| Auth, goals, tasks, sources, catalog, overview | Stub APIs | **Dev1** |
+| Agent / memory / messaging / AuthConnector / MCP | Stub services | **Dev2** |
+| Harness, AstrBot, Nango, TencentDB, LLM adapters | Empty / ping-less | **Dev2** |
+| Compose sidecars | Mock JSON `/health` (no nginx) | **Dev2** |
+| Cursor rules (`.cursor/rules/*.mdc`) | To be created with this save | Shared |
+| Vertical-slice smoke | Missing | **Dev2** |
+
+**Daily rule:** finish one Dev2 task → test/verify → capture a visible demo (URL, JSON, or screenshot) → then start the next task.
+
+---
+
 ## Planning baseline
 
 - **Current context (authoritative for scope):** self-hosted single-customer product; 4 UI pages; collaboration/social **out of scope**; modular monolith; 5-day vertical slice.
@@ -36,7 +60,8 @@
 |Agent|**DeepSeek Harness** behind `AgentService` (+ FallbackLoopAdapter if blocked)|
 |Messaging / IM MCP|**AstrBot** behind `MessagingService` / `AstrBotAdapter` (sidecar)|
 |Huge MCP / OAuth|**Nango** (self-host) behind `AuthConnector` + **MCP Manager** (catalog, registry, gateway)|
-|LLM|**DeepSeek** via `LLMService`|
+|LLM|**DeepSeek V4 Pro** via `LLMService` → **`https://api.deepseek.com`** (not self-hosted)|
+|Deploy|**Single `docker-compose.yml` on this machine.** Harness, AstrBot, Nango, TencentDB Agent Memory = local sidecars. Only the DeepSeek chat API is online.|
 |Files|Local FS via `StorageService`|
 |Jobs|Lightweight asyncio workers|
 |Auth|Single-user JWT admin|

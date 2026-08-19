@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class MemoryProposal(BaseModel):
@@ -12,3 +12,34 @@ class MemoryProposal(BaseModel):
 class MemoryListResponse(BaseModel):
     proposals: list[MemoryProposal]
     total: int
+
+
+class MemoryCreateRequest(BaseModel):
+    title: str
+    content: str
+    source: str | None = None
+
+
+class MemoryRecord(BaseModel):
+    id: str
+    title: str
+    content: str
+    source: str | None = None
+    mode: str | None = None
+
+
+class MemoryDeleteResponse(BaseModel):
+    deleted: bool
+    id: str
+
+
+class MemoryPatchRequest(BaseModel):
+    title: str | None = None
+    content: str | None = None
+    source: str | None = None
+
+
+class MemorySearchResponse(BaseModel):
+    items: list[MemoryRecord]
+    total: int
+    mode: str | None = None

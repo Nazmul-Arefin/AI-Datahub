@@ -6,6 +6,7 @@ from app.api import (
     goals,
     health,
     integrations,
+    mcp,
     memories,
     messaging,
     overview,
@@ -23,4 +24,5 @@ api_router.include_router(integrations.router, prefix="/integrations", tags=["in
 api_router.include_router(overview.router, prefix="/overview", tags=["overview"])
 api_router.include_router(memories.router, prefix="/memories", tags=["memories"])
 api_router.include_router(agents.router, prefix="/agents", tags=["agents"])
+api_router.include_router(mcp.router, prefix="/mcp", tags=["mcp"])
 api_router.include_router(messaging.router, prefix="/messaging", tags=["messaging"])

@@ -1,0 +1,46 @@
+<!doctype html><html><head><meta charset='utf-8'><title>t1-sidecars</title>
+<style>
+body{margin:0;background:#0f1419;color:#e8eef4;font-family:Segoe UI,sans-serif}
+.wrap{padding:32px 40px}
+h1{font-size:22px;margin:0 0 8px}
+.meta{color:#9bb0c3;margin-bottom:20px}
+pre{background:#1b2430;border:1px solid #2c3a4a;border-radius:12px;padding:20px;font-size:15px;line-height:1.45;overflow:auto}
+.ok{display:inline-block;background:#123b28;color:#5ee0a8;border-radius:999px;padding:4px 10px;font-size:12px}
+</style></head><body><div class='wrap'>
+<div class='ok'>AI Data Hub · Developer 2 demo</div>
+<h1>t1-sidecars</h1>
+<p class='meta'>http://127.0.0.1:8000/api/v1/health/sidecars</p>
+<pre>{
+  "status": "ok",
+  "sidecars": [
+    {
+      "name": "nango",
+      "mode": "mock",
+      "status": "ok",
+      "url": "http://localhost:3003",
+      "detail": "http 200"
+    },
+    {
+      "name": "memory",
+      "mode": "mock",
+      "status": "ok",
+      "url": "http://localhost:8081",
+      "detail": "http 200"
+    },
+    {
+      "name": "harness",
+      "mode": "mock",
+      "status": "ok",
+      "url": "http://localhost:8082",
+      "detail": "http 200"
+    },
+    {
+      "name": "astrbot",
+      "mode": "mock",
+      "status": "ok",
+      "url": "http://localhost:8083",
+      "detail": "http 200"
+    }
+  ]
+}</pre>
+</div></body></html>

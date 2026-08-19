@@ -1,0 +1,44 @@
+<!doctype html><html><head><meta charset=utf-8><title>real stack</title>
+<style>body{margin:0;background:#0f1419;color:#e8eef4;font-family:Segoe UI,sans-serif}.wrap{padding:32px 40px}.ok{display:inline-block;background:#123b28;color:#5ee0a8;border-radius:999px;padding:4px 10px;font-size:12px}pre{background:#1b2430;border:1px solid #2c3a4a;border-radius:12px;padding:20px;font-size:14px}</style></head>
+<body><div class=wrap><div class=ok>real sidecars · not mock health servers</div>
+<h1>GET /api/v1/health/sidecars</h1>
+<pre>{
+  "status": "ok",
+  "sidecars": [
+    {
+      "name": "nango",
+      "mode": "live",
+      "status": "ok",
+      "url": "http://nango:3003",
+      "detail": "http 200"
+    },
+    {
+      "name": "memory",
+      "mode": "live",
+      "status": "ok",
+      "url": "http://host.docker.internal:8420",
+      "detail": "http 200"
+    },
+    {
+      "name": "harness",
+      "mode": "live",
+      "status": "ok",
+      "url": "http://agent-harness:3080",
+      "detail": "http 200"
+    },
+    {
+      "name": "astrbot",
+      "mode": "live",
+      "status": "ok",
+      "url": "http://astrbot:6185",
+      "detail": "http 404"
+    },
+    {
+      "name": "mcp_gateway",
+      "mode": "mock",
+      "status": "ok",
+      "url": "http://mcp-gateway:8080",
+      "detail": "http 200"
+    }
+  ]
+}</pre></div></body></html>

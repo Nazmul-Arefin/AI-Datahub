@@ -1,11 +1,15 @@
 # Third-party licenses
 
-Review before shipping adapter integrations.
+Isolation (sidecars + adapters) keeps the FastAPI core replaceable and makes AGPL/Elastic boundaries clearer for counsel. Legal must sign off before commercial images that redistribute covered source.
 
-| Component | License | Notes |
-|-----------|---------|-------|
-| AstrBot | **AGPL-3.0** | Network use may require source disclosure — confirm with legal |
-| Nango | **Elastic License 2.0** | Restrictions on managed SaaS competition — confirm deployment model |
-| FastAPI / SQLAlchemy | MIT / MIT | Standard dependencies |
+| Component | License | Packaging note |
+|-----------|---------|----------------|
+| DeepSeek Harness | MIT | OK for commercial redistribution |
+| TencentDB Agent Memory | MIT | OK |
+| FastAPI / SQLAlchemy | MIT | Standard dependencies |
+| **AstrBot** | **AGPL-3.0** | Boss-required. Run as **isolated sidecar** (HTTP API only). Network use / redistribution may trigger source obligations. Do not vendor AstrBot into the FastAPI image. |
+| **Nango** | **Elastic License** | Boss-required for scale. Self-host free has limited features; Cloud/EE for the full provider set. Isolate as sidecar. Track free vs EE as an open packaging decision. |
 
-Keep adapter code in isolated packages under `backend/app/adapters/` for auditability.
+Adapter code lives under `backend/app/adapters/`. Product routers never import these SDKs.
+
+Open packaging items: [open-decisions.md](open-decisions.md).

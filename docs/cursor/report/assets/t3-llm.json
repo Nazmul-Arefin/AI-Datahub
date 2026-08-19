@@ -1,0 +1,6 @@
+{
+  "status": "ok",
+  "mode": "live",
+  "model": "deepseek-chat",
+  "preview": "pong"
+}

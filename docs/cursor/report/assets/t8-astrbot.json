@@ -1,0 +1,19 @@
+{
+  "platforms": {
+    "mode": "live",
+    "role": "messaging",
+    "webUi": "http://localhost:6185",
+    "ids": ["telegram", "discord"]
+  },
+  "card": {
+    "title": "Telegram connected (mock)",
+    "platform": "telegram",
+    "status": "connected",
+    "sourceId": "src-telegram-f49dca00",
+    "mcpServerId": "srv-f1971d66"
+  },
+  "send_message": {
+    "withoutConfirm": "confirmation_required",
+    "withConfirm": true
+  }
+}

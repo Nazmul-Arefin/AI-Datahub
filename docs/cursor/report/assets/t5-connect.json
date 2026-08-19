@@ -1,0 +1,5 @@
+{
+  "authorizationUrl": "http://localhost:3009/?session_token=<redacted>",
+  "state": "<redacted>",
+  "mode": "live"
+}
