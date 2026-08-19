@@ -29,9 +29,9 @@ export async function disconnectSourceOnApi(sourceId) {
   return disconnectSource(sourceId);
 }
 
-export async function reconnectSourceOnApi(sourceId) {
+export async function reconnectSourceOnApi(sourceId, redirectUri) {
   if (!isApiEnabled()) return null;
-  return reconnectSource(sourceId);
+  return reconnectSource(sourceId, redirectUri);
 }
 
 export async function loadCatalogFromApi(q = '', category = '') {

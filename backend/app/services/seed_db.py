@@ -1,9 +1,10 @@
-"""Idempotent Postgres seed for Dev1 tables."""
+"""Idempotent database seed for Dev1 tables (Postgres or SQLite)."""
 
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.activity import ActivityEvent
+from app.models.base import utcnow
 from app.models.goal import ExecutionTask, Goal
 from app.models.source import DataSource, IntegrationCatalog, IntegrationConnection
 from app.models.user import User
@@ -14,6 +15,7 @@ from app.services.seed_data import (
     SEED_GOALS,
     SEED_SOURCES,
     SEED_TASKS,
+    SOURCE_CATALOG_KEYS,
 )
 
 
@@ -42,6 +44,10 @@ def seed_database(db: Session) -> None:
         row.scopes = list(item.scopes)
         row.logo_url = item.logo_url
         row.enabled = True
+
+    # Flush at each foreign key boundary. Referenced rows must already exist
+    # because nothing here uses writable relationships to imply insert order.
+    db.flush()
 
     if db.query(Goal).count() == 0:
         for goal in SEED_GOALS:
@@ -77,6 +83,8 @@ def seed_database(db: Session) -> None:
                 )
             )
 
+    db.flush()
+
     if db.query(ExecutionTask).count() == 0:
         for task in SEED_TASKS:
             db.add(
@@ -93,19 +101,25 @@ def seed_database(db: Session) -> None:
     if db.query(DataSource).count() == 0:
         for source in SEED_SOURCES:
             connection_id = source.connection_id
+            catalog_key = SOURCE_CATALOG_KEYS.get(source.id)
+            if catalog_key is not None and db.get(IntegrationCatalog, catalog_key) is None:
+                catalog_key = None
+            if connection_id and catalog_key is None:
+                # Without a catalog row the foreign key would fail; keep the
+                # source unlinked rather than attaching it to the wrong entry.
+                connection_id = None
             if connection_id and db.get(IntegrationConnection, connection_id) is None:
-                catalog_key = "google-calendar" if source.id == "calendar" else source.id
-                if catalog_key == "notion":
-                    catalog_key = "notion"
                 db.add(
                     IntegrationConnection(
                         id=connection_id,
                         user_id=ADMIN_USER_ID,
-                        catalog_key=catalog_key if db.get(IntegrationCatalog, catalog_key) else INTEGRATION_CATALOG[0].id,
+                        catalog_key=catalog_key,
                         auth_provider="nango",
                         status="connected",
+                        connected_at=utcnow(),
                     )
                 )
+                db.flush()
             db.add(
                 DataSource(
                     id=source.id,

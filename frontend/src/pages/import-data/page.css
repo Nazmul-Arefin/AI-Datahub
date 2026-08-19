@@ -61,6 +61,20 @@
 
 .source-status.revoked { color: #9a4545; background: rgba(190,70,70,.075); }
 
+/* Authorization state, shown alongside the sync status pill. Deliberately
+   quieter than .source-status so it reads as secondary. */
+.source-connection { display: flex; align-items: center; gap: 4px; color: #7d8490; font-size: 5.5px; font-weight: 680; letter-spacing: .01em; white-space: nowrap; }
+
+.source-connection i { width: 3px; height: 3px; border-radius: 50%; background: currentColor; }
+
+.source-connection.connected { color: #6a8f80; }
+
+.source-connection.pending { color: #9a8a55; }
+
+.source-connection.revoked { color: #a86a6a; }
+
+.source-connection.error { color: #b4553a; }
+
 .source-card > strong { margin-top: 8px; font-size: 10px; }
 
 .source-card > small { margin-top: 2px; color: #969da7; font-size: 6.5px; }
@@ -98,6 +112,33 @@
 
 .source-detail-block header span { color: #9aa1aa; font-size: 6px; }
 
+.connection-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 10px; }
+
+.connection-meta > span { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+
+.connection-meta small { color: #9aa1aa; font-size: 6px; }
+
+.connection-meta b { overflow: hidden; color: #4a5560; font-size: 7.5px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+
+.connection-meta b.connected { color: #2f7f66; }
+
+.connection-meta b.pending { color: #8a7635; }
+
+.connection-meta b.revoked { color: #9a4545; }
+
+.connection-meta b.error { color: #b4442a; }
+
+.connection-error { margin: 8px 0 0; padding: 7px 9px; border-radius: 9px; color: #9a4545; background: rgba(190,70,70,.07); font-size: 7px; line-height: 1.45; }
+
+/* The data-page inspector renders at a larger type scale than the sidebar fallback. */
+.os-shell.data-page .page--import-data .connection-meta { gap: 10px 12px; }
+
+.os-shell.data-page .page--import-data .connection-meta small { font-size: 8px; }
+
+.os-shell.data-page .page--import-data .connection-meta b { font-size: 10px; }
+
+.os-shell.data-page .page--import-data .connection-error { font-size: 9px; }
+
 .source-use-log { display: flex; flex-direction: column; margin-top: 12px; padding: 11px; border-radius: 13px; background: rgba(255,183,3,.065); }
 
 .source-use-log small { color: #ad7d00; font-size: 5.5px; font-weight: 850; letter-spacing: .1em; }
@@ -127,6 +168,11 @@
 .source-detail-actions .source-revoke { color: #9b4b4b; }
 
 .source-detail-actions .source-revoke.confirming { color: white; background: #a94f4f; }
+
+.source-detail-actions .source-pause { color: #697780; }
+
+/* Sync and pause share the first row, so revoke takes the second on its own. */
+.source-detail-actions .source-pause ~ .source-revoke { grid-column: 1 / -1; }
 
 .source-detail-actions button:disabled { opacity: .4; cursor: default; }
 
@@ -161,6 +207,16 @@
 .wizard-source-types b { font-size: 8.5px; }
 
 .wizard-source-types small { color: #959ca5; font-size: 6.5px; }
+
+.wizard-catalog { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; margin-top: 8px; max-height: 132px; overflow-y: auto; }
+
+.wizard-catalog button { min-height: 44px; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 8px 9px; text-align: left; border: 1px solid rgba(17,24,39,.06); border-radius: 12px; background: rgba(248,249,250,.72); cursor: pointer; }
+
+.wizard-catalog button.active { border-color: rgba(255,94,0,.24); background: rgba(255,94,0,.055); }
+
+.wizard-catalog b { font-size: 8px; }
+
+.wizard-catalog small { overflow: hidden; color: #959ca5; font-size: 6.5px; line-height: 1.35; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 
 .wizard-permission-preview { min-height: 52px; display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 10px; border-radius: 14px; background: rgba(139,92,246,.055); }
 
@@ -379,6 +435,19 @@
 .os-shell.data-page .page--import-data .data-main--gallery .source-card-copy > .source-status {
   padding: 5px 7px;
   font-size: 9px;
+}
+
+.os-shell.data-page .page--import-data .data-main--gallery .source-card-copy > .source-connection {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 9px;
+  text-overflow: ellipsis;
+}
+
+.os-shell.data-page .page--import-data .data-main--gallery .source-card-copy > .source-connection i {
+  flex: 0 0 4px;
+  width: 4px;
+  height: 4px;
 }
 
 .os-shell.data-page .page--import-data .data-main--gallery .source-card > footer {

@@ -1,7 +1,13 @@
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.core.deps import CurrentUserId, DbSession
-from app.schemas.sources import Source, SourceListResponse, SourcePatchRequest
+from app.schemas.sources import (
+    Source,
+    SourceListResponse,
+    SourcePatchRequest,
+    SourceReconnectRequest,
+    SourceReconnectResponse,
+)
 from app.services.source_service import source_service
 
 router = APIRouter()
@@ -45,9 +51,19 @@ async def disconnect_source(source_id: str, _user_id: CurrentUserId, db: DbSessi
     return source
 
 
-@router.post("/{source_id}/reconnect", response_model=Source)
-async def reconnect_source(source_id: str, _user_id: CurrentUserId, db: DbSession) -> Source:
-    source = await source_service.reconnect_source(source_id, db=db)
+@router.post("/{source_id}/reconnect", response_model=SourceReconnectResponse)
+async def reconnect_source(
+    source_id: str,
+    user_id: CurrentUserId,
+    db: DbSession,
+    payload: SourceReconnectRequest | None = None,
+) -> SourceReconnectResponse:
+    source = await source_service.reconnect_source(
+        source_id,
+        user_id=user_id,
+        redirect_uri=payload.redirect_uri if payload else None,
+        db=db,
+    )
     if not source:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
     return source

@@ -2,12 +2,14 @@
  * Application runtime adapted from the V2.3.2 monolith.
  * Expects overview/goals/import-data/use-data page roots to exist under #page-outlet.
  */
-import { loadGoalsFromApi, updateGoalOnApi } from './repositories/goalsRepository.js';
+import { loadGoalsFromApi, updateGoalOnApi, createGoalOnApi, deleteGoalOnApi } from './repositories/goalsRepository.js';
 import {
   loadSourcesFromApi,
   disconnectSourceOnApi,
   reconnectSourceOnApi,
   startConnectOnApi,
+  loadCatalogFromApi,
+  toggleSourceOnApi,
 } from './repositories/sourcesRepository.js';
 import { loadOverviewFromApi } from './repositories/overviewRepository.js';
 
@@ -207,6 +209,7 @@ function __install() {
   const wizardCancel = document.getElementById('wizardCancel');
   const wizardContinue = document.getElementById('wizardContinue');
   const wizardPermissionPreview = document.getElementById('wizardPermissionPreview');
+  const wizardCatalog = document.getElementById('wizardCatalog');
   const useWorkspace = document.getElementById('useWorkspace');
   const useMissionStage = document.getElementById('useMissionStage');
   const missionProgress = document.getElementById('missionProgress');
@@ -2276,6 +2279,28 @@ function __install() {
   function persistCustomGoals() {
     try { localStorage.setItem('weeple-custom-goals', JSON.stringify(goalProfiles.filter(goal => goal.custom))); } catch (error) { /* storage is optional */ }
     try { if (__store) __store.emit('goals:changed', { goals: goalProfiles }); } catch (_e) { /* optional */ }
+    const goal = goalProfiles[state.currentGoalIndex];
+    persistGoalProgressOnApi(goal);
+  }
+
+  const goalProgressSync = new Map();
+  let goalsApiReady = false;
+
+  function persistGoalProgressOnApi(goal) {
+    // Progress and monitoring live on the API once a goal has an id. Local-only
+    // drafts (no id yet) stay in localStorage until createGoalOnApi assigns one.
+    if (!goalsApiReady || !goal?.id) return;
+    const snapshot = {
+      progress: Number(goal.progress) || 0,
+      status: goal.status,
+      monitoringPaused: Boolean(goal.monitoringPaused),
+    };
+    const previous = goalProgressSync.get(goal.id);
+    if (previous && previous.progress === snapshot.progress && previous.status === snapshot.status && previous.monitoringPaused === snapshot.monitoringPaused) {
+      return;
+    }
+    goalProgressSync.set(goal.id, snapshot);
+    void updateGoalOnApi(goal.id, snapshot).catch(() => {});
   }
 
   function persistGoalPlanOverrides() {
@@ -2298,14 +2323,40 @@ function __install() {
     if (!Array.isArray(remoteGoals) || !remoteGoals.length) return;
     const byTitle = new Map(goalProfiles.map((goal) => [goal.title, goal]));
     remoteGoals.forEach((remote) => {
-      const local = byTitle.get(remote.title);
+        const local = byTitle.get(remote.title);
       if (local) {
+        const localSubgoals = local.subgoals;
+        const wasCustom = local.custom;
         Object.assign(local, remote);
+        // API subgoals are {name,done,total,state} only. Replacing would wipe
+        // executionTasks and any local plan overrides already on the profile.
+        if (Array.isArray(localSubgoals) && localSubgoals.some((item) => Array.isArray(item.executionTasks))) {
+          local.subgoals = localSubgoals;
+        }
+        if (wasCustom) local.custom = true;
+        if (remote.id) {
+          goalProgressSync.set(remote.id, {
+            progress: Number(remote.progress) || 0,
+            status: remote.status,
+            monitoringPaused: Boolean(remote.monitoringPaused),
+          });
+        }
         return;
       }
       goalProfiles.push(remote);
     });
+    goalsApiReady = true;
     try { renderGoalCollection(); } catch (_error) { /* collection may not be ready */ }
+    // Re-baseline after render so ensureGoalCommandModel's derived progress
+    // does not get PATCHed back as a user change.
+    goalProfiles.forEach((goal) => {
+      if (!goal.id) return;
+      goalProgressSync.set(goal.id, {
+        progress: Number(goal.progress) || 0,
+        status: goal.status,
+        monitoringPaused: Boolean(goal.monitoringPaused),
+      });
+    });
   }
 
   void hydrateGoalsFromApi();
@@ -3813,6 +3864,7 @@ function __install() {
     if (!goal.custom) deletedGoalTitles.add(goal.title);
     persistDeletedGoals();
     persistCustomGoals();
+    if (goal.id) void deleteGoalOnApi(goal.id).catch(() => {});
     pendingGoalDeletion = null;
   }
 
@@ -3952,8 +4004,8 @@ function __install() {
     { id: 'dashcam', name: 'Dash Cam', category: 'device', type: 'Storage device', method: 'USB connection', status: 'Needs attention', statusType: 'attention', lastSync: 'Failed 1h ago', assets: '0 new assets', scopes: ['Selected recordings'], purposes: ['Travel archive'], usedBy: 'No AI task used this source' },
     { id: 'documents', name: 'Personal Documents', category: 'files', type: 'Files & folders', method: 'Explicit local selection', status: 'Connected', statusType: 'connected', lastSync: '12m ago', assets: '124 files', scopes: ['Selected documents'], purposes: ['Local semantic search'], usedBy: 'Research summary · Today' },
     { id: 'research', name: 'Product Research', category: 'files', type: 'Knowledge materials', method: 'Watched local folder', status: 'Processing', statusType: 'processing', lastSync: 'Processing now', assets: '38 notes', scopes: ['Research folder'], purposes: ['Product goal'], usedBy: 'Prototype recommendation · Now' },
-    { id: 'calendar', name: 'Calendar', category: 'productivity', type: 'Calendar & productivity', method: 'Official API', status: 'Connected', statusType: 'connected', lastSync: 'Live', assets: '18 upcoming events', scopes: ['Event title', 'Time & availability'], purposes: ['Planning', 'Reminders'], usedBy: 'Today plan · Now' },
-    { id: 'notion', name: 'Notion Workspace', category: 'productivity', type: 'Productivity service', method: 'MCP extension', status: 'Connected', statusType: 'connected', lastSync: '14m ago', assets: '62 pages', scopes: ['Selected workspace'], purposes: ['Project context'], usedBy: 'Weekly review · Yesterday' },
+    { id: 'calendar', name: 'Calendar', category: 'productivity', type: 'Calendar & productivity', method: 'Official API', status: 'Connected', statusType: 'connected', lastSync: 'Live', assets: '18 upcoming events', scopes: ['Event title', 'Time & availability'], purposes: ['Planning', 'Reminders'], usedBy: 'Today plan · Now', connectionId: 'conn-google-calendar', connection: { id: 'conn-google-calendar', status: 'connected', authProvider: 'nango', externalConnectionId: null, errorMessage: null, connectedAt: null } },
+    { id: 'notion', name: 'Notion Workspace', category: 'productivity', type: 'Productivity service', method: 'MCP extension', status: 'Connected', statusType: 'connected', lastSync: '14m ago', assets: '62 pages', scopes: ['Selected workspace'], purposes: ['Project context'], usedBy: 'Weekly review · Yesterday', connectionId: 'conn-notion', connection: { id: 'conn-notion', status: 'connected', authProvider: 'nango', externalConnectionId: null, errorMessage: null, connectedAt: null } },
     { id: 'fitness', name: 'Apple Fitness', category: 'health', type: 'Health & lifestyle', method: 'Account authorization', status: 'Connected', statusType: 'connected', lastSync: '8m ago', assets: '42 metrics', scopes: ['Activity', 'Sleep summary'], purposes: ['Health goal'], usedBy: 'Recovery insight · 08:40' },
     { id: 'identity', name: 'Digital Identity', category: 'identity', type: 'Public identity candidates', method: 'Maigret discovery', status: 'Review required', statusType: 'attention', lastSync: 'Yesterday', assets: '4 candidates', scopes: ['Public usernames only'], purposes: ['Identity review'], usedBy: 'Not available to AI until confirmed' },
     { id: 'wechat', name: 'WeChat', category: 'communication', type: 'Communication data', method: 'Authorized adapter', status: 'Connected', statusType: 'connected', lastSync: '21m ago', assets: 'Selected conversations', scopes: ['Chosen chats only'], purposes: ['Relationship context'], usedBy: 'Family reminder · Yesterday' },
@@ -3968,7 +4020,10 @@ function __install() {
   }
 
   async function hydrateSourcesFromApi() {
-    const remote = await loadSourcesFromApi(state.sourceFilter || 'all');
+    // Always load the full list. The category chips filter locally; fetching
+    // with ?category= would replace dataSources with a subset (3 of 13 for
+    // Devices) and hide every other source until a full reload.
+    const remote = await loadSourcesFromApi('all');
     if (remote?.sources?.length) applyRemoteSources(remote.sources);
   }
 
@@ -3977,6 +4032,34 @@ function __install() {
   function sourceStatusLabel(source) {
     if (source.aiEnabled === false && source.statusType !== 'revoked') return '<span class="source-status paused"><i></i>Paused</span>';
     return `<span class="source-status ${source.statusType}"><i></i>${source.status}</span>`;
+  }
+
+  const connectionProviderLabels = { nango: 'Nango', astrbot: 'AstrBot', manual: 'Manual setup', api_key: 'API key' };
+
+  function connectionProviderLabel(connection) {
+    return connectionProviderLabels[connection.authProvider] || 'External service';
+  }
+
+  // Authorization state is separate from sync status: a source can sync fine
+  // while its authorization is revoked, and vice versa.
+  function connectionState(connection) {
+    const states = {
+      connected: { tone: 'connected', label: 'Authorized' },
+      pending: { tone: 'pending', label: 'Awaiting authorization' },
+      revoked: { tone: 'revoked', label: 'Authorization revoked' },
+      error: { tone: 'error', label: 'Authorization failed' },
+    };
+    return states[connection.status] || states.pending;
+  }
+
+  function sourceConnectionLabel(source) {
+    // Local sources (device bridge, chosen folders) have no external grant to show.
+    if (!source.connection) return '';
+    const { tone, label } = connectionState(source.connection);
+    const text = source.connection.status === 'connected'
+      ? `${label} · ${connectionProviderLabel(source.connection)}`
+      : label;
+    return `<span class="source-connection ${tone}"><i></i>${escapeGoalText(text)}</span>`;
   }
 
   function sourceAdapterIcon(source) {
@@ -4010,12 +4093,27 @@ function __install() {
         aiEnabled: true,
         lastSync: 'Reconnected now',
         usedBy: 'Available for future authorized AI tasks',
+        // Keep authorization state coherent when the API is unavailable.
+        connection: source.connection ? { ...source.connection, status: 'connected' } : null,
       });
       renderSourceGrid();
       if (state.selectedSourceId === source.id) renderSourceInspector(source);
-      __showToast(`${source.name} reconnected securely`);
+      void hydrateOverviewFromApi();
+      __showToast(source.statusType === 'connected'
+        ? `${source.name} reconnected securely`
+        : `${source.name} could not be reconnected`);
     };
-    reconnectSourceOnApi(source.id).then((remote) => finish(remote)).catch(() => finish());
+    const redirectUri = `${window.location.origin}${window.location.pathname}#/import-data`;
+    reconnectSourceOnApi(source.id, redirectUri).then((remote) => {
+      // Revoking destroyed the provider grant, so access has to be authorized
+      // again rather than simply switched back on.
+      if (remote?.reauthorizationRequired && /^https?:/i.test(remote.authorizationUrl || '')) {
+        __showToast(`${source.name} needs authorization again`);
+        window.location.href = remote.authorizationUrl;
+        return;
+      }
+      finish(remote);
+    }).catch(() => finish());
   }
 
   function renderSourceGrid() {
@@ -4024,7 +4122,7 @@ function __install() {
     sourceGrid.innerHTML = visibleSources.map((source, index) => `
       <article class="source-card${source.aiEnabled === false ? ' is-paused' : ''}" data-source-id="${source.id}" style="--card-order:${index}">
         <span class="source-mini-icon ${source.category}">${sourceAdapterIcon(source)}</span>
-        <span class="source-card-copy"><strong>${source.name}</strong>${sourceStatusLabel(source)}</span>
+        <span class="source-card-copy"><strong>${source.name}</strong>${sourceStatusLabel(source)}${sourceConnectionLabel(source)}</span>
         <footer>
           <span><small>Last sync</small><b>${source.lastSync}</b></span>
           <button class="manage" type="button" data-source-manage="${source.id}" aria-haspopup="dialog"><span>Manage</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7.5 5 5 5-5 5"/></svg></button>
@@ -4050,16 +4148,42 @@ function __install() {
     sourceGrid.querySelectorAll('[data-source-manage]').forEach(button => button.addEventListener('click', () => selectSource(button.dataset.sourceManage, button)));
   }
 
+  function formatConnectedAt(value) {
+    if (!value) return '';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '';
+    return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(parsed);
+  }
+
+  function sourceConnectionBlock(source) {
+    const connection = source.connection;
+    if (!connection) return '';
+    const { tone, label } = connectionState(connection);
+    const connectedAt = formatConnectedAt(connection.connectedAt);
+    return `
+      <section class="source-detail-block source-connection-detail">
+        <header><strong>Authorization</strong><span>Connection detail</span></header>
+        <div class="connection-meta">
+          <span><small>State</small><b class="${tone}">${escapeGoalText(label)}</b></span>
+          <span><small>Provider</small><b>${escapeGoalText(connectionProviderLabel(connection))}</b></span>
+          ${connectedAt ? `<span><small>Connected</small><b>${escapeGoalText(connectedAt)}</b></span>` : ''}
+          ${connection.externalConnectionId ? `<span><small>Provider reference</small><b>${escapeGoalText(connection.externalConnectionId)}</b></span>` : ''}
+        </div>
+        ${connection.errorMessage ? `<p class="connection-error">${escapeGoalText(connection.errorMessage)}</p>` : ''}
+      </section>`;
+  }
+
   function renderSourceInspector(source) {
     const revoked = source.statusType === 'revoked';
     sourceInspectorContent.innerHTML = `
       <header class="source-detail-header"><span><i></i>AUTHORIZATION DETAIL</span>${sourceStatusLabel(source)}<h2 id="sourceInspectorTitle">${source.name}</h2><p>${source.type} · ${source.method}</p></header>
       ${revoked ? '<div class="revoked-banner"><i></i><span><strong>Access revoked</strong><small>This source is excluded from every future AI task.</small></span></div>' : ''}
+      ${sourceConnectionBlock(source)}
       <section class="source-detail-block"><header><strong>Authorized scope</strong><span>Minimum access</span></header>${source.scopes.map((scope, index) => `<button class="scope-toggle${revoked ? '' : ' on'}" type="button" data-scope-index="${index}" aria-pressed="${String(!revoked)}"><span><i></i>${scope}</span><em></em></button>`).join('')}</section>
       <section class="source-detail-block"><header><strong>Allowed purposes</strong><span>You control this</span></header><div class="purpose-chips">${source.purposes.map(purpose => `<span>${purpose}</span>`).join('')}</div></section>
       <section class="source-use-log"><small>RECENT AI USE</small><strong>${source.usedBy}</strong><span>Last synchronization: ${source.lastSync}</span></section>
       <section class="source-processing"><span><i></i><b>Processing location</b><small>${source.category === 'identity' ? 'Public discovery with review gate' : 'Encrypted local processing where available'}</small></span><em>${source.assets}</em></section>
-      <div class="source-detail-actions">${revoked ? '<button class="source-sync source-reconnect" type="button">Reconnect source</button>' : '<button class="source-sync" type="button">Sync now</button>'}<button class="source-revoke" type="button" ${revoked ? 'disabled' : ''}>Revoke access</button></div>
+      <div class="source-detail-actions">${revoked ? '<button class="source-sync source-reconnect" type="button">Reconnect source</button>' : '<button class="source-sync" type="button">Sync now</button>'}${revoked ? '' : `<button class="source-pause" type="button">${source.aiEnabled === false ? 'Resume AI use' : 'Pause AI use'}</button>`}<button class="source-revoke" type="button" ${revoked ? 'disabled' : ''}>Revoke access</button></div>
     `;
     sourceInspectorContent.querySelectorAll('.scope-toggle').forEach(button => button.addEventListener('click', () => {
       if (revoked) return;
@@ -4075,6 +4199,26 @@ function __install() {
       syncButton.textContent = 'Synchronizing…';
       window.setTimeout(() => { syncButton.classList.remove('is-loading'); syncButton.textContent = 'Sync now'; __showToast(`${source.name} synchronized securely`); }, 760);
     });
+    // Pausing is reversible and keeps the grant: it only stops future AI use.
+    // Revoking is the destructive one and tears the authorization down.
+    const pauseButton = sourceInspectorContent.querySelector('.source-pause');
+    pauseButton?.addEventListener('click', () => {
+      if (pauseButton.disabled) return;
+      pauseButton.disabled = true;
+      const aiEnabled = source.aiEnabled === false;
+      source.aiEnabled = aiEnabled;
+      renderSourceGrid();
+      renderSourceInspector(source);
+      __showToast(aiEnabled
+        ? `${source.name} is available to AI again`
+        : `${source.name} is paused for future AI tasks`);
+      void toggleSourceOnApi(source.id, aiEnabled).then((remote) => {
+        if (!remote) return;
+        Object.assign(source, remote);
+        renderSourceGrid();
+        if (state.selectedSourceId === source.id) renderSourceInspector(source);
+      }).catch(() => {});
+    });
     const revokeButton = sourceInspectorContent.querySelector('.source-revoke');
     revokeButton.addEventListener('click', () => {
       if (revokeButton.disabled) return;
@@ -4085,7 +4229,8 @@ function __install() {
         return;
       }
       source.status = 'Revoked'; source.statusType = 'revoked'; source.aiEnabled = false; source.lastSync = 'Access stopped'; source.usedBy = 'Future AI use is blocked';
-      void disconnectSourceOnApi(source.id).then((remote) => { if (remote) Object.assign(source, remote); renderSourceGrid(); renderSourceInspector(source); });
+      if (source.connection) source.connection = { ...source.connection, status: 'revoked' };
+      void disconnectSourceOnApi(source.id).then((remote) => { if (remote) Object.assign(source, remote); renderSourceGrid(); renderSourceInspector(source); void hydrateOverviewFromApi(); });
       renderSourceGrid(); renderSourceInspector(source); __showToast(`${source.name} access revoked`);
     });
   }
@@ -4113,10 +4258,72 @@ function __install() {
     }
   }
 
-  function openConnectionWizard() {
+  // The six wizard tiles are coarse connection styles, not categories, so each
+  // one maps to the catalog rows it can actually offer.
+  const wizardCatalogFilters = {
+    Device: (item) => item.category === 'device',
+    Files: (item) => item.category === 'files',
+    Account: (item) => ['productivity', 'health'].includes(item.category) && item.authType === 'nango',
+    Identity: (item) => item.category === 'identity',
+    Extension: (item) => item.authType === 'mcp_url' || /mcp/i.test(item.method || ''),
+    Relay: (item) => item.category === 'communication',
+  };
+
+  let wizardCatalogItems = null;
+  let wizardIntegrationId = null;
+
+  async function primeWizardCatalog() {
+    if (wizardCatalogItems) return wizardCatalogItems;
+    const remote = await loadCatalogFromApi();
+    wizardCatalogItems = remote?.items?.length ? remote.items : null;
+    return wizardCatalogItems;
+  }
+
+  function describeWizardIntegration(item) {
+    const scopes = item.scopes?.length
+      ? item.scopes.join(' · ')
+      : 'The provider authorization screen lists the exact scopes.';
+    wizardPermissionPreview.innerHTML = `<i></i><span><strong>${escapeGoalText(item.name)} will request</strong><small>${escapeGoalText(scopes)}</small></span>`;
+  }
+
+  function renderWizardCatalog(wizardType) {
+    wizardIntegrationId = null;
+    const match = wizardCatalogFilters[wizardType];
+    const items = match ? (wizardCatalogItems || []).filter(match) : [];
+    if (!wizardCatalog) return;
+    if (!items.length) {
+      // No catalog (API down) or nothing in this style: fall back to the
+      // hardcoded pick so the wizard still completes.
+      wizardCatalog.hidden = true;
+      wizardCatalog.innerHTML = '';
+      return;
+    }
+    wizardCatalog.hidden = false;
+    wizardCatalog.innerHTML = items.map((item) => `
+      <button type="button" data-wizard-integration="${item.id}">
+        <b>${escapeGoalText(item.name)}</b>
+        <small>${escapeGoalText(item.description || item.method || '')}</small>
+      </button>
+    `).join('');
+    wizardCatalog.querySelectorAll('[data-wizard-integration]').forEach((button) => {
+      button.addEventListener('click', () => {
+        wizardCatalog.querySelectorAll('[data-wizard-integration]')
+          .forEach((other) => other.classList.toggle('active', other === button));
+        const item = items.find((entry) => entry.id === button.dataset.wizardIntegration);
+        wizardIntegrationId = item?.id || null;
+        if (item) describeWizardIntegration(item);
+        wizardContinue.disabled = false;
+      });
+    });
+  }
+
+  async function openConnectionWizard() {
     connectionWizard.classList.add('visible');
     connectionWizard.setAttribute('aria-hidden', 'false');
     dataWorkspace.classList.add('wizard-open');
+    await primeWizardCatalog();
+    const selected = connectionWizard?.querySelector('[data-wizard-source].active');
+    if (selected) renderWizardCatalog(selected.dataset.wizardSource);
   }
 
   function closeConnectionWizard() {
@@ -4124,6 +4331,11 @@ function __install() {
     connectionWizard.setAttribute('aria-hidden', 'true');
     dataWorkspace.classList.remove('wizard-open');
     wizardContinue.disabled = true;
+    wizardIntegrationId = null;
+    if (wizardCatalog) {
+      wizardCatalog.hidden = true;
+      wizardCatalog.innerHTML = '';
+    }
     connectionWizard.querySelectorAll('[data-wizard-source]').forEach(item => item.classList.remove('active'));
   }
 
@@ -6473,9 +6685,6 @@ closeDataWorkspace();
       persistCustomGoals();
       haptic(9);
       __showToast(goal.monitoringPaused ? 'AI monitoring paused for this goal' : 'AI monitoring resumed');
-      if (goal.id) {
-        void updateGoalOnApi(goal.id, { monitoringPaused: goal.monitoringPaused }).catch(() => {});
-      }
       return;
     }
     closeGoalMonitoringPopover();
@@ -6898,6 +7107,23 @@ closeDataWorkspace();
     adaptiveProfile.calendarLinked = Boolean(scheduledDate);
     goalProfiles.push(adaptiveProfile);
     persistCustomGoals();
+    void createGoalOnApi({
+      title: adaptiveProfile.title,
+      short: adaptiveProfile.short,
+      status: adaptiveProfile.status,
+      progress: adaptiveProfile.progress,
+      scheduledTime: adaptiveProfile.scheduledTime || null,
+      description: adaptiveProfile.description,
+      accent: adaptiveProfile.accent,
+      category: adaptiveProfile.category,
+      subgoals: adaptiveProfile.subgoals,
+      taskLabels: adaptiveProfile.taskLabels,
+      custom: true,
+    }).then((remote) => {
+      if (!remote?.id) return;
+      adaptiveProfile.id = remote.id;
+      persistCustomGoals();
+    });
     if (scheduledDate) renderCalendar('left', false);
     closeGoalCreateSheet();
     selectGoal(goalProfiles.length - 1, false);
@@ -6951,7 +7177,9 @@ closeDataWorkspace();
       Relay: 'The relay runs only in the user-authorized environment and exposes the selected application data.'
     };
     wizardPermissionPreview.innerHTML = `<i></i><span><strong>${source} permission preview</strong><small>${guidance[source]}</small></span>`;
-    wizardContinue.disabled = false;
+    renderWizardCatalog(source);
+    // With a catalog on screen the user still has to pick a specific service.
+    wizardContinue.disabled = Boolean(wizardCatalog) && !wizardCatalog.hidden;
   }));
   wizardContinue?.addEventListener('click', () => {
     const selected = connectionWizard.querySelector('[data-wizard-source].active');
@@ -6964,7 +7192,9 @@ closeDataWorkspace();
       Extension: 'notion',
       Relay: 'telegram',
     };
-    const integrationId = catalogByType[wizardType];
+    // Prefer the service the user actually picked from the live catalog; the
+    // hardcoded map is only a fallback for when the catalog could not load.
+    const integrationId = wizardIntegrationId || catalogByType[wizardType];
     closeConnectionWizard();
     if (!integrationId) {
       __showToast('Permission review opened — nothing connected yet');
@@ -6978,6 +7208,8 @@ closeDataWorkspace();
       }
       __showToast(`${wizardType} connect started`);
       void hydrateSourcesFromApi();
+      // Connecting records an activity event, so refresh the Overview feed too.
+      void hydrateOverviewFromApi();
     }).catch(() => {
       __showToast('Could not start connect — using local preview');
     });
@@ -7060,10 +7292,13 @@ closeDataWorkspace();
     });
   }
   async function hydrateOverviewFromApi() {
+    // Resolved per call: this also runs after a connect, by which point the
+    // overview view may have been re-injected and the cached node is stale.
+    const feed = document.querySelector('.activity-feed') || activityFeed;
     const overview = await loadOverviewFromApi();
-    if (!overview?.activity?.length || !activityFeed) return;
+    if (!overview?.activity?.length || !feed) return;
     const items = overview.activity.slice(0, 4);
-    activityFeed.innerHTML = items.map((item, index) => {
+    feed.innerHTML = items.map((item, index) => {
       const status = index === 0 ? 'status-progress' : index === 1 ? 'status-important' : 'status-completed';
       const target = item.route === 'import-data' ? 'data' : item.route === 'use-data' ? 'memory' : item.route || 'goals';
       return `<button class="activity-item ${status}" type="button" data-activity-action="${item.label}" data-action-target="${target}">
@@ -7870,6 +8105,7 @@ closeDataWorkspace();
         if (source) selectSource(source.id);
         __showToast(`${source?.name || 'Source'} connected`);
       });
+      void hydrateOverviewFromApi();
     }
     if (pageId === 'use-data' && params.get('memory') === '1') openMemoryDrawer();
     if (params.get('onboarding') === '1') openOnboarding();

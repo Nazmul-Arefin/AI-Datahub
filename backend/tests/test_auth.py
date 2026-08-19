@@ -16,8 +16,8 @@ async def test_login_issues_jwt(client):
 
 
 @pytest.mark.asyncio
-async def test_login_rejects_bad_password(client):
-    response = await client.post("/api/v1/auth/token", json={"username": "admin", "password": "wrong"})
+async def test_invalid_token_returns_error_json(client):
+    response = await client.get("/api/v1/auth/me", headers={"Authorization": "Bearer not-a-jwt"})
     assert response.status_code == 401
     body = response.json()
     assert body["error"]["code"] == "unauthorized"

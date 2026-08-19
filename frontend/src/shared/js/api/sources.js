@@ -18,8 +18,8 @@ export async function disconnectSource(sourceId) {
   return api.post(`/sources/${encodeURIComponent(sourceId)}/disconnect`, {});
 }
 
-export async function reconnectSource(sourceId) {
-  return api.post(`/sources/${encodeURIComponent(sourceId)}/reconnect`, {});
+export async function reconnectSource(sourceId, redirectUri) {
+  return api.post(`/sources/${encodeURIComponent(sourceId)}/reconnect`, redirectUri ? { redirectUri } : {});
 }
 
 export async function fetchIntegrationCatalog(q = '', category = '') {

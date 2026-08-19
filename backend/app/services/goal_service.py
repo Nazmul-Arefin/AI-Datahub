@@ -70,7 +70,8 @@ def _apply_goal_row(row: GoalRow, goal: Goal) -> None:
 class GoalService:
     def list_goals(self, db: Session | None = None) -> GoalListResponse:
         if db is not None:
-            goals = [_goal_from_row(row) for row in db.query(GoalRow).order_by(GoalRow.created_at).all()]
+            rows = db.query(GoalRow).order_by(GoalRow.created_at, GoalRow.id).all()
+            goals = [_goal_from_row(row) for row in rows]
         else:
             goals = list(runtime_store.goals.values())
         return GoalListResponse(goals=goals, total=len(goals))
@@ -117,6 +118,7 @@ class GoalService:
         goal = self.get_goal(goal_id, db=db)
         if not goal:
             return None
+        previous_status = goal.status
         data = goal.model_dump(by_alias=True)
         data.update(payload.model_dump(exclude_unset=True, by_alias=True))
         updated = Goal.model_validate(data)
@@ -127,6 +129,14 @@ class GoalService:
             _apply_goal_row(row, updated)
         else:
             runtime_store.goals[goal_id] = updated
+        if payload.status is not None and updated.status != previous_status:
+            activity_service.record(
+                f"{updated.title} status updated",
+                f"Moved from {previous_status} to {updated.status}",
+                route="goals",
+                related_goal_id=goal_id,
+                db=db,
+            )
         if payload.monitoring_paused is not None:
             activity_service.record(
                 "Goal monitoring updated",

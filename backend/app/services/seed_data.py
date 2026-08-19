@@ -654,6 +654,10 @@ CATALOG_SOURCE_IDS: dict[str, str] = {
     "gmail": "gmail",
 }
 
+SOURCE_CATALOG_KEYS: dict[str, str] = {
+    source_id: catalog_key for catalog_key, source_id in CATALOG_SOURCE_IDS.items()
+}
+
 SEED_TASKS: list[ExecutionTask] = [
     ExecutionTask(
         id="task-1",

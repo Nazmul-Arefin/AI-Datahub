@@ -22,7 +22,7 @@ class TaskService:
             query = db.query(TaskRow)
             if goal_id:
                 query = query.filter(TaskRow.goal_id == goal_id)
-            tasks = [_task_from_row(row) for row in query.order_by(TaskRow.created_at).all()]
+            tasks = [_task_from_row(row) for row in query.order_by(TaskRow.created_at, TaskRow.id).all()]
         else:
             tasks = list(runtime_store.tasks)
             if goal_id:

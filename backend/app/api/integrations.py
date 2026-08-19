@@ -1,9 +1,17 @@
+from typing import Annotated
+
 from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import RedirectResponse
 
 from app.core.config import settings
 from app.core.deps import CurrentUserId, DbSession, OptionalUserId
-from app.schemas.sources import ConnectStartRequest, ConnectStartResponse, IntegrationCatalogResponse, Source
+from app.schemas.sources import (
+    CatalogQuery,
+    ConnectStartRequest,
+    ConnectStartResponse,
+    IntegrationCatalogResponse,
+    Source,
+)
 from app.services.auth_connector import auth_connector
 from app.services.source_service import source_service
 
@@ -14,10 +22,9 @@ router = APIRouter()
 async def integration_catalog(
     _user_id: CurrentUserId,
     db: DbSession,
-    q: str | None = Query(default=None),
-    category: str | None = Query(default=None),
+    query: Annotated[CatalogQuery, Query()],
 ) -> IntegrationCatalogResponse:
-    return source_service.integration_catalog(q=q, category=category, db=db)
+    return source_service.integration_catalog(q=query.q, category=query.category, db=db)
 
 
 @router.post("/connect", response_model=ConnectStartResponse)

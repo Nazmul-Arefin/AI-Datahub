@@ -8,7 +8,16 @@ from app.services.seed_data import (
     SEED_GOALS,
     SEED_SOURCES,
     SEED_TASKS,
+    SOURCE_CATALOG_KEYS,
 )
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def expires_in(minutes: int = 15) -> datetime:
+    return utcnow() + timedelta(minutes=minutes)
 
 
 class RuntimeStore:
@@ -20,8 +29,25 @@ class RuntimeStore:
         self.catalog = [item.model_copy(deep=True) for item in INTEGRATION_CATALOG]
         self.tasks = [task.model_copy(deep=True) for task in SEED_TASKS]
         self.activity = [item.model_copy(deep=True) for item in SEED_ACTIVITY]
-        self.connections: dict[str, dict] = {}
+        self.connections: dict[str, dict] = self._seed_connections()
         self.oauth_states: dict[str, dict] = {}
+
+    def _seed_connections(self) -> dict[str, dict]:
+        """Mirror the connection rows `seed_db` creates, so both modes agree."""
+        connections: dict[str, dict] = {}
+        for source in SEED_SOURCES:
+            catalog_key = SOURCE_CATALOG_KEYS.get(source.id)
+            if not source.connection_id or catalog_key is None:
+                continue
+            connections[source.connection_id] = {
+                "id": source.connection_id,
+                "catalog_key": catalog_key,
+                "auth_provider": "nango",
+                "external_connection_id": None,
+                "status": "connected",
+                "connected_at": utcnow(),
+            }
+        return connections
 
     def catalog_item(self, key: str) -> IntegrationCatalogItem | None:
         return next((item for item in self.catalog if item.id == key), None)
@@ -36,11 +62,3 @@ class RuntimeStore:
 
 runtime_store = RuntimeStore()
 runtime_store.reset()
-
-
-def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def expires_in(minutes: int = 15) -> datetime:
-    return utcnow() + timedelta(minutes=minutes)

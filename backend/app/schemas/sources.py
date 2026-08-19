@@ -1,4 +1,23 @@
+from datetime import datetime
+
 from pydantic import BaseModel, Field
+
+
+class SourceConnection(BaseModel):
+    """Authorization state behind a source, shown on Import Data source cards.
+
+    Distinct from `Source.status`, which describes sync health. A source can be
+    syncing fine while its authorization needs attention, or vice versa.
+    """
+
+    id: str
+    status: str = "pending"
+    auth_provider: str = Field(default="nango", alias="authProvider")
+    external_connection_id: str | None = Field(default=None, alias="externalConnectionId")
+    error_message: str | None = Field(default=None, alias="errorMessage")
+    connected_at: datetime | None = Field(default=None, alias="connectedAt")
+
+    model_config = {"populate_by_name": True}
 
 
 class Source(BaseModel):
@@ -16,6 +35,7 @@ class Source(BaseModel):
     used_by: str | None = Field(default=None, alias="usedBy")
     ai_enabled: bool = Field(default=True, alias="aiEnabled")
     connection_id: str | None = Field(default=None, alias="connectionId")
+    connection: SourceConnection | None = None
 
     model_config = {"populate_by_name": True}
 
@@ -36,6 +56,26 @@ class SourcePatchRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class SourceReconnectRequest(BaseModel):
+    redirect_uri: str | None = Field(default=None, alias="redirectUri")
+
+    model_config = {"populate_by_name": True}
+
+
+class SourceReconnectResponse(Source):
+    """Result of a reconnect, as a superset of `Source` so clients that only
+    read source fields keep working.
+
+    `authorizationUrl` is set only when the provider grant is gone and the user
+    has to authorize again — revoking a Nango or AstrBot connection destroys the
+    upstream token, so it cannot be restored by flipping a status column.
+    """
+
+    authorization_url: str | None = Field(default=None, alias="authorizationUrl")
+    state: str | None = None
+    reauthorization_required: bool = Field(default=False, alias="reauthorizationRequired")
+
+
 class IntegrationCatalogItem(BaseModel):
     id: str
     name: str
@@ -53,6 +93,13 @@ class IntegrationCatalogItem(BaseModel):
 class IntegrationCatalogResponse(BaseModel):
     items: list[IntegrationCatalogItem]
     total: int = 0
+
+
+class CatalogQuery(BaseModel):
+    """Shared query params for GET /integrations/catalog."""
+
+    q: str | None = None
+    category: str | None = None
 
 
 class IntegrationConnection(BaseModel):

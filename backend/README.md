@@ -40,14 +40,47 @@ scripts/            Dev helpers
 
 ```powershell
 $env:PYTHONPATH = (Get-Location).Path
-pytest
-python scripts/smoke_vertical_slice.py
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe scripts\smoke_vertical_slice.py
 ```
 
-With Postgres (`USE_DATABASE=true`):
+`tests/test_database_mode.py` runs the real Alembic migration against a
+throwaway SQLite database, so persistence is covered without Docker.
+
+## Persistence modes
+
+`USE_DATABASE=false` (default) keeps goals, sources, and activity in
+`services/runtime_store.py`. Nothing survives a restart and no migration is
+needed — this is what tests and the local demo use.
+
+`USE_DATABASE=true` routes the same service code through SQLAlchemy. Run the
+migration first, or requests will fail on missing tables.
+
+### SQLite (no Docker required)
+
+```powershell
+$env:PYTHONPATH = (Get-Location).Path
+$env:USE_DATABASE = "true"
+$env:DATABASE_URL = "sqlite+pysqlite:///./weeple.db"
+.\.venv\Scripts\python.exe -m alembic upgrade head
+.\.venv\Scripts\python.exe scripts\seed_db.py
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
+```
+
+### Postgres
 
 ```powershell
 docker compose up postgres -d
-alembic upgrade head
-python scripts/seed_db.py
+$env:USE_DATABASE = "true"
+.\.venv\Scripts\python.exe -m alembic upgrade head
+.\.venv\Scripts\python.exe scripts\seed_db.py
+```
+
+Point Alembic at a different database without editing `.env`:
+
+```powershell
+.\.venv\Scripts\python.exe -m alembic -x db_url="sqlite+pysqlite:///./scratch.db" upgrade head
+```
+
+`scripts/seed_db.py` is idempotent, so re-running it will not duplicate rows.
 

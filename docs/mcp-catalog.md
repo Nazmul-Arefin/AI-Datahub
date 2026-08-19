@@ -25,4 +25,15 @@ Dev2 then maps Nango provider / AstrBot platform / raw MCP URL. The connect API 
 
 Messaging connectors (`telegram`, `discord`) use `authType: astrbot`. OAuth SaaS connectors use `nango`.
 
+Category slugs are a contract with the Import page filter chips — a row in a
+category no chip filters is unreachable in the UI, and `test_catalog_search.py`
+fails if the two drift apart.
+
+## What `authType` means for revoke
+
+`authType` also decides what a reconnect can do. `nango` and `astrbot` grants
+live at the provider, so revoking destroys them and reconnect must walk the
+connect flow again. `api_key` and `mcp_url` connectors have nothing upstream to
+rebuild, so reconnect simply re-enables them. See `docs/api-contracts.md`.
+
 Frontend icons live in `frontend/src/shared/js/app-runtime.js` (`sourceAdapterIcon`).

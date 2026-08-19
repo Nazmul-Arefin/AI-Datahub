@@ -20,6 +20,10 @@ async def run() -> int:
         token = login.json()["access_token"]
         headers = {"Authorization": f"Bearer {token}"}
 
+        me = await client.get("/api/v1/auth/me", headers=headers)
+        me.raise_for_status()
+        assert me.json()["id"] == "dev-user"
+
         catalog = await client.get("/api/v1/integrations/catalog", params={"q": "calendar"}, headers=headers)
         catalog.raise_for_status()
         assert catalog.json()["total"] >= 1
@@ -48,7 +52,7 @@ async def run() -> int:
         overview.raise_for_status()
         assert overview.json()["activity"]
 
-        print("Dev1 smoke: login, catalog, connect, sources, overview — OK")
+        print("Dev1 smoke: login, /me, catalog, connect, sources, overview — OK")
         return 0
 
 

@@ -21,7 +21,8 @@ Auth, goals, tasks, overview, calendar data, integrations catalog/connect API su
 ## Forbidden
 
 - `backend/app/adapters/` (Dev2)
-- Implementing Nango/AstrBot/Harness/TencentDB clients
+- `backend/app/services/agent_service.py`, `memory_service.py`, `mcp_service.py`, `messaging_service.py` (Dev2 implements; Dev1 only calls them)
+- Implementing Nango/AstrBot/Harness/TencentDB clients — including the body of `auth_connector.py`. Dev1 owns that *interface*; Dev2 owns the Nango implementation behind it.
 - A second Goals/Use agent loop
 - Collaboration/social endpoints
 

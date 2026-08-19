@@ -1,10 +1,10 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
+from sqlalchemy import Boolean, ForeignKey, String, Text
 from sqlalchemy import JSON
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, TimestampMixin, utcnow
+from app.models.base import Base, TimestampMixin, UtcDateTime, utcnow
 
 
 class IntegrationCatalog(TimestampMixin, Base):
@@ -32,7 +32,7 @@ class IntegrationConnection(TimestampMixin, Base):
     external_connection_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="pending", index=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    connected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    connected_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
 
 
 class OAuthState(Base):
@@ -42,8 +42,8 @@ class OAuthState(Base):
     user_id: Mapped[str] = mapped_column(String(36))
     catalog_key: Mapped[str] = mapped_column(String(64))
     redirect_uri: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
 
 class DataSource(TimestampMixin, Base):
@@ -65,3 +65,8 @@ class DataSource(TimestampMixin, Base):
     purposes: Mapped[list] = mapped_column(JSON, default=list)
     used_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
     ai_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    # viewonly so connection_id stays the single writable source of truth. A
+    # writable relationship would sync its unset None over the column on flush
+    # and silently null the foreign key.
+    connection: Mapped["IntegrationConnection | None"] = relationship(viewonly=True)

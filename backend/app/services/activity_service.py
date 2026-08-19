@@ -48,7 +48,7 @@ class ActivityService:
         if db is not None:
             rows = (
                 db.query(ActivityEvent)
-                .order_by(ActivityEvent.created_at.desc())
+                .order_by(ActivityEvent.created_at.desc(), ActivityEvent.id)
                 .limit(limit)
                 .all()
             )

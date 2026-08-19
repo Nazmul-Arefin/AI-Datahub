@@ -72,7 +72,26 @@ Default local admin: `admin` / `weeple` (`ADMIN_USERNAME`, `ADMIN_PASSWORD`).
 
 `PATCH /sources/{id}` — toggle `aiEnabled`, status
 
-`POST /sources/{id}/disconnect` | `/reconnect` — revoke or restore a connection (calls AuthConnector/MCPService interfaces)
+`POST /sources/{id}/disconnect` — revoke for real, not a status flip. Blocks AI
+use locally (`aiEnabled=false`, `statusType=revoked`), sets the connection to
+`revoked`, then calls `AuthConnector.revoke` and `MCPService.unregister`. Those
+two run independently, so a provider outage still drops the tool registry entry.
+A failure is reported in `connection.errorMessage` rather than swallowed.
+
+`POST /sources/{id}/reconnect` — body `{ redirectUri? }`, returns a `Source` plus
+`{ authorizationUrl?, state?, reauthorizationRequired }`. Behaviour depends on
+what is actually recoverable:
+
+| Connection state | Behaviour |
+| --- | --- |
+| Revoked, `authType` `nango`/`astrbot` | Restarts the connect flow and returns `authorizationUrl`; the source stays blocked until the callback lands |
+| Live | Calls `AuthConnector.refresh`; on failure the connection goes to `error` and the source to `attention` |
+| No connection (local bridge, folder) | Straight re-enable, no authorization round trip |
+
+Revoking a third-party grant destroys the upstream token, so it cannot be
+restored by writing `connected` back into the column — the client must follow
+`authorizationUrl`. Re-authorization creates a new connection row and leaves the
+revoked one as history.
 
 ## Integrations
 

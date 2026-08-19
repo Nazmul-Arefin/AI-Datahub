@@ -20,6 +20,14 @@ async def test_patch_goal_progress(client):
 
 
 @pytest.mark.asyncio
+async def test_patch_goal_status_records_activity(client):
+    response = await client.patch("/api/v1/goals/beijing-trip", json={"status": "On track"})
+    assert response.status_code == 200
+    labels = [item["label"] for item in (await client.get("/api/v1/overview")).json()["activity"]]
+    assert any("status updated" in label.lower() for label in labels)
+
+
+@pytest.mark.asyncio
 async def test_create_and_delete_goal(client):
     created = await client.post("/api/v1/goals", json={"title": "Ship the demo", "category": "Project"})
     assert created.status_code == 201

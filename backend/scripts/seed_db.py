@@ -1,5 +1,6 @@
 """Idempotent database seed."""
 
+from app.core.config import settings
 from app.core.database import SessionLocal, init_database
 from app.services.seed_db import seed_database
 
@@ -13,7 +14,7 @@ def main() -> None:
     try:
         seed_database(db)
         db.commit()
-        print("Seeded Postgres catalog, goals, sources, and activity.")
+        print(f"Seeded catalog, goals, sources, and activity into {settings.database_url}.")
     finally:
         db.close()
 

@@ -33,14 +33,21 @@ With Postgres:
 ```powershell
 docker compose up postgres api
 cd backend
+python -m alembic upgrade head
 python scripts/seed_db.py
 python scripts/smoke_vertical_slice.py
 ```
+
+No Docker? Persistence also runs on SQLite — set
+`DATABASE_URL=sqlite+pysqlite:///./weeple.db` alongside `USE_DATABASE=true`.
+See `backend/README.md` for the full workflow.
 
 ## Wiring checklist (per page)
 
 - [x] Replace mock array reads with repository `load()` (Import sources, Overview activity, Goals list)
 - [x] Replace localStorage-only writes with API PATCH where a goal/source id exists
-- [ ] Keep UI-only prefs in `storage.js` (hints, layout)
+- [x] Connect wizard offers live catalog rows (`loadCatalogFromApi`) instead of a fixed key per tile
+- [x] Goal create/delete and progress/monitoring changes go through the API when reachable
+- [x] Keep UI-only prefs in `storage.js` (hints, layout) — layout stays local; source `aiEnabled` and goal progress go through the API
 
 See `docs/api-contracts.md` for shapes.
