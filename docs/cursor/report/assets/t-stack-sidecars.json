@@ -1,0 +1,40 @@
+{
+  "status": "ok",
+  "sidecars": [
+    {
+      "name": "nango",
+      "mode": "live",
+      "status": "ok",
+      "url": "http://nango:3003",
+      "detail": "http 200"
+    },
+    {
+      "name": "memory",
+      "mode": "live",
+      "status": "ok",
+      "url": "http://host.docker.internal:8420",
+      "detail": "http 200"
+    },
+    {
+      "name": "harness",
+      "mode": "live",
+      "status": "ok",
+      "url": "http://agent-harness:3080",
+      "detail": "http 200"
+    },
+    {
+      "name": "astrbot",
+      "mode": "live",
+      "status": "ok",
+      "url": "http://astrbot:6185",
+      "detail": "http 404"
+    },
+    {
+      "name": "mcp_gateway",
+      "mode": "mock",
+      "status": "ok",
+      "url": "http://mcp-gateway:8080",
+      "detail": "http 200"
+    }
+  ]
+}

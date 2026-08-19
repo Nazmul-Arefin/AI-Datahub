@@ -1,14 +1,18 @@
-# Weeple AI OS
+# Weeple AI OS / AI Data Hub
 
-Monorepo: modular dashboard UI + FastAPI backend.
+Monorepo: modular dashboard UI + FastAPI backend + sidecars.
+
+**Backend sprint plan:** [plan.md](plan.md)  
+**Developer 2 live todo:** [docs/cursor/TODO.md](docs/cursor/TODO.md)  
+**Role + task details:** [docs/cursor/DEV2.md](docs/cursor/DEV2.md) · [docs/cursor/DEV2-TASKS.md](docs/cursor/DEV2-TASKS.md)
 
 ## Repository layout
 
 ```
 frontend/          Hash-routed UI (index.html, src/, assets/)
 backend/           FastAPI API (schemas, services, adapters)
-docs/              Architecture, API contracts, dev guides
-docker-compose.yml Local stack (Postgres + API + adapter placeholders)
+docs/              Architecture, API contracts, cursor guides
+docker-compose.yml api + postgres + harness + astrbot + nango + memory
 ```
 
 ## Run locally

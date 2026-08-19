@@ -1,0 +1,21 @@
+added 12 connectors without new routers
+catalogSize: 13
+  github             nango srv-5c5fb61f tools=['list_repos', 'get_user']
+  google-calendar    nango srv-256b4dda tools=['list_events']
+  notion             nango srv-773e3e10 tools=['search_pages']
+  dropbox            nango srv-946d530e tools=['list_files']
+  fitbit             nango srv-74fe7abc tools=['list_sleep']
+  strava             nango srv-c918b1dd tools=['list_activities']
+  slack              nango srv-77086edf tools=['list_channels']
+  telegram           astrbot srv-5e5569bd tools=['list_chats', 'send_message']
+  discord            astrbot srv-4b7947ec tools=['list_guilds']
+  google-drive       nango srv-8f0dd4ff tools=['list_files']
+  todoist            nango srv-0d4e5da3 tools=['list_tasks']
+  okta               nango srv-3f1d9e61 tools=['list_users']
+
+VERTICAL SLICE ok
+nango: mock http://localhost:3003/oauth/connect/github
+mcp: github srv-1811a744
+telegram: Telegram connected (mock) srv-f39f5921
+memory: mem-1a320708-985e-462b-ad24-f57daa0135e8 recalled=True
+run: run-30d8f745dc queued mock tools= ['list_repos', 'get_user', 'list_chats', 'send_message']

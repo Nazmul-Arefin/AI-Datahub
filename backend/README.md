@@ -2,6 +2,8 @@
 
 FastAPI service for the Weeple AI OS dashboard. Contracts live in `app/schemas/` and `../docs/api-contracts.md`.
 
+This checkout is **Developer 2** (AI + sidecars). See `../docs/cursor/DEV2.md` and `../docs/cursor/DEV2-TASKS.md`. Team plan: `../plan.md`.
+
 ## Quick start
 
 ```powershell

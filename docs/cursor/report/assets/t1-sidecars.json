@@ -1,0 +1,33 @@
+{
+  "status": "ok",
+  "sidecars": [
+    {
+      "name": "nango",
+      "mode": "mock",
+      "status": "ok",
+      "url": "http://localhost:3003",
+      "detail": "http 200"
+    },
+    {
+      "name": "memory",
+      "mode": "mock",
+      "status": "ok",
+      "url": "http://localhost:8081",
+      "detail": "http 200"
+    },
+    {
+      "name": "harness",
+      "mode": "mock",
+      "status": "ok",
+      "url": "http://localhost:8082",
+      "detail": "http 200"
+    },
+    {
+      "name": "astrbot",
+      "mode": "mock",
+      "status": "ok",
+      "url": "http://localhost:8083",
+      "detail": "http 200"
+    }
+  ]
+}

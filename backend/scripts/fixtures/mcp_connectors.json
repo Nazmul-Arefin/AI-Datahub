@@ -1,0 +1,106 @@
+{
+  "connectors": [
+    {
+      "name": "github",
+      "category": "productivity",
+      "auth_type": "nango",
+      "nango_provider_key": "github",
+      "mcp_template": "github.list_repos",
+      "tools": [
+        {"name": "list_repos", "description": "List repositories"},
+        {"name": "get_user", "description": "Get the authenticated user"}
+      ]
+    },
+    {
+      "name": "google-calendar",
+      "category": "productivity",
+      "auth_type": "nango",
+      "nango_provider_key": "google-calendar",
+      "mcp_template": "calendar.list_events",
+      "tools": [{"name": "list_events", "description": "List calendar events"}]
+    },
+    {
+      "name": "notion",
+      "category": "files",
+      "auth_type": "nango",
+      "nango_provider_key": "notion",
+      "mcp_template": "notion.search",
+      "tools": [{"name": "search_pages", "description": "Search Notion pages"}]
+    },
+    {
+      "name": "dropbox",
+      "category": "files",
+      "auth_type": "nango",
+      "nango_provider_key": "dropbox",
+      "mcp_template": "dropbox.list_files",
+      "tools": [{"name": "list_files", "description": "List files in a folder"}]
+    },
+    {
+      "name": "fitbit",
+      "category": "health",
+      "auth_type": "nango",
+      "nango_provider_key": "fitbit",
+      "mcp_template": "fitbit.sleep",
+      "tools": [{"name": "list_sleep", "description": "List recent sleep sessions"}]
+    },
+    {
+      "name": "strava",
+      "category": "health",
+      "auth_type": "nango",
+      "nango_provider_key": "strava",
+      "mcp_template": "strava.activities",
+      "tools": [{"name": "list_activities", "description": "List recent activities"}]
+    },
+    {
+      "name": "slack",
+      "category": "communication",
+      "auth_type": "nango",
+      "nango_provider_key": "slack",
+      "mcp_template": "slack.list_channels",
+      "tools": [{"name": "list_channels", "description": "List Slack channels"}]
+    },
+    {
+      "name": "telegram",
+      "category": "communication",
+      "auth_type": "astrbot",
+      "astrbot_platform": "telegram",
+      "mcp_template": "astrbot.telegram",
+      "tools": [
+        {"name": "list_chats", "description": "List Telegram chats", "confirmationRequired": false},
+        {"name": "send_message", "description": "Send a Telegram message", "confirmationRequired": true}
+      ]
+    },
+    {
+      "name": "discord",
+      "category": "communication",
+      "auth_type": "astrbot",
+      "astrbot_platform": "discord",
+      "mcp_template": "astrbot.discord",
+      "tools": [{"name": "list_guilds", "description": "List Discord guilds"}]
+    },
+    {
+      "name": "google-drive",
+      "category": "files",
+      "auth_type": "nango",
+      "nango_provider_key": "google-drive",
+      "mcp_template": "drive.list",
+      "tools": [{"name": "list_files", "description": "List Drive files"}]
+    },
+    {
+      "name": "todoist",
+      "category": "productivity",
+      "auth_type": "nango",
+      "nango_provider_key": "todoist",
+      "mcp_template": "todoist.tasks",
+      "tools": [{"name": "list_tasks", "description": "List Todoist tasks"}]
+    },
+    {
+      "name": "okta",
+      "category": "identity",
+      "auth_type": "nango",
+      "nango_provider_key": "okta",
+      "mcp_template": "okta.users",
+      "tools": [{"name": "list_users", "description": "List directory users"}]
+    }
+  ]
+}

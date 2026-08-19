@@ -1,32 +1,47 @@
-# Agent instructions (Weeple monorepo)
+# Agent instructions — AI Data Hub backend
 
-## Repository map
+Monorepo: `frontend/` (V2.3.2 mock SPA) + `backend/` (FastAPI modular monolith) + sidecars in Compose.
 
-- **Frontend:** `frontend/` (`index.html`, `src/`, `assets/`)
-- **Backend:** `backend/app/`
-- **Contracts:** `backend/app/schemas/` + `docs/api-contracts.md`
+Read first: [plan.md](../../plan.md), [api-contracts.md](../api-contracts.md), [licenses.md](../licenses.md), `backend/app/schemas/`.
 
-## Rules
+This checkout’s active developer is **Developer 2**. Follow [TODO.md](TODO.md) (live status), [DEV2.md](DEV2.md), and [DEV2-TASKS.md](DEV2-TASKS.md).
 
-1. Do not break hash routes: `#/overview`, `#/goals`, `#/import-data`, `#/use-data`.
-2. Page-owned UI stays under `frontend/src/pages/<page>/`.
-3. API integration uses `frontend/src/shared/js/api/client.js` — never hardcode fetch URLs in page CSS.
-4. Backend route handlers stay thin; logic belongs in `services/`.
-5. Shared JSON field names use camelCase aliases for frontend compatibility.
-6. Adapters wrap third-party systems; never import Nango/MCP clients from `api/` directly.
+## Locked split
+
+| Who | Owns |
+|-----|------|
+| Dev1 | Auth, goals, tasks, overview, catalog/connect HTTP, Postgres models |
+| Dev2 | Adapters + AgentService, MessagingService, AuthConnector, MCP, Memory, LLM, Compose sidecars |
+
+## Isolation (non-negotiable)
+
+- Product agents: `API → AgentService → DeepSeek Harness` (FallbackLoopAdapter allowed, same interface).
+- AstrBot: messaging/IM connectors only. Never implement Goals/Use agent loop there.
+- Nango: OAuth/API-key scale layer via `AuthConnector` only.
+- Routers never import Harness / AstrBot / Nango / TencentDB / DeepSeek clients.
+- Never put OAuth tokens in agent prompts or frontend payloads.
+- Adding a connector = catalog/registry data, not a new business router.
+- Do not remove AstrBot or Nango from Compose without updating docs and the boss-facing architecture.
+- No collaboration endpoints.
 
 ## Commands
 
 ```powershell
 npx serve frontend
-cd backend && .\scripts\dev.ps1
-cd backend && pytest
+cd backend; .\scripts\dev.ps1
+cd backend; pytest
+docker compose up -d
 ```
 
-## When adding an endpoint
+## Adding an endpoint
 
-1. Schema in `backend/app/schemas/`
-2. Service method in `backend/app/services/`
-3. Route in `backend/app/api/`
-4. Document in `docs/api-contracts.md`
-5. Optional client in `frontend/src/shared/js/api/`
+1. Schema in `backend/app/schemas/` (check day-owner).
+2. Logic in `backend/app/services/` (or adapter behind the service).
+3. Thin route in `backend/app/api/`.
+4. Document in `docs/api-contracts.md`.
+
+## Git
+
+- Branches: `dev1/goals-catalog`, `dev2/harness-astrbot-nango`.
+- Morning rebase; no force-push to `main`.
+- Conventional commits with scopes: `feat(catalog)`, `feat(harness)`, `feat(astrbot)`, `feat(nango)`, `feat(mcp)`.

@@ -1,0 +1,12 @@
+{
+  "runId": "session-8699c4f8-723d-4146-87c4-a89d02afdc9a",
+  "status": "running",
+  "sessionId": "session-8699c4f8-723d-4146-87c4-a89d02afdc9a",
+  "mode": "live",
+  "events": [
+    "permission/preset",
+    "sandbox/mode",
+    "turn/start",
+    "user/message"
+  ]
+}

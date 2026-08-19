@@ -1,51 +1,36 @@
 # Contributing
 
-## Page ownership
+Two backend developers. Canonical plan: [plan.md](plan.md).
 
-| Folder | Owner |
-|--------|--------|
-| `frontend/src/pages/overview` | Primary maintainer |
-| `frontend/src/pages/goals` | Primary maintainer |
-| `frontend/src/pages/import-data` | Primary maintainer |
-| `frontend/src/pages/use-data` | Teammate |
+| Role | Owns | Branch |
+|------|------|--------|
+| **Dev1** | Auth, goals, tasks, overview, catalog/connect HTTP, Postgres models | `dev1/goals-catalog` |
+| **Dev2** | Harness, AstrBot, Nango, MCP gateway, Memory, LLM, Compose sidecars | `dev2/harness-astrbot-nango` |
 
-Keep routine feature work inside your page folder (`view.html`, `page.css`, `page.js`).
+Guides: [docs/cursor/DEV1.md](docs/cursor/DEV1.md), [docs/cursor/DEV2.md](docs/cursor/DEV2.md), [docs/cursor/AGENTS.md](docs/cursor/AGENTS.md).
 
-## Shared code
+## Workflow
 
-Changes under `frontend/src/shared/` or `frontend/src/app/routes.js` affect every page. Prefer a **separate PR** and coordinate with the other maintainer before merging.
+1. Rebase onto latest `main` each morning. No force-push to `main`.
+2. `backend/app/schemas/` has a **day-owner** — coordinate before editing shared contracts.
+3. One task at a time (Dev2: [docs/cursor/DEV2-TASKS.md](docs/cursor/DEV2-TASKS.md)). Test before starting the next.
+4. Conventional commits: `feat(catalog)`, `feat(harness)`, `feat(astrbot)`, `feat(nango)`, `feat(mcp)`.
 
-The route registry in `frontend/src/app/routes.js` is defined up front — do not edit it for normal page work.
+## Isolation
 
-## Branch workflow
+- Routers stay thin; SDKs live in `backend/app/adapters/`.
+- Product agents go `API → AgentService → DeepSeek Harness`.
+- AstrBot is messaging only.
+- Do not add collaboration endpoints.
 
-1. Update local `main` (pull/rebase) before starting.
-2. Create a fresh branch per task, for example:
-   - `feature/goals-progress`
-   - `feature/use-data-search`
-3. Limit the PR diff to the relevant page folder when possible.
-4. Require the other teammate to review before merge.
-5. Delete the feature branch after merge; start the next task from latest `main`.
-
-## Useful commands
+## Commands
 
 ```powershell
-# Serve the UI (required — no file://)
 npx serve frontend
-
-# Syntax-check frontend modules
-Get-ChildItem -Recurse frontend/src -Filter *.js | ForEach-Object { node --check $_.FullName }
-
-# Backend API (optional)
 cd backend
 .\scripts\dev.ps1
 pytest
 ```
-
-## Backend
-
-API lives in `backend/`. Contracts: `backend/app/schemas/` and `docs/api-contracts.md`.  
-Do not call the API directly from page folders — use `frontend/src/shared/js/api/` and `repositories/`.
 
 ## Line endings
 

@@ -1,0 +1,1 @@
+"""Sidecar health ping adapter."""

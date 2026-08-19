@@ -1,0 +1,15 @@
+{
+  "platforms": [
+    {
+      "id": "telegram",
+      "name": "Telegram",
+      "status": "available"
+    },
+    {
+      "id": "discord",
+      "name": "Discord",
+      "status": "available"
+    }
+  ],
+  "mode": "mock"
+}
