@@ -15,6 +15,7 @@ Daily demo pack. After each task we add `T0.md` … `T9.md` here with what shipp
 | T7 ContextBuilder + Harness | Done | [T7.md](T7.md) |
 | T8 AstrBot Telegram connect | Done | [T8.md](T8.md) |
 | T9 Bulk MCP + vertical slice | Done | [T9.md](T9.md) |
+| Final live audit (2026-08-19) | Done | [FINAL.md](FINAL.md) |
 
 Live checklist: [TODO.md](../TODO.md)
 
