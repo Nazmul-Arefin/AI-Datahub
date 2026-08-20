@@ -177,7 +177,28 @@
 
 .side-day-overview .preparing-loader { display: flex; align-items: center; gap: 4px; margin-top: 9px; padding: 0; background: transparent; }
 
-.calendar-day-card[data-position="0"] .expanded-agenda { opacity: 1; pointer-events: auto; transform: translateY(0) scale(1); }
+.calendar-day-card[data-position="0"] .expanded-agenda {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+  max-height: calc(100% - 108px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  align-content: start;
+  padding-right: 2px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--card-rgb), .35) transparent;
+}
+
+.calendar-day-card[data-position="0"] .expanded-agenda::-webkit-scrollbar {
+  width: 4px;
+}
+
+.calendar-day-card[data-position="0"] .expanded-agenda::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(var(--card-rgb), .35);
+}
 
 .calendar-swipe-hint { position: relative; z-index: 12; display: flex; align-items: center; justify-content: center; gap: 9px; margin-top: -6px; color: #a0a6af; font-size: 6px; font-weight: 650; letter-spacing: .03em; }
 

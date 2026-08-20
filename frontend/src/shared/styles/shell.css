@@ -225,6 +225,21 @@
 .preparing-loader i:nth-child(3) { animation-delay: .28s; }
 
 .expanded-agenda { position: absolute; z-index: 3; left: 21px; right: 21px; top: 96px; display: grid; gap: 8px; opacity: 0; pointer-events: none; transform: translateY(10px) scale(.97); transition: opacity .3s .1s, transform .38s .08s; }
+.calendar-day-card[data-position="0"] .expanded-agenda {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+  max-height: calc(100% - 108px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  align-content: start;
+  padding-right: 2px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--card-rgb), .35) transparent;
+}
+.calendar-day-card[data-position="0"] .expanded-agenda::-webkit-scrollbar { width: 4px; }
+.calendar-day-card[data-position="0"] .expanded-agenda::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(var(--card-rgb), .35); }
 
 .carousel-agenda-item { display: grid; grid-template-columns: 38px minmax(0,1fr) auto; align-items: center; gap: 10px; min-height: 72px; padding: 9px; border: 1px solid rgba(17,24,39,.06); border-radius: 15px; background: rgba(255,255,255,.52); }
 

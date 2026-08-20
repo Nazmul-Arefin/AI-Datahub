@@ -8,10 +8,19 @@ class OverviewCluster(BaseModel):
 
 
 class CalendarTask(BaseModel):
+    """One Overview calendar agenda row (YOU or AI)."""
+
     id: str
     title: str
     time: str | None = None
     day_offset: int = Field(default=0, alias="dayOffset")
+    owner: str = "human"  # human | ai
+    label: str | None = None
+    detail: str | None = None
+    status: str | None = None
+    type: str | None = None  # goal | action | complete | planning
+    goal_id: str | None = Field(default=None, alias="goalId")
+    icon: str | None = None
 
     model_config = {"populate_by_name": True}
 

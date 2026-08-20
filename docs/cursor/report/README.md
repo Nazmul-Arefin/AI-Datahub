@@ -1,6 +1,10 @@
-# Reports (Developer 2)
+# Reports
 
 Daily demo pack. After each task we add `T0.md` … `T9.md` here with what shipped, how we verified it, and screenshots.
+
+Developer 1 core-platform summary: [DEV1.md](DEV1.md).
+
+## Developer 2
 
 | Task | Status | Report |
 |------|--------|--------|

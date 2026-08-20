@@ -8,6 +8,7 @@ class ExecutionTask(BaseModel):
     state: str = "Pending"
     due_at: str | None = Field(default=None, alias="dueAt")
     subgoal_name: str | None = Field(default=None, alias="subgoalName")
+    owner: str = "human"  # human | ai
 
     model_config = {"populate_by_name": True}
 
@@ -22,5 +23,6 @@ class TaskUpdateRequest(BaseModel):
     state: str | None = None
     due_at: str | None = Field(default=None, alias="dueAt")
     subgoal_name: str | None = Field(default=None, alias="subgoalName")
+    owner: str | None = None
 
     model_config = {"populate_by_name": True}

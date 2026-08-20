@@ -136,6 +136,23 @@ Categories match Import filters: `device`, `files`, `productivity`, `health`, `i
 
 Clusters are live counts from goals and sources. Activity is backed by `activity_events`.
 
+`calendarTasks` is the full YOU + AI agenda (not capped). Each item:
+
+| Field | Type | Notes |
+|-------|------|--------|
+| id | string | Stable key |
+| title | string | Card title |
+| time | string? | `HH:MM` when known |
+| dayOffset | number | 0 = today, 1 = tomorrow, … |
+| owner | `human` \| `ai` | YOU vs AI chip |
+| label | string? | e.g. `SCHEDULED GOAL`, `AI COMPLETED`, `NEEDS YOUR ACTION` |
+| detail | string? | Subtext |
+| status | string? | Badge / CTA text |
+| type | string? | `goal` \| `action` \| `complete` \| `planning` |
+| goalId | string? | Linked goal when applicable |
+| icon | string? | `target` \| `check` \| `alert` \| `spark` \| `clock` |
+
+Built from scheduled goals + execution tasks (human and AI).
 ## Agents / memories / messaging
 
 `POST /agents/runs` — start mission (`AgentService.run` → DeepSeek Harness; FallbackLoopAdapter if blocked)

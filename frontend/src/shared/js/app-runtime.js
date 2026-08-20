@@ -3467,7 +3467,7 @@ function __install() {
     const scoredObservations = observations.map((observation, index) => ({ ...observation, influence: Number(observation.influence) || Math.max(42, 92 - index * 13) }));
     const highestInfluence = Math.max(0, ...scoredObservations.map(item => item.influence));
     const rankedObservations = scoredObservations.map((observation, index) => ({ ...observation, originalIndex: index })).sort((a, b) => b.influence - a.influence);
-    const taskDrawerLabel = goalPlanTaskOwner === 'ai' ? 'AI tasks' : 'Your tasks';
+    const taskDrawerLabel = goalPlanTaskOwner === 'ai' ? 'AI Subgoals' : 'Your Subgoals';
     const previousGoal = goalProfiles[state.currentGoalIndex - 1];
     const nextGoal = goalProfiles[state.currentGoalIndex + 1];
 
@@ -3523,7 +3523,7 @@ function __install() {
 
       <section class="goal-plan-task-dock${goalPlanTaskDrawerOpen ? ' open' : ''}">
         <button class="goal-plan-task-summary" type="button" data-goal-task-drawer-toggle aria-expanded="${String(goalPlanTaskDrawerOpen)}"><span><i class="human">YOU</i><b>${humanTasks.filter(task => !task.done).length}</b><small>to do</small></span><span><i class="ai">AI</i><b>${activeAiCount}</b><small>active</small></span><em></em><strong title="${escapeGoalText(nextTask?.name || 'All current work reviewed')}">${escapeGoalText(nextTask?.name || 'All current work reviewed')}</strong><small>${nextTask ? formatGoalPlanMoment(goalPlanTaskMoment(nextTask)) : 'Up to date'}</small><i class="chevron">⌃</i></button>
-        ${goalPlanTaskDrawerOpen ? `<div class="goal-plan-task-drawer"><header><div role="tablist" aria-label="Task owner"><button class="${goalPlanTaskOwner === 'human' ? 'active' : ''}" type="button" data-goal-task-owner="human"><i>YOU</i>Your tasks <em>${humanTasks.length}</em></button><button class="${goalPlanTaskOwner === 'ai' ? 'active' : ''}" type="button" data-goal-task-owner="ai"><i>AI</i>AI tasks <em>${aiTasks.length}</em></button></div><span><button type="button" data-game-subgoal-add>+ Subgoal</button><button class="primary" type="button" data-goal-task-add>+ Task</button><button type="button" data-goal-task-drawer-close aria-label="Close task drawer">&times;</button></span></header><div class="goal-plan-task-content" aria-label="${taskDrawerLabel}">${goalPlanTaskGroupsMarkup(goal, goalPlanTaskOwner)}</div>${goalPlanTaskEditorMarkup(goal)}${goalPlanSubgoalEditorMarkup(goal)}</div>` : ''}
+        ${goalPlanTaskDrawerOpen ? `<div class="goal-plan-task-drawer"><header><div role="tablist" aria-label="Subgoal owner"><button class="${goalPlanTaskOwner === 'human' ? 'active' : ''}" type="button" data-goal-task-owner="human">Your Subgoals <em>${humanTasks.length}</em></button><button class="${goalPlanTaskOwner === 'ai' ? 'active' : ''}" type="button" data-goal-task-owner="ai">AI Subgoals <em>${aiTasks.length}</em></button></div><span><button type="button" data-game-subgoal-add>+ Subgoal</button><button class="primary" type="button" data-goal-task-add>+ Task</button><button type="button" data-goal-task-drawer-close aria-label="Close task drawer">&times;</button></span></header><div class="goal-plan-task-content" aria-label="${taskDrawerLabel}">${goalPlanTaskGroupsMarkup(goal, goalPlanTaskOwner)}</div>${goalPlanTaskEditorMarkup(goal)}${goalPlanSubgoalEditorMarkup(goal)}</div>` : ''}
       </section>
       ${goalPlanIntelligenceDrawerMarkup(goal, scoredObservations)}
       ${goalPlanShareMarkup(goal, artwork, progress)}
@@ -7296,7 +7296,12 @@ closeDataWorkspace();
     // overview view may have been re-injected and the cached node is stale.
     const feed = document.querySelector('.activity-feed') || activityFeed;
     const overview = await loadOverviewFromApi();
-    if (!overview?.activity?.length || !feed) return;
+    if (!overview) return;
+    if (Array.isArray(overview.calendarTasks)) {
+      apiCalendarTasks = overview.calendarTasks;
+      try { renderCalendar('left', false); } catch (_e) { /* overview may be paused */ }
+    }
+    if (!overview.activity?.length || !feed) return;
     const items = overview.activity.slice(0, 4);
     feed.innerHTML = items.map((item, index) => {
       const status = index === 0 ? 'status-progress' : index === 1 ? 'status-important' : 'status-completed';
@@ -7416,6 +7421,7 @@ closeDataWorkspace();
   let calendarSuppressClick = false;
   let calendarTransitioning = false;
   let calendarUserTasks = [];
+  let apiCalendarTasks = [];
   try {
     const storedCalendarTasks = JSON.parse(localStorage.getItem('weeple-calendar-tasks') || '[]');
     if (Array.isArray(storedCalendarTasks)) calendarUserTasks = storedCalendarTasks;
@@ -7440,6 +7446,59 @@ closeDataWorkspace();
       { type: 'planning', label: 'AI PLANNING', title: 'Tomorrow’s top priority', detail: 'Execution plan is being prepared', status: 'Planning', icon: 'spark' }
     ]
   ];
+
+  function calendarDayOffset(date) {
+    return Math.round((date - calendarReferenceDate) / 86400000);
+  }
+
+  function apiAgendaForDate(date) {
+    const offset = calendarDayOffset(date);
+    return apiCalendarTasks
+      .filter((item) => Number(item.dayOffset ?? item.day_offset ?? 0) === offset)
+      .map((item) => {
+        const owner = item.owner === 'ai' ? 'ai' : 'human';
+        const goalId = item.goalId || item.goal_id;
+        const goalIndex = goalId ? goalProfiles.findIndex((goal) => goal.id === goalId) : -1;
+        return {
+          type: item.type || (owner === 'ai' ? 'planning' : 'action'),
+          owner,
+          label: item.label || (owner === 'ai' ? 'AI TASK' : 'YOUR TASK'),
+          title: escapeGoalText(item.title),
+          detail: escapeGoalText(item.detail || ''),
+          status: item.status || (owner === 'ai' ? 'Queued' : 'To do'),
+          icon: item.icon || (owner === 'ai' ? 'spark' : 'target'),
+          timelineTime: item.time || null,
+          rgb: owner === 'ai' ? '139,92,246' : (goalIndex >= 0 && goalProfiles[goalIndex].accent) || '255,94,0',
+          goalIndex: goalIndex >= 0 ? goalIndex : undefined,
+          fromApi: true,
+        };
+      });
+  }
+
+  function sortAgendaItems(items) {
+    const rank = (item) => {
+      const time = item.timelineTime || String(item.title).match(/(\d{1,2}:\d{2})/)?.[1];
+      if (time && /^\d{1,2}:\d{2}$/.test(time)) return time.padStart(5, '0');
+      if (item.type === 'complete') return '00:00';
+      if (item.type === 'planning') return '98:00';
+      return '99:00';
+    };
+    return [...items].sort((a, b) => {
+      const byTime = rank(a).localeCompare(rank(b));
+      if (byTime) return byTime;
+      return String(a.title).localeCompare(String(b.title));
+    });
+  }
+
+  function dedupeAgenda(items) {
+    const seen = new Set();
+    return items.filter((item) => {
+      const key = `${item.owner}|${String(item.title).toLowerCase()}|${item.timelineTime || ''}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
 
   const calendarIcons = {
     check: '<path d="m7 12 3 3 7-7"/><circle cx="12" cy="12" r="8"/>',
@@ -7647,7 +7706,27 @@ closeDataWorkspace();
         detail: 'Tap to open this goal and its current context', status: `${goal.progress}%`, icon: 'target', goalIndex: index,
         timelineTime: goal.scheduledTime || 'GOAL', rgb: goal.accent || '255,94,0'
       }));
-      const agenda = [...linkedTasks, ...addedTasks, ...goalAgenda, ...backgroundAgenda].slice(0, 3);
+      const apiAgenda = apiAgendaForDate(date);
+      const apiHasAi = apiAgenda.some((item) => item.owner === 'ai');
+      const apiHasTaskRows = apiAgenda.some((item) => item.type && item.type !== 'goal');
+      // Only replace local linked tasks when the API actually sent YOU/AI work
+      // rows. A goals-only overview payload must not wipe AI agenda items.
+      const preferApiTasks = apiHasTaskRows && apiHasAi;
+      const realAgenda = dedupeAgenda([
+        ...(preferApiTasks ? [] : linkedTasks),
+        ...addedTasks,
+        ...goalAgenda,
+        ...apiAgenda,
+      ]);
+      const agenda = sortAgendaItems(
+        realAgenda.length
+          ? realAgenda
+          : backgroundAgenda.map((item) => ({
+              ...item,
+              owner: item.type === 'action' ? 'human' : 'ai',
+              rgb: item.type === 'action' ? '255,94,0' : '139,92,246',
+            }))
+      );
       const story = scheduledGoals.length
         ? { label: 'GOAL SCHEDULED', detail: scheduledGoals[0].goal.title, badge: scheduledGoals[0].goal.scheduledTime || 'Open goal', icon: 'target' }
         : isFuture
@@ -7668,9 +7747,9 @@ closeDataWorkspace();
       card.setAttribute('aria-label', new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(date));
       card.innerHTML = `
         <header class="day-card-heading">
-          <small>${offset === 0 ? (linkedTasks.length ? `${linkedTasks.length} GOAL TASK${linkedTasks.length === 1 ? '' : 'S'}` : addedTasks.length ? `${addedTasks.length} TASK${addedTasks.length === 1 ? '' : 'S'} ADDED` : scheduledGoals.length ? `${scheduledGoals.length} GOAL${scheduledGoals.length === 1 ? '' : 'S'} SCHEDULED` : isFuture ? 'YOU + AI PLAN' : `${agenda.length} TASKS PLANNED`) : new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(date).toUpperCase()}</small>
+          <small>${offset === 0 ? (agenda.length ? `${agenda.length} TASK${agenda.length === 1 ? '' : 'S'} · YOU + AI` : isFuture ? 'YOU + AI PLAN' : 'NO TASKS YET') : new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(date).toUpperCase()}</small>
           <strong>${heading}</strong>
-          <p>${linkedTasks.length ? 'Goal work stays synced with this calendar' : addedTasks.length ? 'Your actions and AI work are organized together' : scheduledGoals.length ? 'Scheduled goals are connected to your Goals workspace' : isFuture ? 'Your actions and AI support are ready for this day' : 'See what you will do and what AI will handle'}</p>
+          <p>${agenda.length ? 'Scroll to see every YOU and AI task for this day' : scheduledGoals.length ? 'Scheduled goals are connected to your Goals workspace' : isFuture ? 'Your actions and AI support are ready for this day' : 'See what you will do and what AI will handle'}</p>
         </header>
         <div class="side-day-overview">
           <span class="side-orb"><svg viewBox="0 0 24 24" aria-hidden="true">${calendarIcons[story.icon]}</svg></span>
@@ -7825,6 +7904,7 @@ closeDataWorkspace();
     renderCalendar(direction);
   });
   calendarStage?.addEventListener('pointerdown', (event) => {
+    if (event.target.closest('.expanded-agenda')) return;
     calendarPointerStart = event.clientX;
     calendarStage.classList.add('is-dragging');
     calendarStage.setPointerCapture(event.pointerId);

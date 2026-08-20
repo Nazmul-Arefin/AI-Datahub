@@ -6,6 +6,7 @@ from app.services.runtime_store import runtime_store
 
 
 def _task_from_row(row: TaskRow) -> ExecutionTask:
+    owner = "ai" if str(row.id).startswith("task-ai") else "human"
     return ExecutionTask(
         id=row.id,
         goalId=row.goal_id,
@@ -13,6 +14,7 @@ def _task_from_row(row: TaskRow) -> ExecutionTask:
         state=row.state,
         dueAt=row.due_at,
         subgoalName=row.subgoal_name,
+        owner=owner,
     )
 
 
