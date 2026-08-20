@@ -55,10 +55,18 @@ function __install() {
   }
 
 
-  function openRoutedView(legacyKey, announce = true) {
+  function openRoutedView(legacyKey, announce = true, params = null) {
     const map = { overview: 'overview', goals: 'goals', data: 'import-data', memory: 'use-data' };
+    const routeId = map[legacyKey] || legacyKey;
     try {
-      __navigate(map[legacyKey] || legacyKey);
+      if (params instanceof URLSearchParams && [...params.keys()].length) {
+        __navigate(routeId, { params });
+      } else if (params && typeof params === 'object') {
+        const search = new URLSearchParams(params);
+        __navigate(routeId, { params: search });
+      } else {
+        __navigate(routeId);
+      }
       return;
     } catch (_n) {
       return openPrimaryView(legacyKey, announce);
@@ -509,6 +517,7 @@ function __install() {
       const node = makeTopologyNode({
         id: `${item.kind}-evidence-${index}`, cluster: item.kind, role: 'evidence', evidenceType: item.kind,
         title: item.title, detail: item.detail, source: item.source, freshness: item.freshness,
+        sourceId: item.sourceId || null,
         permission: item.kind === 'data' ? 'Connected source · authorized' : 'Confirmed memory · user controlled',
         reason: `Supports “${parent.title}” because ${item.reason}`,
         x: parent.baseX + Math.cos(laneAngle) * spread + Math.cos(parentAngle) * 9,
@@ -599,10 +608,11 @@ function __install() {
       };
       const node = makeTopologyNode({
         id: `goal-${goalIndex}`, cluster: 'goals', role: 'goal', goalRole: 'goal', goalIndex,
+        goalId: goal.id || null,
         isSelectedGoal: selected, title: goal.title,
         detail: goal.description || `${goal.progress || 0}% of this goal is complete.`,
         source: 'User-confirmed goal',
-        reason: 'This goal connects to the central intelligence core for continuous planning and support.',
+        reason: 'Tap to open this goal in Goals.',
         x: position.x, y: position.y, z: position.z,
         radius: selected ? 10.6 : 8.5, strength: 100, showLabel: true
       });
@@ -630,8 +640,11 @@ function __install() {
           id: `${item.kind}-goal-${goalNode.goalIndex}-${evidenceIndex}`, cluster: item.kind,
           role: 'evidence', evidenceType: item.kind, goalIndex: goalNode.goalIndex,
           title: item.title, detail: item.detail, source: item.source, freshness: item.freshness,
+          sourceId: item.sourceId || null,
           permission: item.kind === 'data' ? 'Connected source · authorized' : 'Confirmed memory · user controlled',
-          reason: `Connected to “${goal.title}” because ${item.reason}`,
+          reason: item.sourceId
+            ? `Tap to open “${item.title}” in Import Data.`
+            : `Connected to “${goal.title}” because ${item.reason}`,
           x: goalNode.baseX + Math.cos(evidenceAngle) * distance,
           y: goalNode.baseY + Math.sin(evidenceAngle) * distance * .78,
           z: goalNode.baseZ + (evidenceIndex - 1) * 9,
@@ -671,48 +684,129 @@ function __install() {
     return node;
   }
 
+  function matchDataSource(hint) {
+    const text = String(hint || '').trim().toLowerCase();
+    let sources = [];
+    try { sources = Array.isArray(dataSources) ? dataSources : []; } catch (_error) { sources = []; }
+    if (!text || !sources.length) return null;
+    return sources.find((source) => {
+      const name = String(source.name || '').toLowerCase();
+      const id = String(source.id || '').toLowerCase();
+      return name === text || id === text || name.includes(text) || text.includes(name);
+    }) || null;
+  }
+
+  function categoryAffinity(goalCategory) {
+    const key = String(goalCategory || '').toLowerCase();
+    if (/travel/.test(key)) return ['device', 'productivity', 'files', 'communication'];
+    if (/wellbeing|health/.test(key)) return ['health', 'device'];
+    if (/learn|spanish|skill/.test(key)) return ['files', 'productivity', 'identity'];
+    if (/finance|money/.test(key)) return ['productivity', 'files'];
+    if (/family|relationship/.test(key)) return ['communication', 'device', 'productivity'];
+    return ['productivity', 'files', 'device', 'communication', 'health', 'identity'];
+  }
+
+  function pickSourcesForGoal(goal, usedIds = new Set()) {
+    let pool = [];
+    try { pool = (dataSources || []).filter((source) => !usedIds.has(source.id)); } catch (_error) { pool = []; }
+    if (!pool.length) return [];
+    const preferred = categoryAffinity(goal?.category);
+    const scored = pool.map((source, index) => {
+      let score = 0;
+      const categoryIndex = preferred.indexOf(source.category);
+      if (categoryIndex >= 0) score += 20 - categoryIndex;
+      if (source.statusType === 'connected') score += 8;
+      if (source.aiEnabled !== false && source.statusType !== 'revoked') score += 4;
+      if (source.connection?.status === 'connected') score += 3;
+      score += Math.max(0, 3 - index);
+      return { source, score };
+    });
+    scored.sort((a, b) => b.score - a.score || String(a.source.name).localeCompare(String(b.source.name)));
+    return scored.map((entry) => entry.source);
+  }
+
   function buildGoalEvidence(goal, subgoalNodes) {
-    const subgoals = subgoalNodes.map(node => node.title.toLowerCase());
+    const subgoals = (subgoalNodes || []).map((node) => String(node.title || '').toLowerCase());
     const chooseSubgoal = (text, fallback) => {
-      const words = String(text).toLowerCase().split(/[^a-z0-9]+/).filter(word => word.length > 3);
-      let bestIndex = fallback % Math.max(1, subgoals.length);
+      const words = String(text).toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length > 3);
+      let bestIndex = fallback % Math.max(1, subgoals.length || 1);
       let bestScore = -1;
       subgoals.forEach((subgoal, index) => {
         const score = words.reduce((total, word) => total + (subgoal.includes(word) ? 1 : 0), 0);
-        if (score > bestScore) { bestScore = score; bestIndex = index; }
+        if (score > bestScore) {
+          bestScore = score;
+          bestIndex = index;
+        }
       });
       return bestIndex;
     };
-    const looksLikeMemory = (item) => /memory|history|pattern|preference|habit|notes|confirmed/i.test(`${item.title || ''} ${item.source || ''}`);
-    const observations = (goal.observations || []).slice(0, 6);
-    const result = observations.map((observation, index) => {
-      const kind = looksLikeMemory(observation) ? 'memory' : 'data';
-      return {
-        kind, title: observation.title, detail: observation.detail,
-        source: observation.source || (kind === 'data' ? 'Connected source' : 'Long-term memory'),
-        freshness: observation.time || (kind === 'data' ? 'Live' : 'Confirmed'),
-        subgoalIndex: chooseSubgoal(`${observation.title} ${observation.detail}`, index),
-        reason: kind === 'data' ? 'it changes the current situation around this work.' : 'it preserves a useful pattern or preference from earlier experience.',
-        strength: 91 - index * 3, featured: index < 3
-      };
-    });
-    const hasMemory = result.some(item => item.kind === 'memory');
-    if (!hasMemory) {
+
+    const result = [];
+    const usedIds = new Set();
+
+    (goal.observations || []).forEach((observation, index) => {
+      const source = matchDataSource(observation.source) || matchDataSource(observation.title);
+      if (!source || usedIds.has(source.id)) return;
+      usedIds.add(source.id);
       result.push({
-        kind: 'memory', title: `${goal.category || 'Goal'} preferences`,
+        kind: 'data',
+        title: source.name,
+        detail: observation.detail || `${source.status || 'Connected'} · ${source.lastSync || 'Live'}`,
+        source: source.name,
+        sourceId: source.id,
+        freshness: observation.time || source.lastSync || 'Live',
+        subgoalIndex: chooseSubgoal(`${observation.title} ${observation.detail}`, index),
+        reason: 'this authorized source is linked to the current goal context.',
+        strength: 94 - result.length * 3,
+        featured: result.length < 3,
+      });
+    });
+
+    pickSourcesForGoal(goal, usedIds).slice(0, Math.max(0, 2 - result.filter((item) => item.kind === 'data').length)).forEach((source, index) => {
+      usedIds.add(source.id);
+      result.push({
+        kind: 'data',
+        title: source.name,
+        detail: `${source.status || 'Connected'} · ${source.assets || source.type || 'Live source'}`,
+        source: source.name,
+        sourceId: source.id,
+        freshness: source.lastSync || 'Live',
+        subgoalIndex: chooseSubgoal(source.name, index),
+        reason: 'it is part of your connected personal data for this goal.',
+        strength: 90 - result.length * 3,
+        featured: true,
+      });
+    });
+
+    const memoryObservations = (goal.observations || []).filter((item) => /memory|history|pattern|preference|habit|notes|confirmed/i.test(`${item.title || ''} ${item.source || ''}`));
+    if (memoryObservations.length) {
+      memoryObservations.slice(0, 1).forEach((observation, index) => {
+        result.push({
+          kind: 'memory',
+          title: observation.title,
+          detail: observation.detail,
+          source: observation.source || 'Long-term memory',
+          freshness: observation.time || 'Confirmed',
+          subgoalIndex: chooseSubgoal(`${observation.title} ${observation.detail}`, index),
+          reason: 'it preserves a useful pattern or preference from earlier experience.',
+          strength: 88,
+          featured: true,
+        });
+      });
+    } else {
+      result.push({
+        kind: 'memory',
+        title: `${goal.category || 'Goal'} preferences`,
         detail: goal.description || `Confirmed context retained for ${goal.title}.`,
-        source: 'User-confirmed goal brief', freshness: 'Confirmed', subgoalIndex: 0,
-        reason: 'it keeps your intended outcome and constraints consistent over time.', strength: 88, featured: true
+        source: 'User-confirmed goal brief',
+        freshness: 'Confirmed',
+        subgoalIndex: 0,
+        reason: 'it keeps your intended outcome and constraints consistent over time.',
+        strength: 86,
+        featured: true,
       });
     }
-    const hasData = result.some(item => item.kind === 'data');
-    if (!hasData) {
-      result.unshift({
-        kind: 'data', title: 'Current goal status', detail: `${goal.progress || 0}% of the confirmed plan is complete.`,
-        source: 'Goal activity', freshness: 'Live', subgoalIndex: 0,
-        reason: 'it shows what has changed since the plan was confirmed.', strength: 95, featured: true
-      });
-    }
+
     return result.slice(0, 8);
   }
 
@@ -2021,6 +2115,38 @@ function __install() {
     }
   });
 
+  function openTopologyGoal(goalIndex) {
+    const safeIndex = Math.max(0, Math.min(goalProfiles.length - 1, goalIndex));
+    const goal = goalProfiles[safeIndex];
+    state.currentGoalIndex = safeIndex;
+    state.currentGoalProgress = goal?.progress || 0;
+    nodes.filter((node) => node.role === 'goal').forEach((node) => {
+      node.isSelectedGoal = node.goalIndex === safeIndex;
+    });
+    nodes.filter((node) => node.role === 'evidence').forEach((node) => {
+      node.showLabel = node.goalIndex === safeIndex;
+      node.isSelectedEvidence = node.goalIndex === safeIndex;
+    });
+    const params = new URLSearchParams();
+    if (goal?.id) params.set('goal', goal.id);
+    else params.set('goalIndex', String(safeIndex));
+    openRoutedView('goals', true, params);
+  }
+
+  function openTopologySource(sourceId) {
+    if (!sourceId) {
+      openRoutedView('data');
+      return;
+    }
+    state.selectedSourceId = sourceId;
+    openRoutedView('data', true, { source: sourceId });
+    window.setTimeout(() => {
+      try {
+        if (state.dataWorkspaceActive) selectSource(sourceId);
+      } catch (_error) { /* inspector may still be mounting */ }
+    }, 80);
+  }
+
   function endPointer(event) {
     const pos = pointerPosition(event);
     const wasTap = !state.moved && state.pointers.size === 1;
@@ -2030,16 +2156,31 @@ function __install() {
     if (wasTap) {
       const hit = getHitNode(pos.x, pos.y);
       if (hit) {
-        if (hit.role === 'goal' && Number.isInteger(hit.goalIndex)) {
-          state.currentGoalIndex = hit.goalIndex;
-          state.currentGoalProgress = goalProfiles[hit.goalIndex]?.progress || 0;
-          nodes.filter(node => node.role === 'goal').forEach(node => { node.isSelectedGoal = node === hit; });
-          nodes.filter(node => node.role === 'evidence').forEach(node => { node.showLabel = node.goalIndex === hit.goalIndex; });
-        }
         state.selectedNode = hit;
         state.hoverNode = hit;
-        positionTooltip(hit);
         haptic(10);
+        if (hit.role === 'goal' && Number.isInteger(hit.goalIndex)) {
+          openTopologyGoal(hit.goalIndex);
+          return;
+        }
+        if (hit.role === 'hub' || (hit.core && hit.cluster === 'goals')) {
+          openRoutedView('goals');
+          return;
+        }
+        if (hit.role === 'evidence' && hit.evidenceType === 'data') {
+          const sourceId = hit.sourceId || matchDataSource(hit.source || hit.title)?.id;
+          if (sourceId) {
+            openTopologySource(sourceId);
+            return;
+          }
+          openRoutedView('data');
+          return;
+        }
+        if (hit.role === 'evidence' && hit.evidenceType === 'memory') {
+          openRoutedView('memory', true, { memory: '1' });
+          return;
+        }
+        positionTooltip(hit);
       } else {
         state.selectedNode = null;
         hideTooltip();
@@ -2359,7 +2500,12 @@ function __install() {
     });
   }
 
-  void hydrateGoalsFromApi();
+  void hydrateGoalsFromApi().then(() => {
+    // Defer so the later dataSources initializer has run before evidence nodes rebuild.
+    window.setTimeout(() => {
+      try { invalidateTopology(); } catch (_error) { /* topology may not be ready */ }
+    }, 0);
+  });
 
   const goalCategorySymbols = { Travel: 'TR', Wellbeing: 'WB', Learning: 'LN', Finance: 'FN', Relationships: 'FM', Project: 'PJ' };
 
@@ -3473,7 +3619,7 @@ function __install() {
 
     const goalSwitcherMarkup = `<div class="goal-plan-edge-switcher">
       <button class="goal-plan-edge-handle" type="button" data-goal-list-toggle aria-expanded="${String(goalPlanListOpen)}" aria-label="Open goal list"><span>Goals</span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
-      ${goalPlanListOpen ? `<button class="goal-plan-list-scrim" type="button" data-goal-list-close aria-label="Close goal list"></button><section class="goal-plan-list" aria-label="Choose a goal"><header><span><small>YOUR GOALS</small><b>Choose your mission</b></span><div><button type="button" data-goal-create aria-label="Add goal">+</button><button type="button" data-goal-list-close aria-label="Close goal list">&times;</button></div></header><label><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><input type="search" data-goal-plan-search placeholder="Find a goal" autocomplete="off"></label><div>${goalProfiles.map((profile, index) => { ensureGoalCommandModel(profile); return `<button class="goal-plan-list-item${index === state.currentGoalIndex ? ' active' : ''}" type="button" data-goal-plan-select="${index}" data-goal-search-value="${escapeGoalText(profile.title.toLowerCase())}"><i>${goalCategorySymbols[profile.category] || 'GO'}</i><span><b>${escapeGoalText(profile.title)}</b><small>${formatGoalPlanMoment(`${goalPlanDateKey(profile)}T${profile.scheduledTime || '23:59'}`)}</small></span><em>${profile.progress || 0}%</em></button>`; }).join('')}</div><footer><button type="button" data-goal-create><i>+</i>Add goal</button></footer></section>` : ''}
+      ${goalPlanListOpen ? `<button class="goal-plan-list-scrim" type="button" data-goal-list-close aria-label="Close goal list"></button><section class="goal-plan-list" aria-label="Choose a goal"><header><span><small>YOUR GOALS</small><b>Choose your mission</b></span><div><button type="button" data-goal-list-close aria-label="Close goal list">&times;</button></div></header><label><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><input type="search" data-goal-plan-search placeholder="Find a goal" autocomplete="off"></label><div>${goalProfiles.map((profile, index) => { ensureGoalCommandModel(profile); return `<button class="goal-plan-list-item${index === state.currentGoalIndex ? ' active' : ''}" type="button" data-goal-plan-select="${index}" data-goal-search-value="${escapeGoalText(profile.title.toLowerCase())}"><i>${goalCategorySymbols[profile.category] || 'GO'}</i><span><b>${escapeGoalText(profile.title)}</b><small>${formatGoalPlanMoment(`${goalPlanDateKey(profile)}T${profile.scheduledTime || '23:59'}`)}</small></span><em>${profile.progress || 0}%</em></button>`; }).join('')}</div><footer><button type="button" data-goal-create><i>+</i>Add goal</button></footer></section>` : ''}
     </div>`;
 
     goalGameContent.innerHTML = `<div class="goal-plan-shell${goalPlanTaskDrawerOpen ? ' task-open' : ''}${goalPlanListOpen ? ' goal-list-open' : ''}" style="--observation-count:${scoredObservations.length};--suggestion-count:${Math.min(3, suggestions.length)}">
@@ -3485,6 +3631,7 @@ function __install() {
           <div class="goal-plan-image-title"><small>${escapeGoalText(goal.category)} GOAL</small><h1 title="${escapeGoalText(goal.title)}">${escapeGoalText(goal.title)}</h1></div>
           <span class="goal-plan-live"><i></i>${goal.monitoringPaused ? 'PAUSED' : 'GOAL ACTIVE'}</span>
           <div class="goal-plan-image-actions">
+            <button class="goal-plan-image-use" type="button" data-goal-plan-use aria-label="Open Use Data for this goal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v4m0 10v4M3 12h4m10 0h4M6.2 6.2l2.8 2.8m6 6 2.8 2.8m0-11.6-2.8 2.8m-6 6-2.8 2.8"/><circle cx="12" cy="12" r="3.2"/></svg><span>Use Data</span></button>
             <button class="goal-plan-image-share" type="button" data-goal-plan-share aria-label="Share goal"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.5-4.4M8.2 13.2l7.5 4.4"/></svg><span>Share</span></button>
             <div class="goal-plan-image-more"><button type="button" data-goal-plan-more aria-haspopup="menu" aria-expanded="${String(goalPlanMoreOpen)}" aria-label="More goal actions"><i></i><i></i><i></i></button>${goalPlanMoreOpen ? `<div role="menu" aria-label="Goal actions"><button type="button" role="menuitem" data-goal-plan-edit><span>Edit goal</span></button><button class="delete" type="button" role="menuitem" data-goal-plan-delete><span>Delete goal</span></button></div>` : ''}</div>
           </div>
@@ -4017,6 +4164,7 @@ function __install() {
     if (!Array.isArray(remoteSources) || !remoteSources.length) return;
     dataSources.splice(0, dataSources.length, ...remoteSources);
     try { renderSourceGrid(); } catch (_error) { /* grid may not be ready */ }
+    try { invalidateTopology(); } catch (_error) { /* topology may not be ready */ }
   }
 
   async function hydrateSourcesFromApi() {
@@ -4897,6 +5045,60 @@ function __install() {
 
   function getUseDashboardGoal() {
     return useDashboardGoals[state.useMissionGoalIndex] || useDashboardGoals[0];
+  }
+
+  function syncUseDashboardGoalFromProfile(goal) {
+    if (!goal || !useDashboardGoals.length) return 0;
+    const title = String(goal.title || '').toLowerCase();
+    const short = String(goal.short || '').toLowerCase();
+    let index = useDashboardGoals.findIndex((entry) => {
+      const entryTitle = String(entry.title || '').toLowerCase();
+      const entryShort = String(entry.short || '').toLowerCase();
+      return entryTitle === title
+        || (short && entryShort === short)
+        || (short && entryTitle.includes(short))
+        || (entryShort && title.includes(entryShort))
+        || entry.linkedGoalId && goal.id && entry.linkedGoalId === goal.id;
+    });
+    if (index < 0) {
+      const category = String(goal.category || '').toLowerCase();
+      if (/wellbeing|health|fitness/.test(category)) index = Math.min(3, useDashboardGoals.length - 1);
+      else if (/learn|spanish|chinese|study/.test(category) || /learn|spanish|chinese|study/.test(title)) index = Math.min(2, useDashboardGoals.length - 1);
+      else if (/finance|investor|startup|money/.test(category) || /investor|startup|finance/.test(title)) index = 0;
+      else if (/project|build|product/.test(category) || /build|product|prototype/.test(title)) index = Math.min(1, useDashboardGoals.length - 1);
+      else index = Math.max(0, Math.min(useDashboardGoals.length - 1, state.currentGoalIndex));
+    }
+    const entry = useDashboardGoals[index];
+    entry.title = goal.title || entry.title;
+    entry.short = goal.short || goal.title || entry.short;
+    entry.progress = Number.isFinite(Number(goal.progress)) ? Number(goal.progress) : entry.progress;
+    entry.state = goal.status || entry.state;
+    entry.linkedGoalId = goal.id || null;
+    entry.linkedGoalIndex = goalProfiles.findIndex((item) => item === goal);
+    return index;
+  }
+
+  function openUseDataForCurrentGoal(announce = true) {
+    const goal = goalProfiles[state.currentGoalIndex];
+    if (!goal) {
+      openRoutedView('memory', announce);
+      return;
+    }
+    const useIndex = syncUseDashboardGoalFromProfile(goal);
+    state.useMissionGoalIndex = useIndex;
+    state.useMissionDraft = `Help me make progress on: ${goal.title}`;
+    state.useMissionRequest = state.useMissionDraft;
+    state.useMissionState = 'idle';
+    if (useMissionStage) useMissionStage.innerHTML = '';
+    const params = goal.id
+      ? { goal: goal.id }
+      : { goalIndex: String(state.currentGoalIndex) };
+    openRoutedView('memory', false, params);
+    if (announce) {
+      window.setTimeout(() => {
+        if (state.useWorkspaceActive) __showToast(`Use Data opened for ${goal.title}`);
+      }, 60);
+    }
   }
 
   function getMissionPhaseProgress(value) {
@@ -6197,6 +6399,11 @@ closeDataWorkspace();
     }
     if (event.target.closest('[data-goal-plan-edit]')) { goalPlanMoreOpen = false; openGoalEditSheet(); return; }
     if (event.target.closest('[data-goal-plan-delete]')) { goalPlanMoreOpen = false; openGoalDeleteSheet(); return; }
+    if (event.target.closest('[data-goal-plan-use]')) {
+      goalPlanMoreOpen = false;
+      openUseDataForCurrentGoal();
+      return;
+    }
     if (event.target.closest('[data-goal-plan-share]')) { goalPlanMoreOpen = false; goalPlanShareOpen = true; renderGoalGameBoard(goal); return; }
     if (event.target.closest('[data-goal-share-close]')) { goalPlanShareOpen = false; renderGoalGameBoard(goal); return; }
     const shareButton = event.target.closest('[data-goal-share-confirm],[data-goal-share-download]');
@@ -8164,6 +8371,26 @@ closeDataWorkspace();
       el.style.display = active ? '' : 'none';
     });
 
+    if (pageId === 'use-data') {
+      const goalId = params.get('goal');
+      const goalIndexParam = params.get('goalIndex');
+      let profileIndex = -1;
+      if (goalId) {
+        profileIndex = goalProfiles.findIndex((goal) => goal.id === goalId);
+      } else if (goalIndexParam !== null && goalIndexParam !== '') {
+        const parsed = Number(goalIndexParam);
+        if (Number.isFinite(parsed)) profileIndex = parsed;
+      }
+      if (profileIndex >= 0 && goalProfiles[profileIndex]) {
+        const goal = goalProfiles[profileIndex];
+        state.currentGoalIndex = profileIndex;
+        state.useMissionGoalIndex = syncUseDashboardGoalFromProfile(goal);
+        state.useMissionDraft = `Help me make progress on: ${goal.title}`;
+        state.useMissionRequest = state.useMissionDraft;
+        if (useMissionStage) useMissionStage.innerHTML = '';
+      }
+    }
+
     openPrimaryView(legacy, false);
     if (pageId === 'overview') {
       window.requestAnimationFrame(() => {
@@ -8175,9 +8402,25 @@ closeDataWorkspace();
       });
     }
 
+    if (pageId === 'goals') {
+      const goalId = params.get('goal');
+      const goalIndexParam = params.get('goalIndex');
+      if (goalId) {
+        const idx = goalProfiles.findIndex((goal) => goal.id === goalId);
+        if (idx >= 0) selectGoal(idx, false);
+      } else if (goalIndexParam !== null && goalIndexParam !== '') {
+        selectGoal(Number(goalIndexParam), false);
+      }
+    }
     if (pageId === 'goals' && params.get('sheet') === 'create') openGoalCreateSheet();
     if (pageId === 'goals' && params.get('drawer') === 'plan') renderGoalResultDrawer('plan');
     if (pageId === 'import-data' && params.get('wizard') === '1') openConnectionWizard();
+    if (pageId === 'import-data' && params.get('source')) {
+      const sourceId = params.get('source');
+      window.requestAnimationFrame(() => {
+        try { selectSource(sourceId); } catch (_error) { /* inspector may still be mounting */ }
+      });
+    }
     if (pageId === 'import-data' && params.get('connected')) {
       void hydrateSourcesFromApi().then(() => {
         const connectedId = params.get('connected');

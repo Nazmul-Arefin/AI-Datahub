@@ -13152,7 +13152,7 @@
   .goal-plan-image-title { top:18px;left:20px;max-width:56%; }
   .goal-plan-image-title > h1 { font-size:28px; }
   .goal-plan-live { top:80px;left:20px; }
-  .goal-plan-image-actions { top:16px;right:142px; }
+  .goal-plan-image-actions { top:16px;right:236px; }
 }
 
 @media (max-width:600px) {
@@ -13162,7 +13162,8 @@
   .goal-plan-image-title > h1 { font-size:20px; }
   .goal-plan-live { top:66px;left:17px; }
   .goal-plan-image-actions { top:64px;right:12px; }
-  .goal-plan-image-share { height:38px;padding:0 11px;border-radius:12px; }
+  .goal-plan-image-share,
+  .goal-plan-image-use { height:38px;padding:0 11px;border-radius:12px; }
   .goal-plan-image-more > button { width:38px;height:38px;border-radius:12px; }
   .goal-plan-image-more > div { top:45px;width:195px; }
   .goal-plan-image-deadline { top:112px; }

@@ -561,8 +561,11 @@
           id: `${item.kind}-goal-${goalNode.goalIndex}-${evidenceIndex}`, cluster: item.kind,
           role: 'evidence', evidenceType: item.kind, goalIndex: goalNode.goalIndex,
           title: item.title, detail: item.detail, source: item.source, freshness: item.freshness,
+          sourceId: item.sourceId || null,
           permission: item.kind === 'data' ? 'Connected source · authorized' : 'Confirmed memory · user controlled',
-          reason: `Connected to “${goal.title}” because ${item.reason}`,
+          reason: item.sourceId
+            ? `Tap to open “${item.title}” in Import Data.`
+            : `Connected to “${goal.title}” because ${item.reason}`,
           x: goalNode.baseX + Math.cos(evidenceAngle) * distance,
           y: goalNode.baseY + Math.sin(evidenceAngle) * distance * .78,
           z: goalNode.baseZ + (evidenceIndex - 1) * 9,
@@ -603,10 +606,12 @@
   }
 
   function buildGoalEvidence(goal, subgoalNodes) {
-    const subgoals = subgoalNodes.map(node => node.title.toLowerCase());
+    let sources = [];
+    try { sources = Array.isArray(dataSources) ? dataSources : []; } catch (_error) { sources = []; }
+    const subgoals = (subgoalNodes || []).map(node => String(node.title || '').toLowerCase());
     const chooseSubgoal = (text, fallback) => {
       const words = String(text).toLowerCase().split(/[^a-z0-9]+/).filter(word => word.length > 3);
-      let bestIndex = fallback % Math.max(1, subgoals.length);
+      let bestIndex = fallback % Math.max(1, subgoals.length || 1);
       let bestScore = -1;
       subgoals.forEach((subgoal, index) => {
         const score = words.reduce((total, word) => total + (subgoal.includes(word) ? 1 : 0), 0);
@@ -614,30 +619,60 @@
       });
       return bestIndex;
     };
-    const looksLikeMemory = (item) => /memory|history|pattern|preference|habit|notes|confirmed/i.test(`${item.title || ''} ${item.source || ''}`);
-    const observations = (goal.observations || []).slice(0, 6);
-    const result = observations.map((observation, index) => {
-      const kind = looksLikeMemory(observation) ? 'memory' : 'data';
-      return {
-        kind, title: observation.title, detail: observation.detail,
-        source: observation.source || (kind === 'data' ? 'Connected source' : 'Long-term memory'),
-        freshness: observation.time || (kind === 'data' ? 'Live' : 'Confirmed'),
+    const matchSource = (hint) => {
+      const text = String(hint || '').trim().toLowerCase();
+      if (!text) return null;
+      return sources.find((source) => {
+        const name = String(source.name || '').toLowerCase();
+        const id = String(source.id || '').toLowerCase();
+        return name === text || id === text || name.includes(text) || text.includes(name);
+      }) || null;
+    };
+    const result = [];
+    const usedIds = new Set();
+    (goal.observations || []).forEach((observation, index) => {
+      const source = matchSource(observation.source) || matchSource(observation.title);
+      if (!source || usedIds.has(source.id)) return;
+      usedIds.add(source.id);
+      result.push({
+        kind: 'data', title: source.name,
+        detail: observation.detail || `${source.status || 'Connected'} · ${source.lastSync || 'Live'}`,
+        source: source.name, sourceId: source.id,
+        freshness: observation.time || source.lastSync || 'Live',
         subgoalIndex: chooseSubgoal(`${observation.title} ${observation.detail}`, index),
-        reason: kind === 'data' ? 'it changes the current situation around this work.' : 'it preserves a useful pattern or preference from earlier experience.',
-        strength: 91 - index * 3, featured: index < 3
-      };
+        reason: 'this authorized source is linked to the current goal context.',
+        strength: 94 - result.length * 3, featured: result.length < 3
+      });
     });
-    const hasMemory = result.some(item => item.kind === 'memory');
-    if (!hasMemory) {
+    sources.filter((source) => !usedIds.has(source.id) && source.statusType === 'connected').slice(0, Math.max(0, 2 - result.filter((item) => item.kind === 'data').length)).forEach((source, index) => {
+      usedIds.add(source.id);
+      result.push({
+        kind: 'data', title: source.name,
+        detail: `${source.status || 'Connected'} · ${source.assets || source.type || 'Live source'}`,
+        source: source.name, sourceId: source.id,
+        freshness: source.lastSync || 'Live',
+        subgoalIndex: chooseSubgoal(source.name, index),
+        reason: 'it is part of your connected personal data for this goal.',
+        strength: 90 - result.length * 3, featured: true
+      });
+    });
+    const memoryObservations = (goal.observations || []).filter((item) => /memory|history|pattern|preference|habit|notes|confirmed/i.test(`${item.title || ''} ${item.source || ''}`));
+    if (memoryObservations.length) {
+      const observation = memoryObservations[0];
+      result.push({
+        kind: 'memory', title: observation.title, detail: observation.detail,
+        source: observation.source || 'Long-term memory', freshness: observation.time || 'Confirmed', subgoalIndex: 0,
+        reason: 'it preserves a useful pattern or preference from earlier experience.', strength: 88, featured: true
+      });
+    } else {
       result.push({
         kind: 'memory', title: `${goal.category || 'Goal'} preferences`,
         detail: goal.description || `Confirmed context retained for ${goal.title}.`,
         source: 'User-confirmed goal brief', freshness: 'Confirmed', subgoalIndex: 0,
-        reason: 'it keeps your intended outcome and constraints consistent over time.', strength: 88, featured: true
+        reason: 'it keeps your intended outcome and constraints consistent over time.', strength: 86, featured: true
       });
     }
-    const hasData = result.some(item => item.kind === 'data');
-    if (!hasData) {
+    if (!result.some((item) => item.kind === 'data')) {
       result.unshift({
         kind: 'data', title: 'Current goal status', detail: `${goal.progress || 0}% of the confirmed plan is complete.`,
         source: 'Goal activity', freshness: 'Live', subgoalIndex: 0,
@@ -1961,16 +1996,37 @@
     if (wasTap) {
       const hit = getHitNode(pos.x, pos.y);
       if (hit) {
+        state.selectedNode = hit;
+        state.hoverNode = hit;
+        haptic(10);
         if (hit.role === 'goal' && Number.isInteger(hit.goalIndex)) {
           state.currentGoalIndex = hit.goalIndex;
           state.currentGoalProgress = goalProfiles[hit.goalIndex]?.progress || 0;
           nodes.filter(node => node.role === 'goal').forEach(node => { node.isSelectedGoal = node === hit; });
-          nodes.filter(node => node.role === 'evidence').forEach(node => { node.showLabel = node.goalIndex === hit.goalIndex; });
+          nodes.filter(node => node.role === 'evidence').forEach(node => {
+            node.showLabel = node.goalIndex === hit.goalIndex;
+            node.isSelectedEvidence = node.goalIndex === hit.goalIndex;
+          });
+          openGoalsWorkspace(hit.goalIndex, true);
+          return;
         }
-        state.selectedNode = hit;
-        state.hoverNode = hit;
+        if (hit.role === 'hub' || (hit.core && hit.cluster === 'goals')) {
+          openPrimaryView('goals');
+          return;
+        }
+        if (hit.role === 'evidence' && hit.evidenceType === 'data') {
+          const sourceId = hit.sourceId
+            || dataSources.find((source) => source.name === hit.source || source.name === hit.title)?.id;
+          openPrimaryView('data', false);
+          if (sourceId) selectSource(sourceId);
+          else showToast('Import Data opened');
+          return;
+        }
+        if (hit.role === 'evidence' && hit.evidenceType === 'memory') {
+          openPrimaryView('memory');
+          return;
+        }
         positionTooltip(hit);
-        haptic(10);
       } else {
         state.selectedNode = null;
         hideTooltip();
@@ -3305,7 +3361,7 @@
 
     const goalSwitcherMarkup = `<div class="goal-plan-edge-switcher">
       <button class="goal-plan-edge-handle" type="button" data-goal-list-toggle aria-expanded="${String(goalPlanListOpen)}" aria-label="Open goal list"><span>Goals</span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
-      ${goalPlanListOpen ? `<button class="goal-plan-list-scrim" type="button" data-goal-list-close aria-label="Close goal list"></button><section class="goal-plan-list" aria-label="Choose a goal"><header><span><small>YOUR GOALS</small><b>Choose your mission</b></span><div><button type="button" data-goal-create aria-label="Add goal">+</button><button type="button" data-goal-list-close aria-label="Close goal list">&times;</button></div></header><label><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><input type="search" data-goal-plan-search placeholder="Find a goal" autocomplete="off"></label><div>${goalProfiles.map((profile, index) => { ensureGoalCommandModel(profile); return `<button class="goal-plan-list-item${index === state.currentGoalIndex ? ' active' : ''}" type="button" data-goal-plan-select="${index}" data-goal-search-value="${escapeGoalText(profile.title.toLowerCase())}"><i>${goalCategorySymbols[profile.category] || 'GO'}</i><span><b>${escapeGoalText(profile.title)}</b><small>${formatGoalPlanMoment(`${goalPlanDateKey(profile)}T${profile.scheduledTime || '23:59'}`)}</small></span><em>${profile.progress || 0}%</em></button>`; }).join('')}</div><footer><button type="button" data-goal-create><i>+</i>Add goal</button></footer></section>` : ''}
+      ${goalPlanListOpen ? `<button class="goal-plan-list-scrim" type="button" data-goal-list-close aria-label="Close goal list"></button><section class="goal-plan-list" aria-label="Choose a goal"><header><span><small>YOUR GOALS</small><b>Choose your mission</b></span><div><button type="button" data-goal-list-close aria-label="Close goal list">&times;</button></div></header><label><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><input type="search" data-goal-plan-search placeholder="Find a goal" autocomplete="off"></label><div>${goalProfiles.map((profile, index) => { ensureGoalCommandModel(profile); return `<button class="goal-plan-list-item${index === state.currentGoalIndex ? ' active' : ''}" type="button" data-goal-plan-select="${index}" data-goal-search-value="${escapeGoalText(profile.title.toLowerCase())}"><i>${goalCategorySymbols[profile.category] || 'GO'}</i><span><b>${escapeGoalText(profile.title)}</b><small>${formatGoalPlanMoment(`${goalPlanDateKey(profile)}T${profile.scheduledTime || '23:59'}`)}</small></span><em>${profile.progress || 0}%</em></button>`; }).join('')}</div><footer><button type="button" data-goal-create><i>+</i>Add goal</button></footer></section>` : ''}
     </div>`;
 
     goalGameContent.innerHTML = `<div class="goal-plan-shell${goalPlanTaskDrawerOpen ? ' task-open' : ''}${goalPlanListOpen ? ' goal-list-open' : ''}" style="--observation-count:${scoredObservations.length};--suggestion-count:${Math.min(3, suggestions.length)}">
@@ -3317,6 +3373,7 @@
           <div class="goal-plan-image-title"><small>${escapeGoalText(goal.category)} GOAL</small><h1 title="${escapeGoalText(goal.title)}">${escapeGoalText(goal.title)}</h1></div>
           <span class="goal-plan-live"><i></i>${goal.monitoringPaused ? 'PAUSED' : 'GOAL ACTIVE'}</span>
           <div class="goal-plan-image-actions">
+            <button class="goal-plan-image-use" type="button" data-goal-plan-use aria-label="Open Use Data for this goal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v4m0 10v4M3 12h4m10 0h4M6.2 6.2l2.8 2.8m6 6 2.8 2.8m0-11.6-2.8 2.8m-6 6-2.8 2.8"/><circle cx="12" cy="12" r="3.2"/></svg><span>Use Data</span></button>
             <button class="goal-plan-image-share" type="button" data-goal-plan-share aria-label="Share goal"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.5-4.4M8.2 13.2l7.5 4.4"/></svg><span>Share</span></button>
             <div class="goal-plan-image-more"><button type="button" data-goal-plan-more aria-haspopup="menu" aria-expanded="${String(goalPlanMoreOpen)}" aria-label="More goal actions"><i></i><i></i><i></i></button>${goalPlanMoreOpen ? `<div role="menu" aria-label="Goal actions"><button type="button" role="menuitem" data-goal-plan-edit><span>Edit goal</span></button><button class="delete" type="button" role="menuitem" data-goal-plan-delete><span>Delete goal</span></button></div>` : ''}</div>
           </div>
@@ -4555,6 +4612,53 @@
 
   function getUseDashboardGoal() {
     return useDashboardGoals[state.useMissionGoalIndex] || useDashboardGoals[0];
+  }
+
+  function syncUseDashboardGoalFromProfile(goal) {
+    if (!goal || !useDashboardGoals.length) return 0;
+    const title = String(goal.title || '').toLowerCase();
+    const short = String(goal.short || '').toLowerCase();
+    let index = useDashboardGoals.findIndex((entry) => {
+      const entryTitle = String(entry.title || '').toLowerCase();
+      const entryShort = String(entry.short || '').toLowerCase();
+      return entryTitle === title
+        || (short && entryShort === short)
+        || (short && entryTitle.includes(short))
+        || (entryShort && title.includes(entryShort))
+        || entry.linkedGoalId && goal.id && entry.linkedGoalId === goal.id;
+    });
+    if (index < 0) {
+      const category = String(goal.category || '').toLowerCase();
+      if (/wellbeing|health|fitness/.test(category)) index = Math.min(3, useDashboardGoals.length - 1);
+      else if (/learn|spanish|chinese|study/.test(category) || /learn|spanish|chinese|study/.test(title)) index = Math.min(2, useDashboardGoals.length - 1);
+      else if (/finance|investor|startup|money/.test(category) || /investor|startup|finance/.test(title)) index = 0;
+      else if (/project|build|product/.test(category) || /build|product|prototype/.test(title)) index = Math.min(1, useDashboardGoals.length - 1);
+      else index = Math.max(0, Math.min(useDashboardGoals.length - 1, state.currentGoalIndex));
+    }
+    const entry = useDashboardGoals[index];
+    entry.title = goal.title || entry.title;
+    entry.short = goal.short || goal.title || entry.short;
+    entry.progress = Number.isFinite(Number(goal.progress)) ? Number(goal.progress) : entry.progress;
+    entry.state = goal.status || entry.state;
+    entry.linkedGoalId = goal.id || null;
+    entry.linkedGoalIndex = goalProfiles.findIndex((item) => item === goal);
+    return index;
+  }
+
+  function openUseDataForCurrentGoal(announce = true) {
+    const goal = goalProfiles[state.currentGoalIndex];
+    if (!goal) {
+      openPrimaryView('memory', announce);
+      return;
+    }
+    const useIndex = syncUseDashboardGoalFromProfile(goal);
+    state.useMissionGoalIndex = useIndex;
+    state.useMissionDraft = `Help me make progress on: ${goal.title}`;
+    state.useMissionRequest = state.useMissionDraft;
+    state.useMissionState = 'idle';
+    if (useMissionStage) useMissionStage.innerHTML = '';
+    openPrimaryView('memory', false);
+    if (announce) showToast(`Use Data opened for ${goal.title}`);
   }
 
   function getMissionPhaseProgress(value) {
@@ -5860,6 +5964,11 @@
     }
     if (event.target.closest('[data-goal-plan-edit]')) { goalPlanMoreOpen = false; openGoalEditSheet(); return; }
     if (event.target.closest('[data-goal-plan-delete]')) { goalPlanMoreOpen = false; openGoalDeleteSheet(); return; }
+    if (event.target.closest('[data-goal-plan-use]')) {
+      goalPlanMoreOpen = false;
+      openUseDataForCurrentGoal();
+      return;
+    }
     if (event.target.closest('[data-goal-plan-share]')) { goalPlanMoreOpen = false; goalPlanShareOpen = true; renderGoalGameBoard(goal); return; }
     if (event.target.closest('[data-goal-share-close]')) { goalPlanShareOpen = false; renderGoalGameBoard(goal); return; }
     const shareButton = event.target.closest('[data-goal-share-confirm],[data-goal-share-download]');
