@@ -1,7 +1,9 @@
+from uuid import uuid4
+
 from sqlalchemy.orm import Session
 
 from app.models.goal import ExecutionTask as TaskRow
-from app.schemas.tasks import ExecutionTask, TaskListResponse, TaskUpdateRequest
+from app.schemas.tasks import ExecutionTask, TaskCreateRequest, TaskListResponse, TaskUpdateRequest
 from app.services.runtime_store import runtime_store
 
 
@@ -19,6 +21,44 @@ def _task_from_row(row: TaskRow) -> ExecutionTask:
 
 
 class TaskService:
+    def create_task(self, payload: TaskCreateRequest, db: Session | None = None) -> ExecutionTask:
+        owner = payload.owner if payload.owner in {"human", "ai"} else "human"
+        task_id = f"task-{'ai' if owner == 'ai' else 'human'}-{uuid4().hex[:10]}"
+        task = ExecutionTask(
+            id=task_id,
+            goalId=payload.goal_id,
+            name=payload.name,
+            state=payload.state or "Pending",
+            dueAt=payload.due_at,
+            subgoalName=payload.subgoal_name,
+            owner=owner,
+        )
+        if db is not None:
+            db.add(
+                TaskRow(
+                    id=task.id,
+                    goal_id=task.goal_id,
+                    name=task.name,
+                    state=task.state,
+                    due_at=task.due_at,
+                    subgoal_name=task.subgoal_name,
+                )
+            )
+            db.flush()
+        else:
+            runtime_store.tasks.insert(0, task.model_copy(deep=True))
+
+        from app.services.activity_service import activity_service
+
+        activity_service.record(
+            "Task created",
+            f"“{task.name}” was added to the calendar",
+            route="overview",
+            related_goal_id=task.goal_id,
+            db=db,
+        )
+        return task.model_copy(deep=True)
+
     def list_tasks(self, goal_id: str | None = None, db: Session | None = None) -> TaskListResponse:
         if db is not None:
             query = db.query(TaskRow)
@@ -47,17 +87,32 @@ class TaskService:
                 row.due_at = patch["due_at"]
             if "subgoal_name" in patch:
                 row.subgoal_name = patch["subgoal_name"]
-            return _task_from_row(row)
+            updated = _task_from_row(row)
+        else:
+            updated = None
+            for index, task in enumerate(runtime_store.tasks):
+                if task.id != task_id:
+                    continue
+                data = task.model_dump(by_alias=True)
+                data.update(payload.model_dump(exclude_unset=True, by_alias=True))
+                updated = ExecutionTask.model_validate(data)
+                runtime_store.tasks[index] = updated
+                break
+            if updated is None:
+                return None
 
-        for index, task in enumerate(runtime_store.tasks):
-            if task.id != task_id:
-                continue
-            data = task.model_dump(by_alias=True)
-            data.update(payload.model_dump(exclude_unset=True, by_alias=True))
-            updated = ExecutionTask.model_validate(data)
-            runtime_store.tasks[index] = updated
-            return updated
-        return None
+        # Calendar Confirm → keep overview/activity in sync
+        if str(patch.get("state") or "").lower() in {"confirmed", "active", "completed", "done"}:
+            from app.services.activity_service import activity_service
+
+            activity_service.record(
+                "Task confirmed",
+                f"“{updated.name}” was confirmed from the calendar",
+                route="overview",
+                related_goal_id=updated.goal_id,
+                db=db,
+            )
+        return updated
 
 
 task_service = TaskService()

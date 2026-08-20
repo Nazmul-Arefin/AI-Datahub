@@ -56,6 +56,7 @@ def normalize_memory_item(
         "content": str(content),
         "source": item.get("source"),
         "mode": item.get("mode") or mode,
+        "use_for_ai": bool(item.get("use_for_ai", item.get("useForAi", True))),
     }
 
 

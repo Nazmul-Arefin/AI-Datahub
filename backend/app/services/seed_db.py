@@ -49,7 +49,7 @@ def seed_database(db: Session) -> None:
     # because nothing here uses writable relationships to imply insert order.
     db.flush()
 
-    if db.query(Goal).count() == 0:
+    if settings.use_mock_data and db.query(Goal).count() == 0:
         for goal in SEED_GOALS:
             if not goal.id:
                 continue
@@ -85,18 +85,28 @@ def seed_database(db: Session) -> None:
 
     db.flush()
 
-    if db.query(ExecutionTask).count() == 0:
+    if settings.use_mock_data:
+        existing_tasks = {row.id: row for row in db.query(ExecutionTask).all()}
         for task in SEED_TASKS:
-            db.add(
-                ExecutionTask(
-                    id=task.id,
-                    goal_id=task.goal_id,
-                    name=task.name,
-                    state=task.state,
-                    due_at=task.due_at,
-                    subgoal_name=task.subgoal_name,
+            row = existing_tasks.get(task.id)
+            if row is None:
+                db.add(
+                    ExecutionTask(
+                        id=task.id,
+                        goal_id=task.goal_id,
+                        name=task.name,
+                        state=task.state,
+                        due_at=task.due_at,
+                        subgoal_name=task.subgoal_name,
+                    )
                 )
-            )
+            else:
+                # Keep seed calendar day offsets current across restarts.
+                row.due_at = task.due_at
+                row.name = task.name
+                row.state = task.state
+                row.subgoal_name = task.subgoal_name
+                row.goal_id = task.goal_id
 
     if db.query(DataSource).count() == 0:
         for source in SEED_SOURCES:
@@ -139,7 +149,7 @@ def seed_database(db: Session) -> None:
                 )
             )
 
-    if db.query(ActivityEvent).count() == 0:
+    if settings.use_mock_data and db.query(ActivityEvent).count() == 0:
         for item in SEED_ACTIVITY:
             db.add(
                 ActivityEvent(

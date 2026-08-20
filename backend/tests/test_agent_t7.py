@@ -68,6 +68,12 @@ async def test_run_includes_memory_and_tools_and_persists(tmp_path):
     fetched = await service.get_run(result["runId"])
     assert fetched["runId"] == result["runId"]
     assert fetched["sessionId"] == result["sessionId"]
+    assert fetched["status"] == "running"
+
+    completed = await service.get_run(result["runId"])
+    assert completed["status"] == "completed"
+    assert completed.get("summary")
+    assert completed["events"]
 
 
 @pytest.mark.asyncio

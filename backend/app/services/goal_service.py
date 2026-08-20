@@ -3,13 +3,97 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from app.models.goal import Goal as GoalRow
-from app.schemas.goals import Goal, GoalCreateRequest, GoalListResponse, GoalUpdateRequest
+from app.schemas.goals import Goal, GoalCreateRequest, GoalListResponse, GoalPrediction, GoalUpdateRequest
 from app.services.activity_service import activity_service
 from app.services.runtime_store import runtime_store
 
 
+def _sync_progress_from_subgoals(goal: Goal) -> Goal:
+    """Progress is always derived from subgoal done/total when subgoals exist."""
+    if not goal.subgoals:
+        return goal
+    completed = sum(max(0, int(item.done)) for item in goal.subgoals)
+    tasks = sum(max(0, int(item.total)) for item in goal.subgoals)
+    goal.progress = int(round(completed / max(1, tasks) * 100))
+    goal.completed = completed
+    goal.tasks = tasks
+    return goal
+
+
+def _sync_prediction_from_state(goal: Goal) -> Goal:
+    """Deterministic likelihood from completion + schedule pressure (offline fallback)."""
+    if goal.prediction and getattr(goal.prediction, "agent_generated", None):
+        return goal
+    progress = max(0, min(100, int(goal.progress or 0)))
+    offset = goal.schedule_offset
+    score = 42.0 + progress * 0.38
+    if offset is not None:
+        if offset < 0:
+            score -= 18
+        elif offset == 0:
+            score -= 10 if progress < 70 else -4
+        elif offset == 1:
+            score -= 6 if progress < 50 else 0
+        elif offset >= 7:
+            score += 6
+    open_steps = max(0, (goal.tasks or 0) - (goal.completed or 0))
+    score -= min(14, open_steps * 1.4)
+    if goal.monitoring_paused:
+        score -= 12
+    if goal.sources:
+        score += min(8, goal.sources * 0.7)
+    probability = int(max(8, min(96, round(score))))
+    if probability >= 80:
+        risk, confidence = "POSITIVE WINDOW", "High confidence"
+    elif probability >= 65:
+        risk, confidence = "ON TRACK", "Medium-high confidence"
+    elif probability >= 45:
+        risk, confidence = "WATCH", "Medium confidence"
+    else:
+        risk, confidence = "AT RISK", "Needs attention"
+    window = "Next review"
+    if offset is not None:
+        if offset < 0:
+            window = "Overdue"
+        elif offset == 0:
+            window = "Today"
+        elif offset == 1:
+            window = "Tomorrow"
+        else:
+            window = f"In {offset} days"
+    impact = "Next milestone"
+    if goal.subgoals:
+        open_subgoal = next((item for item in goal.subgoals if item.done < item.total), None)
+        if open_subgoal:
+            impact = open_subgoal.name
+    title = (
+        f"At {progress}% completion, the current plan is {probability}% likely to hold through {window.lower()}."
+        if progress
+        else f"Early signals put success likelihood near {probability}% for {window.lower()}."
+    )
+    goal.prediction = GoalPrediction(
+        probability=probability,
+        risk=risk,
+        title=title,
+        impact=impact,
+        window=window,
+        confidence=confidence,
+        agent_generated=False,
+    )
+    return goal
+
+
+def _hydrate_goal_metrics(goal: Goal) -> Goal:
+    _sync_progress_from_subgoals(goal)
+    # Keep agent-authored observations; only fill prediction when no agent forecast exists.
+    if not any(getattr(item, "agent_generated", None) for item in (goal.observations or [])):
+        pass
+    _sync_prediction_from_state(goal)
+    return goal
+
+
 def _goal_from_row(row: GoalRow) -> Goal:
-    return Goal.model_validate(
+    goal = Goal.model_validate(
         {
             "id": row.id,
             "title": row.title,
@@ -38,6 +122,7 @@ def _goal_from_row(row: GoalRow) -> Goal:
             "custom": row.custom,
         }
     )
+    return _hydrate_goal_metrics(goal)
 
 
 def _apply_goal_row(row: GoalRow, goal: Goal) -> None:
@@ -73,14 +158,15 @@ class GoalService:
             rows = db.query(GoalRow).order_by(GoalRow.created_at, GoalRow.id).all()
             goals = [_goal_from_row(row) for row in rows]
         else:
-            goals = list(runtime_store.goals.values())
+            goals = [_hydrate_goal_metrics(goal.model_copy(deep=True)) for goal in runtime_store.goals.values()]
         return GoalListResponse(goals=goals, total=len(goals))
 
     def get_goal(self, goal_id: str, db: Session | None = None) -> Goal | None:
         if db is not None:
             row = db.get(GoalRow, goal_id)
             return _goal_from_row(row) if row else None
-        return runtime_store.goals.get(goal_id)
+        goal = runtime_store.goals.get(goal_id)
+        return _hydrate_goal_metrics(goal.model_copy(deep=True)) if goal else None
 
     def create_goal(self, payload: GoalCreateRequest, db: Session | None = None) -> Goal:
         goal_id = f"goal-{uuid4().hex[:8]}"
@@ -99,6 +185,7 @@ class GoalService:
             taskLabels=payload.task_labels,
             custom=payload.custom,
         )
+        _hydrate_goal_metrics(goal)
         if db is not None:
             row = GoalRow(id=goal_id)
             _apply_goal_row(row, goal)
@@ -121,7 +208,7 @@ class GoalService:
         previous_status = goal.status
         data = goal.model_dump(by_alias=True)
         data.update(payload.model_dump(exclude_unset=True, by_alias=True))
-        updated = Goal.model_validate(data)
+        updated = _hydrate_goal_metrics(Goal.model_validate(data))
         if db is not None:
             row = db.get(GoalRow, goal_id)
             if not row:

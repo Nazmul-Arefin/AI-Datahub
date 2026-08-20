@@ -2,6 +2,7 @@
  * Application runtime adapted from the V2.3.2 monolith.
  * Expects overview/goals/import-data/use-data page roots to exist under #page-outlet.
  */
+import { isApiEnabled } from './api/client.js';
 import { loadGoalsFromApi, updateGoalOnApi, createGoalOnApi, deleteGoalOnApi } from './repositories/goalsRepository.js';
 import {
   loadSourcesFromApi,
@@ -12,6 +13,25 @@ import {
   toggleSourceOnApi,
 } from './repositories/sourcesRepository.js';
 import { loadOverviewFromApi } from './repositories/overviewRepository.js';
+import {
+  loadMemoriesFromApi,
+  loadMemoryProposalsFromApi,
+  createMemoryOnApi,
+  updateMemoryOnApi,
+  deleteMemoryOnApi,
+} from './repositories/memoriesRepository.js';
+import { startAgentRunOnApi, getAgentRunOnApi, loadAllowedAgentToolsFromApi } from './repositories/agentsRepository.js';
+import { ensureAuthenticated } from './repositories/authRepository.js';
+import { loadTasksFromApi, updateTaskOnApi, createTaskOnApi } from './repositories/tasksRepository.js';
+import { loadMcpServersFromApi, loadMcpToolsFromApi, invokeMcpToolOnApi, loadMcpAuditFromApi } from './repositories/mcpRepository.js';
+import {
+  loadMessagingPlatformsFromApi,
+  loadMessagingSourcesFromApi,
+  sendMessageOnApi,
+  connectMessagingPlatformOnApi,
+} from './repositories/messagingRepository.js';
+import { loadSettingsFromApi, saveSettingsOnApi } from './repositories/settingsRepository.js';
+import { searchPlatformFromApi } from './repositories/searchRepository.js';
 
 let __navigate = (id) => { window.location.hash = '#/' + id; };
 let __showToastExternal = null;
@@ -245,7 +265,10 @@ function __install() {
   const toastAction = document.getElementById('toastAction');
   const goalUseHint = document.getElementById('goalUseHint');
   const goalUseHintDismiss = document.getElementById('goalUseHintDismiss');
-  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const reduceMotionPref = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let reduceMotion = reduceMotionPref;
+  // Do not trust a stale localStorage reduce-motion flag before settings hydrate.
+  // Server settings (or OS preference) are the source of truth after boot.
   const interactionHintCopy = interactionHint?.querySelector('span');
   if (interactionHintCopy) interactionHintCopy.innerHTML = 'Drag to explore <i>·</i> Pinch to zoom <i>·</i> Tap any node to understand it';
   let goalUseHintSeen = false;
@@ -337,13 +360,16 @@ function __install() {
     useWorkspaceActive: false,
     useMissionState: 'idle',
     useMissionListening: false,
-    useMissionRequest: 'Find investors for my startup who are interested in AI education platforms and can invest between $100K to $500K.',
+    useMissionRequest: '',
     useMissionDraft: '',
     useMissionElapsed: 0,
     useMissionAutoAdvance: true,
     useMissionGoalIndex: 0,
     useMissionGoalStringHidden: false,
     useMissionExecutionPhase: 0,
+    useMissionStatusText: '',
+    useMissionToolsUsed: [],
+    useMissionSummary: '',
     currentGoalIndex: 0,
     currentGoalProgress: 72,
     selectedSourceId: 'iphone',
@@ -373,11 +399,12 @@ function __install() {
   }
 
   function startTopologyLoop() {
-    if (!shouldRenderTopology() || topologyAnimationFrame) return;
+    if (!shouldRenderTopology()) return;
     if (topologyDirty) {
       buildUniverse();
       topologyDirty = false;
     }
+    if (topologyAnimationFrame) return;
     state.lastTime = performance.now();
     topologyAnimationFrame = requestAnimationFrame(draw);
   }
@@ -387,6 +414,7 @@ function __install() {
     if (!shouldRenderTopology()) return;
     buildUniverse();
     topologyDirty = false;
+    startTopologyLoop();
   }
 
   let seed = 84921;
@@ -577,7 +605,25 @@ function __install() {
         ...options
       });
     };
-    if (!goalProfiles.length) return;
+    if (!goalProfiles.length) {
+      // Empty universe: keep ambient motion, no invented demo goals/hubs.
+      nodes.push(makeTopologyNode({
+        id: 'goals-core', cluster: 'goals', core: true, role: 'hub', visualKind: 'ai-core', title: 'AI Synthesis',
+        detail: 'Create a goal to populate this map.',
+        source: 'Weeple AI OS',
+        reason: 'Topology nodes come from goals, sources, and memories after hydrate.',
+        x: 34, y: 0, z: 0, radius: 11.8, strength: 40, showLabel: true
+      }));
+      for (let index = 0; index < 80; index += 1) {
+        dust.push({
+          x: -260 + random() * 570, y: -155 + random() * 310, z: -125 + random() * 250,
+          radius: .25 + random() * 1.05, alpha: .05 + random() * .14,
+          phase: random() * Math.PI * 2
+        });
+      }
+      if (topologyConnectionCount) topologyConnectionCount.textContent = '00';
+      return;
+    }
 
     const selectedGoal = goalProfiles[state.currentGoalIndex] || goalProfiles[0];
     state.currentGoalProgress = selectedGoal.progress || 0;
@@ -762,50 +808,22 @@ function __install() {
       });
     });
 
-    pickSourcesForGoal(goal, usedIds).slice(0, Math.max(0, 2 - result.filter((item) => item.kind === 'data').length)).forEach((source, index) => {
-      usedIds.add(source.id);
+    // Evidence must come from real goal observations / memories — do not invent
+    // category-affinity sources or placeholder memory nodes.
+    const memoryObservations = (goal.observations || []).filter((item) => /memory|history|pattern|preference|habit|notes|confirmed/i.test(`${item.title || ''} ${item.source || ''}`));
+    memoryObservations.slice(0, 2).forEach((observation, index) => {
       result.push({
-        kind: 'data',
-        title: source.name,
-        detail: `${source.status || 'Connected'} · ${source.assets || source.type || 'Live source'}`,
-        source: source.name,
-        sourceId: source.id,
-        freshness: source.lastSync || 'Live',
-        subgoalIndex: chooseSubgoal(source.name, index),
-        reason: 'it is part of your connected personal data for this goal.',
-        strength: 90 - result.length * 3,
+        kind: 'memory',
+        title: observation.title,
+        detail: observation.detail,
+        source: observation.source || 'Long-term memory',
+        freshness: observation.time || 'Confirmed',
+        subgoalIndex: chooseSubgoal(`${observation.title} ${observation.detail}`, index),
+        reason: 'it preserves a useful pattern or preference from earlier experience.',
+        strength: 88,
         featured: true,
       });
     });
-
-    const memoryObservations = (goal.observations || []).filter((item) => /memory|history|pattern|preference|habit|notes|confirmed/i.test(`${item.title || ''} ${item.source || ''}`));
-    if (memoryObservations.length) {
-      memoryObservations.slice(0, 1).forEach((observation, index) => {
-        result.push({
-          kind: 'memory',
-          title: observation.title,
-          detail: observation.detail,
-          source: observation.source || 'Long-term memory',
-          freshness: observation.time || 'Confirmed',
-          subgoalIndex: chooseSubgoal(`${observation.title} ${observation.detail}`, index),
-          reason: 'it preserves a useful pattern or preference from earlier experience.',
-          strength: 88,
-          featured: true,
-        });
-      });
-    } else {
-      result.push({
-        kind: 'memory',
-        title: `${goal.category || 'Goal'} preferences`,
-        detail: goal.description || `Confirmed context retained for ${goal.title}.`,
-        source: 'User-confirmed goal brief',
-        freshness: 'Confirmed',
-        subgoalIndex: 0,
-        reason: 'it keeps your intended outcome and constraints consistent over time.',
-        strength: 86,
-        featured: true,
-      });
-    }
 
     return result.slice(0, 8);
   }
@@ -892,6 +910,21 @@ function __install() {
       y: state.height * .465 + rotated.y * baseScale * perspective,
       z: rotated.z,
       scale: baseScale * perspective
+    };
+  }
+
+  /** Keep AI Synthesis anchored on the right-middle of the canvas; other nodes keep free projection. */
+  function pinAiSynthesisScreen(node, projected) {
+    if (node.visualKind !== 'ai-core') return projected;
+    const baseScale = Math.min(state.width / 1260, state.height / 720) * Math.min(2.15, Math.max(1.65, state.zoom));
+    const rightX = state.width < 700
+      ? state.width * .8
+      : Math.max(state.width * .68, Math.min(state.width - 118, state.width * .74));
+    return {
+      x: rightX,
+      y: state.height * .5,
+      z: projected.z,
+      scale: baseScale
     };
   }
 
@@ -1785,6 +1818,10 @@ function __install() {
   function draw(time) {
     topologyAnimationFrame = 0;
     if (!shouldRenderTopology()) return;
+    if (topologyDirty) {
+      buildUniverse();
+      topologyDirty = false;
+    }
     const delta = Math.min(40, time - state.lastTime);
     state.lastTime = time;
     state.elapsed += delta * .001;
@@ -1868,7 +1905,7 @@ function __install() {
         node.y = node.baseY + drift * .62 * motionScale + Math.cos(state.elapsed * (.18 + node.drift * .07) * motionSpeed + node.membraneSeed) * 1.35 * motionScale;
         node.z = node.baseZ + tissueBreath;
       }
-      node.screen = project(node);
+      node.screen = pinAiSynthesisScreen(node, project(node));
       node.screen.r = Math.max(node.core ? 10 : (node.showLabel ? 3.3 : 2), node.radius * node.screen.scale);
     });
 
@@ -2232,140 +2269,9 @@ function __install() {
     }
   };
 
-  const goalProfiles = [
-    {
-      title: 'Business Trip to Beijing Tomorrow', short: 'Beijing trip', status: 'Time-sensitive', progress: 34, scheduleOffset: 1, scheduledTime: '08:30',
-      description: 'Arrive in Beijing safely and protect the morning client meeting despite changing travel conditions.',
-      sources: 3, memories: 4, outputs: 2, tasks: 3, completed: 1, accent: '255,94,0',
-      subgoals: [
-        { name: 'Check-in for flight CA1832', done: 1, total: 1, state: 'Completed' },
-        { name: 'Confirm hotel reservation in Chaoyang District', done: 0, total: 1, state: 'Needs action' },
-        { name: 'Review schedule for morning client meeting', done: 0, total: 1, state: 'At risk' }
-      ],
-      taskLabels: ['Flight check-in', 'Hotel confirmation', 'Client meeting schedule'],
-      recommendation: 'Move the trip to tonight or make the client meeting remote to reduce the weather-delay risk.',
-      basis: ['Weather feed', 'Flight status', 'Calendar'],
-      observations: [
-        { type: 'weather', title: 'Weather warning', detail: 'Heavy rain and thunderstorm warning forecasted for Beijing Capital Airport (PEK) tomorrow morning.', source: 'Beijing weather feed', time: '2m ago' },
-        { type: 'flight', title: 'Flight status', detail: 'Flight CA1832 currently shows a 75% delay probability due to weather.', source: 'Live flight tracker', time: 'Now' },
-        { type: 'calendar', title: 'Calendar conflict', detail: 'Meeting scheduled at 10:00 AM immediately after the planned landing.', source: 'Work calendar', time: 'Live' }
-      ],
-      prediction: { probability: 82, risk: 'HIGH RISK', title: 'A flight delay is likely to cause a missed morning meeting in Beijing.', impact: 'Client meeting', window: 'Tomorrow · 10:00 AM', confidence: 'High confidence' },
-      suggestions: [
-        { id: 'earlier-flight', label: 'TRAVEL SAFEGUARD', title: "Reschedule to tonight's 8:30 PM departure to arrive before the rainstorm.", action: 'Reschedule Flight', updates: 0, options: ['8:30 PM', '10:10 PM', 'Compare all'] },
-        { id: 'remote-meeting', label: 'SCHEDULE SAFEGUARD', title: 'Shift tomorrow’s 10:00 AM meeting to a remote video call.', action: 'Send Reschedule Request', updates: 2, options: ['Video call', 'Move to 2 PM', 'Draft only'] }
-      ]
-    },
-    {
-      title: 'Become a Better Self', short: 'Better self', status: 'On track', progress: 64, scheduleOffset: 0, scheduledTime: '09:00',
-      description: 'Create sustainable progress across health, focused work, and continuous learning.',
-      sources: 9, memories: 128, outputs: 7, tasks: 18, completed: 11, accent: '255,140,66',
-      subgoals: [
-        { name: 'Healthy living', done: 5, total: 7, state: 'Active' },
-        { name: 'Healthy work', done: 4, total: 6, state: 'Active' },
-        { name: 'Learning advancement', done: 2, total: 5, state: 'Planning' }
-      ],
-      taskLabels: ['Protect morning focus', 'Complete strength session', 'Review sleep pattern', 'Read for 30 minutes', 'Plan weekly reflection'],
-      recommendation: 'Move tomorrow’s focus block 30 minutes earlier based on your recent energy pattern.',
-      basis: ['Fitness', 'Calendar', '12 memories']
-    },
-    {
-      title: 'Speak Spanish Confidently', short: 'Spanish fluency', status: 'Building momentum', progress: 48, scheduleOffset: 2, scheduledTime: '19:00',
-      description: 'Reach conversational confidence through daily practice and real-world speaking sessions.',
-      sources: 5, memories: 36, outputs: 4, tasks: 16, completed: 7, accent: '139,92,246',
-      subgoals: [
-        { name: 'Build daily vocabulary', done: 5, total: 7, state: 'Active' },
-        { name: 'Practice live conversation', done: 1, total: 5, state: 'Needs action' },
-        { name: 'Understand native media', done: 1, total: 4, state: 'Planning' }
-      ],
-      taskLabels: ['Review 20 phrases', 'Book conversation session', 'Listen to a short podcast', 'Record pronunciation sample'],
-      recommendation: 'A compatible conversation partner is available Wednesday evening. Review before matching.',
-      basis: ['Learning log', 'Availability', 'Goal history']
-    },
-    {
-      title: 'Build Financial Resilience', short: 'Financial resilience', status: 'Needs review', progress: 37,
-      description: 'Create a reliable safety buffer and make long-term spending decisions with confidence.',
-      sources: 6, memories: 22, outputs: 3, tasks: 12, completed: 4, accent: '255,183,3',
-      subgoals: [
-        { name: 'Establish an emergency fund', done: 2, total: 5, state: 'Active' },
-        { name: 'Understand recurring spending', done: 2, total: 4, state: 'Review' },
-        { name: 'Create an investment routine', done: 0, total: 3, state: 'Planning' }
-      ],
-      taskLabels: ['Review monthly ledger', 'Confirm savings target', 'Classify recurring expenses', 'Draft investment checklist'],
-      recommendation: 'Three recurring expenses changed this month. Review them before updating the savings plan.',
-      basis: ['Family ledger', 'Transactions', '2 memories']
-    },
-    {
-      title: 'Strengthen Family Connections', short: 'Family connections', status: 'Healthy', progress: 81,
-      description: 'Stay meaningfully connected through shared time, thoughtful follow-up, and family rituals.',
-      sources: 7, memories: 84, outputs: 6, tasks: 11, completed: 9, accent: '255,124,89',
-      subgoals: [
-        { name: 'Protect weekly family time', done: 4, total: 4, state: 'Completed' },
-        { name: 'Stay present across distance', done: 3, total: 4, state: 'Active' },
-        { name: 'Preserve shared memories', done: 2, total: 3, state: 'Active' }
-      ],
-      taskLabels: ['Confirm Sunday dinner', 'Call parents', 'Organize recent photos', 'Plan next family trip'],
-      recommendation: 'Sunday afternoon is open for everyone. Review a proposed family plan before sending.',
-      basis: ['Family calendar', 'Photos', '8 memories']
-    }
-  ];
+  const goalProfiles = [];
 
-  const goalIntelligence = {
-    'Business Trip to Beijing Tomorrow': { category: 'Travel', updated: 'Live now' },
-    'Become a Better Self': {
-      category: 'Wellbeing', updated: '8m ago',
-      observations: [
-        { type: 'context', title: 'Recovery trend', detail: 'Average sleep is 42 minutes below your confirmed target this week.', source: 'Apple Fitness', time: '8m ago' },
-        { type: 'calendar', title: 'Focus window', detail: 'Tomorrow has an open 90-minute block before the first meeting.', source: 'Calendar', time: 'Live' },
-        { type: 'context', title: 'Work pattern', detail: 'Your strongest focus sessions occurred before 10:00 AM on four recent days.', source: 'Confirmed memory', time: 'Today' }
-      ],
-      prediction: { probability: 76, risk: 'OPPORTUNITY', title: 'Protecting the early focus window is likely to improve both work output and evening recovery.', impact: 'Energy balance', window: 'Tomorrow morning', confidence: 'Medium-high confidence' },
-      suggestions: [
-        { id: 'protect-focus', label: 'ENERGY ALIGNMENT', title: 'Protect tomorrow’s 8:30–10:00 AM window for the most important work.', action: 'Reserve Focus Block', updates: 1, options: ['8:00 AM', '8:30 AM', 'Choose time'] },
-        { id: 'recovery-plan', label: 'RECOVERY SUPPORT', title: 'Move the strength session to 6:00 PM and set a 10:30 PM wind-down reminder.', action: 'Update Routine', updates: 0, options: ['5:30 PM', '6:00 PM', 'Draft only'] }
-      ]
-    },
-    'Speak Spanish Confidently': {
-      category: 'Learning', updated: '12m ago',
-      observations: [
-        { type: 'context', title: 'Practice streak', detail: 'Vocabulary practice is consistent, but live speaking occurred only once this week.', source: 'Learning log', time: 'Today' },
-        { type: 'calendar', title: 'Available session', detail: 'Wednesday evening has a 45-minute open window for conversation practice.', source: 'Calendar', time: 'Live' },
-        { type: 'context', title: 'Skill pattern', detail: 'Listening comprehension is improving faster than spontaneous speaking confidence.', source: 'Progress history', time: '12m ago' }
-      ],
-      prediction: { probability: 73, risk: 'PLATEAU RISK', title: 'Progress will likely plateau unless passive learning is converted into live speaking practice.', impact: 'Speaking confidence', window: 'Next 2 weeks', confidence: 'High confidence' },
-      suggestions: [
-        { id: 'book-speaking', label: 'ACTIVE PRACTICE', title: 'Book a 30-minute Spanish conversation session for Wednesday evening.', action: 'Book Practice', updates: 1, options: ['6:30 PM', '7:30 PM', 'Find partner'] },
-        { id: 'micro-rehearsal', label: 'DAILY REINFORCEMENT', title: 'Add a five-minute spoken recap after each vocabulary session.', action: 'Add to Routine', updates: 0, options: ['After practice', 'Before lunch', 'Adjust plan'] }
-      ]
-    },
-    'Build Financial Resilience': {
-      category: 'Finance', updated: '21m ago',
-      observations: [
-        { type: 'context', title: 'Savings pace', detail: 'This month’s emergency-fund contribution is 18% below the confirmed plan.', source: 'Family ledger', time: '21m ago' },
-        { type: 'context', title: 'Recurring costs', detail: 'Three subscriptions increased or renewed during the current billing cycle.', source: 'Transactions', time: 'Today' },
-        { type: 'calendar', title: 'Review due', detail: 'The monthly financial review is scheduled for Friday evening.', source: 'Calendar', time: 'Live' }
-      ],
-      prediction: { probability: 69, risk: 'PLAN DRIFT', title: 'At the current contribution pace, the emergency-fund milestone may be delayed by six weeks.', impact: 'Safety buffer', window: 'Next 3 months', confidence: 'Medium confidence' },
-      suggestions: [
-        { id: 'review-costs', label: 'SPENDING REVIEW', title: 'Review the three changed subscriptions before Friday’s plan update.', action: 'Open Cost Review', updates: 1, options: ['Review now', 'Friday 6 PM', 'Export list'] },
-        { id: 'adjust-saving', label: 'MILESTONE RECOVERY', title: 'Draft a small weekly transfer increase to recover the original timeline.', action: 'Draft Adjustment', updates: 0, options: ['+5% weekly', '+10% weekly', 'Compare'] }
-      ]
-    },
-    'Strengthen Family Connections': {
-      category: 'Relationships', updated: '1h ago',
-      observations: [
-        { type: 'calendar', title: 'Shared availability', detail: 'Sunday afternoon is the only shared open window across the family calendar.', source: 'Family calendar', time: 'Live' },
-        { type: 'context', title: 'Contact rhythm', detail: 'Two important family conversations have not had a follow-up this month.', source: 'Confirmed relationship memory', time: '1h ago' },
-        { type: 'context', title: 'Recent moments', detail: 'Forty-two recent photos are ready to be organized into a shared memory.', source: 'Selected photos', time: 'Today' }
-      ],
-      prediction: { probability: 84, risk: 'POSITIVE WINDOW', title: 'A protected Sunday plan is highly likely to strengthen connection without disrupting other commitments.', impact: 'Shared family time', window: 'This Sunday', confidence: 'High confidence' },
-      suggestions: [
-        { id: 'family-plan', label: 'SHARED TIME', title: 'Draft a simple Sunday family plan using the shared afternoon window.', action: 'Review Family Plan', updates: 0, options: ['Lunch', 'Afternoon', 'Evening'] },
-        { id: 'photo-memory', label: 'SHARED MEMORY', title: 'Prepare a private album from the 42 selected photos for family review.', action: 'Prepare Album', updates: 2, options: ['Last 30 days', 'This season', 'Select photos'] }
-      ]
-    }
-  };
-  goalProfiles.forEach(goal => Object.assign(goal, goalIntelligence[goal.title] || {}, { archived: false }));
+  // Demo goalIntelligence payloads were removed — intel comes from the API + agent.
   const deletedGoalTitles = new Set();
   let pendingGoalDeletion = null;
   let goalFormMode = 'create';
@@ -2384,6 +2290,9 @@ function __install() {
   let goalPlanTaskEditor = null;
   let goalPlanSubgoalEditor = null;
   let goalPlanFocusedTaskId = '';
+  const goalAgentPollTimers = new Map();
+  const goalAgentRefreshInFlight = new Set();
+  let systemSettings = { autonomy: 'prepare' };
   try {
     const savedDeletedGoals = JSON.parse(localStorage.getItem('weeple-deleted-goals') || '[]');
     if (Array.isArray(savedDeletedGoals)) savedDeletedGoals.forEach(title => deletedGoalTitles.add(String(title)));
@@ -2435,9 +2344,51 @@ function __install() {
       progress: Number(goal.progress) || 0,
       status: goal.status,
       monitoringPaused: Boolean(goal.monitoringPaused),
+      subgoals: Array.isArray(goal.subgoals)
+        ? goal.subgoals.map((subgoal) => ({
+          name: subgoal.name,
+          done: Number(subgoal.done) || 0,
+          total: Number(subgoal.total) || 0,
+          state: subgoal.state || 'Active',
+        }))
+        : undefined,
+      observations: Array.isArray(goal.observations)
+        ? goal.observations.map((item) => ({
+          type: item.type || 'context',
+          title: item.title,
+          detail: item.detail,
+          source: item.source || null,
+          time: item.time || null,
+          influence: Number.isFinite(Number(item.influence)) ? Number(item.influence) : null,
+          agentGenerated: Boolean(item.agentGenerated),
+        }))
+        : undefined,
+      prediction: goal.prediction
+        ? {
+          probability: Number(goal.prediction.probability) || 0,
+          risk: goal.prediction.risk,
+          title: goal.prediction.title,
+          impact: goal.prediction.impact || null,
+          window: goal.prediction.window || null,
+          confidence: goal.prediction.confidence || null,
+          agentGenerated: Boolean(goal.prediction.agentGenerated),
+        }
+        : undefined,
+      suggestions: Array.isArray(goal.suggestions)
+        ? goal.suggestions.map((item) => ({
+          id: item.id,
+          label: item.label,
+          title: item.title,
+          action: item.action,
+          updates: Number(item.updates) || 0,
+          options: Array.isArray(item.options) ? item.options : [],
+          agentGenerated: Boolean(item.agentGenerated),
+          decision: item.decision || null,
+        }))
+        : undefined,
     };
     const previous = goalProgressSync.get(goal.id);
-    if (previous && previous.progress === snapshot.progress && previous.status === snapshot.status && previous.monitoringPaused === snapshot.monitoringPaused) {
+    if (previous && JSON.stringify(previous) === JSON.stringify(snapshot)) {
       return;
     }
     goalProgressSync.set(goal.id, snapshot);
@@ -2459,35 +2410,112 @@ function __install() {
     try { localStorage.setItem('weeple-paused-goal-monitoring', JSON.stringify([...pausedMonitoringGoalTitles])); } catch (error) { /* storage is optional */ }
   }
 
+  let apiTasks = [];
+  let tasksApiReady = false;
+  let mcpServersCache = [];
+  let mcpToolsByServer = new Map();
+  let agentToolsCache = [];
+  let messagingPlatformsCache = [];
+  let messagingSourcesCache = [];
+  let currentUserProfile = null;
+
+  function mapApiTaskToExecution(task) {
+    const done = /complete|done|prepared/i.test(String(task.state || ''));
+    const owner = task.owner === 'ai' ? 'ai' : 'human';
+    return {
+      id: task.id,
+      name: task.name,
+      owner,
+      done,
+      state: task.state || (done ? 'Completed' : 'Ready now'),
+      dueAt: task.dueAt || null,
+      subgoalName: task.subgoalName || null,
+      aiState: owner === 'ai' ? (done ? 'prepared' : 'queued') : undefined,
+      apiSynced: true,
+    };
+  }
+
+  function applyApiTasksToGoals() {
+    if (!tasksApiReady || !apiTasks.length) return;
+    goalProfiles.forEach((goal) => {
+      if (!goal?.id) return;
+      const related = apiTasks.filter((task) => task.goalId === goal.id);
+      if (!related.length) return;
+      try { ensureGoalCommandModel(goal); } catch (_error) { return; }
+      const bySubgoal = new Map();
+      related.forEach((task) => {
+        const key = String(task.subgoalName || '').trim().toLowerCase() || '__general__';
+        if (!bySubgoal.has(key)) bySubgoal.set(key, []);
+        bySubgoal.get(key).push(mapApiTaskToExecution(task));
+      });
+      goal.subgoals.forEach((subgoal) => {
+        const key = String(subgoal.name || '').trim().toLowerCase();
+        const matched = bySubgoal.get(key) || [];
+        if (matched.length) {
+          subgoal.executionTasks = matched;
+          subgoal.aiSeeded = true;
+        }
+      });
+      const unmatched = bySubgoal.get('__general__') || [];
+      if (unmatched.length && goal.subgoals[0]) {
+        const existingIds = new Set((goal.subgoals[0].executionTasks || []).map((task) => task.id));
+        unmatched.forEach((task) => {
+          if (!existingIds.has(task.id)) goal.subgoals[0].executionTasks.push(task);
+        });
+      }
+      syncGoalTaskStats(goal);
+    });
+  }
+
+  async function hydrateTasksFromApi() {
+    const remote = await loadTasksFromApi();
+    if (!Array.isArray(remote)) {
+      apiTasks = [];
+      tasksApiReady = false;
+      return false;
+    }
+    apiTasks = remote;
+    tasksApiReady = true;
+    applyApiTasksToGoals();
+    try { rebuildUseDashboardGoals({ preserveSelection: true }); } catch (_error) { /* use-data optional */ }
+    try { if (typeof renderCalendar === 'function') renderCalendar('left', false); } catch (_error) { /* overview optional */ }
+    return true;
+  }
+
+  async function hydrateMcpAndAgentsFromApi() {
+    const [servers, tools, platforms, sources] = await Promise.all([
+      loadMcpServersFromApi(),
+      loadAllowedAgentToolsFromApi(),
+      loadMessagingPlatformsFromApi(),
+      loadMessagingSourcesFromApi(),
+    ]);
+    if (Array.isArray(servers)) {
+      mcpServersCache = servers;
+      await Promise.all(servers.slice(0, 8).map(async (server) => {
+        const serverId = server.serverId || server.id;
+        if (!serverId) return;
+        const serverTools = await loadMcpToolsFromApi(serverId);
+        if (Array.isArray(serverTools)) mcpToolsByServer.set(serverId, serverTools);
+      }));
+    }
+    if (Array.isArray(tools)) agentToolsCache = tools;
+    if (Array.isArray(platforms)) messagingPlatformsCache = platforms;
+    if (Array.isArray(sources)) messagingSourcesCache = sources;
+  }
+
   async function hydrateGoalsFromApi() {
     const remoteGoals = await loadGoalsFromApi();
-    if (!Array.isArray(remoteGoals) || !remoteGoals.length) return;
-    const byTitle = new Map(goalProfiles.map((goal) => [goal.title, goal]));
-    remoteGoals.forEach((remote) => {
-        const local = byTitle.get(remote.title);
-      if (local) {
-        const localSubgoals = local.subgoals;
-        const wasCustom = local.custom;
-        Object.assign(local, remote);
-        // API subgoals are {name,done,total,state} only. Replacing would wipe
-        // executionTasks and any local plan overrides already on the profile.
-        if (Array.isArray(localSubgoals) && localSubgoals.some((item) => Array.isArray(item.executionTasks))) {
-          local.subgoals = localSubgoals;
-        }
-        if (wasCustom) local.custom = true;
-        if (remote.id) {
-          goalProgressSync.set(remote.id, {
-            progress: Number(remote.progress) || 0,
-            status: remote.status,
-            monitoringPaused: Boolean(remote.monitoringPaused),
-          });
-        }
-        return;
-      }
-      goalProfiles.push(remote);
-    });
+    if (!Array.isArray(remoteGoals)) {
+      goalProfiles.splice(0, goalProfiles.length);
+      goalsApiReady = false;
+      return false;
+    }
+    const customs = goalProfiles.filter((goal) => goal.custom && !remoteGoals.some((remote) => remote.id === goal.id || remote.title === goal.title));
+    goalProfiles.splice(0, goalProfiles.length, ...remoteGoals, ...customs);
     goalsApiReady = true;
+    applyApiTasksToGoals();
     try { renderGoalCollection(); } catch (_error) { /* collection may not be ready */ }
+    try { rebuildUseDashboardGoals({ preserveSelection: true }); } catch (_error) { /* use-data may not be ready */ }
     // Re-baseline after render so ensureGoalCommandModel's derived progress
     // does not get PATCHed back as a user change.
     goalProfiles.forEach((goal) => {
@@ -2496,16 +2524,46 @@ function __install() {
         progress: Number(goal.progress) || 0,
         status: goal.status,
         monitoringPaused: Boolean(goal.monitoringPaused),
+        subgoals: Array.isArray(goal.subgoals)
+          ? goal.subgoals.map((subgoal) => ({
+            name: subgoal.name,
+            done: Number(subgoal.done) || 0,
+            total: Number(subgoal.total) || 0,
+            state: subgoal.state || 'Active',
+          }))
+          : undefined,
       });
     });
+    return true;
   }
 
-  void hydrateGoalsFromApi().then(() => {
-    // Defer so the later dataSources initializer has run before evidence nodes rebuild.
-    window.setTimeout(() => {
-      try { invalidateTopology(); } catch (_error) { /* topology may not be ready */ }
-    }, 0);
-  });
+  async function hydratePlatformFromApi() {
+    currentUserProfile = await ensureAuthenticated();
+    const results = await Promise.all([
+      hydrateGoalsFromApi(),
+      hydrateSourcesFromApi(),
+      hydrateTasksFromApi(),
+      hydrateMemoriesFromApi(),
+      hydrateOverviewFromApi(),
+      hydrateMcpAndAgentsFromApi(),
+      hydrateSettingsFromApi(),
+    ]);
+    if (results.some((ok) => ok === false)) {
+      __showToast('Backend offline');
+    }
+    try { rebuildUseDashboardGoals({ preserveSelection: true }); } catch (_error) { /* use-data optional */ }
+    try { invalidateTopology(); } catch (_error) { /* topology optional */ }
+    if (currentUserProfile?.display_name || currentUserProfile?.displayName) {
+      const label = currentUserProfile.display_name || currentUserProfile.displayName;
+      const setup = document.getElementById('setupButton');
+      if (setup) {
+        const span = setup.querySelector('span');
+        if (span) span.textContent = label;
+      }
+    }
+  }
+
+  void hydratePlatformFromApi();
 
   const goalCategorySymbols = { Travel: 'TR', Wellbeing: 'WB', Learning: 'LN', Finance: 'FN', Relationships: 'FM', Project: 'PJ' };
 
@@ -2710,36 +2768,35 @@ function __install() {
       if (button.classList.contains('is-loading')) return;
       button.classList.add('is-loading');
       button.setAttribute('aria-busy', 'true');
-      window.setTimeout(() => {
+      void refreshGoalIntelFromAgent(goal, { force: true }).then((ok) => {
         button.classList.remove('is-loading');
         button.removeAttribute('aria-busy');
-        __showToast('AI recommendation opened for your confirmation');
-      }, 620);
+        if (ok) {
+          renderGoalCommandCenter(goal);
+          __showToast('AI recommendation ready for your confirmation');
+        } else {
+          __showToast('Agent runtime unavailable');
+        }
+      });
     });
     goalInspectorContent.querySelector('.goal-collaboration').addEventListener('click', (event) => {
       const subgoal = event.currentTarget.dataset.collaborationSubgoal;
       collaborationSheet.dataset.subgoal = subgoal;
-      if (matchingSubgoal.collaborationEnabled) {
-        collaborationSheet.dataset.mode = 'candidate';
-        collaborationTitle.textContent = 'Review a de-identified match?';
-        collaborationDescription.textContent = `A potential collaborator complements “${subgoal}.” Identity remains hidden at this stage.`;
-        consentRules.innerHTML = '<span><i>87%</i><b>Complementary goals</b><small>Wants real product experience while building product-management capability.</small></span><span><i>6h</i><b>Compatible availability</b><small>Six overlapping hours across the next two weeks.</small></span><span><i>01</i><b>Progressive disclosure</b><small>Expressing interest shares no identity or contact details until interest is mutual.</small></span>';
-        collaborationCancel.textContent = 'Not now';
-        collaborationConfirm.textContent = 'Express interest';
-      } else {
-        collaborationSheet.dataset.mode = 'opt-in';
-        collaborationTitle.textContent = 'Open this subgoal to collaboration?';
-        collaborationDescription.textContent = `Review what may be shared for “${subgoal}” before choosing to join private matching.`;
-        consentRules.innerHTML = defaultConsentRules;
-        collaborationCancel.textContent = 'Keep private';
-        collaborationConfirm.textContent = 'Review & opt in';
-      }
+      collaborationSheet.dataset.mode = 'unavailable';
+      collaborationTitle.textContent = 'Collaboration matching is not connected';
+      collaborationDescription.textContent = `Private matching for “${subgoal}” is not available in this build. No candidate profiles are generated.`;
+      consentRules.innerHTML = '<span><i>—</i><b>No demo matches</b><small>Weeple will not invent collaborators or compatibility scores.</small></span><span><i>01</i><b>Privacy first</b><small>Nothing is shared until a real matching service is connected.</small></span>';
+      collaborationCancel.textContent = 'Close';
+      collaborationConfirm.textContent = 'Got it';
       collaborationSheet.classList.add('visible');
       collaborationSheet.setAttribute('aria-hidden', 'false');
       goalsWorkspace.classList.add('consent-open');
       collaborationClose.focus();
     });
-    goalInspectorContent.querySelector('.goal-primary-action').addEventListener('click', () => __showToast('Full execution plan opened'));
+    goalInspectorContent.querySelector('.goal-primary-action').addEventListener('click', () => {
+      renderGoalResultDrawer('plan');
+      __showToast('Full execution plan opened');
+    });
   }
 
   function escapeGoalText(value) {
@@ -2823,23 +2880,230 @@ function __install() {
     return `${days}d left`;
   }
 
+  function goalHoursUntilDeadline(goal) {
+    const target = new Date(`${goalPlanDateKey(goal)}T${goal?.scheduledTime || '23:59'}`);
+    if (Number.isNaN(target.getTime())) return null;
+    return (target.getTime() - Date.now()) / 3600000;
+  }
+
+  function isGoalTaskComplete(task) {
+    if (!task) return false;
+    if (task.owner === 'ai') return task.aiState === 'prepared' || Boolean(task.done);
+    return Boolean(task.done);
+  }
+
+  function collectGoalExecutionTasks(goal) {
+    return (goal.subgoals || [])
+      .filter((subgoal) => !subgoal.rejected)
+      .flatMap((subgoal) => (Array.isArray(subgoal.executionTasks) ? subgoal.executionTasks : []));
+  }
+
+  function computeGoalProgressStats(goal) {
+    const tasks = collectGoalExecutionTasks(goal);
+    if (tasks.length) {
+      const completed = tasks.filter(isGoalTaskComplete).length;
+      return {
+        progress: Math.round((completed / tasks.length) * 100),
+        completed,
+        tasks: tasks.length,
+        openTasks: tasks.length - completed,
+        humanOpen: tasks.filter((task) => task.owner !== 'ai' && !isGoalTaskComplete(task)).length,
+        aiOpen: tasks.filter((task) => task.owner === 'ai' && !isGoalTaskComplete(task)).length,
+      };
+    }
+    const completed = (goal.subgoals || []).reduce((total, subgoal) => total + (Number(subgoal.done) || 0), 0);
+    const total = (goal.subgoals || []).reduce((sum, subgoal) => sum + (Number(subgoal.total) || 0), 0);
+    return {
+      progress: Math.round((completed / Math.max(1, total)) * 100),
+      completed,
+      tasks: total,
+      openTasks: Math.max(0, total - completed),
+      humanOpen: Math.max(0, total - completed),
+      aiOpen: 0,
+    };
+  }
+
+  function scoreObservationInfluence(observation, goal, stats, index) {
+    const title = String(observation?.title || '').toLowerCase();
+    const type = String(observation?.type || 'context');
+    const hours = goalHoursUntilDeadline(goal);
+    if (title.includes('deadline') || title.includes('arrival') || (type === 'calendar' && /due|schedule|window|conflict/.test(title))) {
+      if (hours == null) return 55;
+      if (hours <= 0) return 94;
+      if (hours <= 12) return 90;
+      if (hours <= 24) return 84;
+      if (hours <= 72) return 70;
+      return 48;
+    }
+    if (title.includes('coverage') || title.includes('source')) {
+      return Math.min(82, 40 + Math.round(Number(goal.sources || 0) * 4));
+    }
+    if (title.includes('constraint') || title.includes('budget') || title.includes('pressure')) {
+      return Math.min(88, 50 + Math.round(stats.openTasks * 3) + (stats.progress < 40 ? 12 : 0));
+    }
+    if (title.includes('recovery') || title.includes('sleep') || title.includes('streak') || title.includes('pace')) {
+      return Math.max(36, Math.min(86, 70 - Math.round(stats.progress * 0.15) + index));
+    }
+    if (type === 'calendar') {
+      if (hours != null && hours <= 48) return 78;
+      return 58;
+    }
+    return Math.max(34, Math.min(80, 62 - index * 7 + Math.round(stats.progress * 0.08)));
+  }
+
   function deriveGoalObservations(goal) {
-    const observations = [...(goal.observations || [])];
-    const existingTitles = new Set(observations.map(item => item.title));
-    if (Number.isInteger(goal.scheduleOffset) && goal.scheduleOffset <= 1 && !existingTitles.has('Deadline proximity')) {
-      observations.push({ type: 'calendar', title: 'Deadline proximity', detail: 'The target window is close enough that timing now has a stronger influence on the plan.', source: 'Goal schedule', time: 'Live', influence: 86 });
+    const stats = computeGoalProgressStats(goal);
+    const hours = goalHoursUntilDeadline(goal);
+    const observations = [...(goal.observations || [])].map((item) => ({ ...item }));
+    const existingTitles = new Set(observations.map((item) => item.title));
+
+    if (hours != null && hours <= 36 && !existingTitles.has('Deadline proximity')) {
+      observations.push({
+        type: 'calendar',
+        title: 'Deadline proximity',
+        detail: hours <= 0
+          ? 'The target window is overdue, so timing pressure is highest right now.'
+          : `About ${Math.max(1, Math.ceil(hours))} hours remain before the target window.`,
+        source: 'Goal schedule',
+        time: 'Live',
+      });
     }
-    if (Number(goal.sources || 0) >= 8 && !existingTitles.has('Context coverage')) {
-      observations.push({ type: 'context', title: 'Context coverage', detail: `${goal.sources} authorized sources are contributing current context to this goal.`, source: 'Authorized sources', time: 'Now', influence: 54 });
+    if (stats.openTasks > 0 && !existingTitles.has('Open execution load')) {
+      observations.push({
+        type: 'context',
+        title: 'Open execution load',
+        detail: `${stats.openTasks} open step${stats.openTasks === 1 ? '' : 's'} remain (${stats.humanOpen} yours · ${stats.aiOpen} AI).`,
+        source: 'Task plan',
+        time: 'Now',
+      });
     }
-    if (goal.category === 'Finance' && !existingTitles.has('Constraint pressure')) {
-      observations.push({ type: 'context', title: 'Constraint pressure', detail: 'The confirmed budget and timeline are narrowing the available recovery options.', source: 'Goal constraints', time: 'Current', influence: 63 });
+    if (Number(goal.sources || 0) > 0 && !existingTitles.has('Context coverage')) {
+      observations.push({
+        type: 'context',
+        title: 'Context coverage',
+        detail: `${goal.sources} authorized source${goal.sources === 1 ? '' : 's'} currently feed this goal.`,
+        source: 'Authorized sources',
+        time: 'Now',
+      });
     }
-    return observations.slice(0, 6);
+    if (goal.monitoringPaused && !existingTitles.has('Monitoring paused')) {
+      observations.push({
+        type: 'context',
+        title: 'Monitoring paused',
+        detail: 'Live monitoring is paused, so forecast confidence is reduced until it resumes.',
+        source: 'Goal controls',
+        time: 'Current',
+      });
+    }
+
+    return observations.slice(0, 6).map((observation, index) => ({
+      ...observation,
+      influence: scoreObservationInfluence(observation, goal, stats, index),
+    }));
+  }
+
+  function computeGoalPrediction(goal, stats = computeGoalProgressStats(goal)) {
+    const hours = goalHoursUntilDeadline(goal);
+    let score = 44 + stats.progress * 0.36;
+    if (hours != null) {
+      if (hours <= 0) score -= 20;
+      else if (hours <= 12) score -= stats.progress < 70 ? 14 : 6;
+      else if (hours <= 24) score -= stats.progress < 55 ? 10 : 3;
+      else if (hours <= 72) score -= stats.progress < 40 ? 6 : 0;
+      else if (hours >= 168) score += 5;
+    } else if (Number.isInteger(goal.scheduleOffset)) {
+      if (goal.scheduleOffset < 0) score -= 18;
+      else if (goal.scheduleOffset === 0) score -= stats.progress < 70 ? 10 : 3;
+      else if (goal.scheduleOffset === 1) score -= stats.progress < 50 ? 6 : 0;
+      else if (goal.scheduleOffset >= 7) score += 5;
+    }
+    score -= Math.min(16, stats.openTasks * 1.5);
+    score += Math.min(8, Number(goal.sources || 0) * 0.7);
+    if (goal.monitoringPaused) score -= 12;
+    const pendingSuggestions = (goal.suggestions || []).filter((item) => !item.decision).length;
+    const resolvedSuggestions = (goal.suggestions || []).filter((item) => item.decision === 'confirmed').length;
+    score -= Math.min(9, pendingSuggestions * 2.5);
+    score += Math.min(6, resolvedSuggestions * 2);
+    const probability = Math.max(8, Math.min(96, Math.round(score)));
+
+    let risk = 'WATCH';
+    let confidence = 'Medium confidence';
+    if (probability >= 80) {
+      risk = 'POSITIVE WINDOW';
+      confidence = 'High confidence';
+    } else if (probability >= 65) {
+      risk = 'ON TRACK';
+      confidence = 'Medium-high confidence';
+    } else if (probability < 45) {
+      risk = 'AT RISK';
+      confidence = 'Needs attention';
+    }
+
+    let window = 'Next review';
+    if (hours != null) {
+      if (hours <= 0) window = 'Overdue';
+      else if (hours < 24) window = `${Math.max(1, Math.ceil(hours))}h window`;
+      else window = `${Math.ceil(hours / 24)}d window`;
+    } else if (Number.isInteger(goal.scheduleOffset)) {
+      if (goal.scheduleOffset < 0) window = 'Overdue';
+      else if (goal.scheduleOffset === 0) window = 'Today';
+      else if (goal.scheduleOffset === 1) window = 'Tomorrow';
+      else window = `In ${goal.scheduleOffset} days`;
+    }
+
+    const openSubgoal = (goal.subgoals || []).find((subgoal) => (Number(subgoal.done) || 0) < (Number(subgoal.total) || 0));
+    const impact = openSubgoal?.name || 'Next milestone';
+    const title = stats.progress
+      ? `At ${stats.progress}% completion, the current plan is ${probability}% likely to hold through ${window.toLowerCase()}.`
+      : `Early execution signals put success likelihood near ${probability}% for ${window.toLowerCase()}.`;
+
+    return {
+      probability,
+      risk,
+      title,
+      impact,
+      window,
+      confidence,
+      computed: true,
+      drivers: [
+        ['Task completion', stats.progress],
+        ['Schedule pressure', hours == null ? 50 : Math.max(8, Math.min(96, Math.round(100 - Math.max(0, hours) * 1.2)))],
+        ['Open workload', Math.max(8, Math.min(96, 20 + stats.openTasks * 8))],
+      ],
+    };
+  }
+
+  function refreshGoalMetrics(goal) {
+    if (!goal) return goal;
+    const stats = computeGoalProgressStats(goal);
+    goal.progress = stats.progress;
+    goal.completed = stats.completed;
+    goal.tasks = stats.tasks;
+    const hasAgentObservations = Array.isArray(goal.observations)
+      && goal.observations.some((item) => item.agentGenerated);
+    if (hasAgentObservations) {
+      goal.observations = goal.observations.slice(0, 6).map((observation, index) => ({
+        ...observation,
+        influence: Number(observation.influence)
+          || scoreObservationInfluence(observation, goal, stats, index),
+        agentGenerated: true,
+      }));
+    } else {
+      goal.observations = deriveGoalObservations(goal);
+    }
+    if (!goal.prediction?.agentGenerated) {
+      goal.prediction = computeGoalPrediction(goal, stats);
+    }
+    if (stats.progress >= 100) goal.status = 'Completed';
+    else if (goal.status === 'Completed' && stats.progress < 100) goal.status = 'On track';
+    else if ((goalHoursUntilDeadline(goal) ?? 999) < 24 && stats.progress < 40) goal.status = 'At risk';
+    return goal;
   }
 
   function syncPredictionSuggestions(goal) {
     goal.suggestions = Array.isArray(goal.suggestions) ? goal.suggestions : [];
+    if (goal.suggestions.some((item) => item.agentGenerated && !item.decision)) return;
+    if (goal.prediction?.agentGenerated) return;
     const suggestionId = `${goal.id}-prediction-move`;
     const existingIndex = goal.suggestions.findIndex(item => item.id === suggestionId);
     const probability = Number(goal.prediction?.probability || 0);
@@ -2871,7 +3135,6 @@ function __install() {
     goal.constraints = goal.constraints || (goal.category === 'Travel' ? 'Timing, safety, and confirmed reservations' : 'User-confirmed time, privacy, and resource limits');
     goal.taskLabels = Array.isArray(goal.taskLabels) ? goal.taskLabels : [];
     goal.draftSubgoals = Array.isArray(goal.draftSubgoals) ? goal.draftSubgoals : [];
-    syncPredictionSuggestions(goal);
     goal.subgoals.forEach((subgoal, subgoalIndex) => {
       subgoal.id = subgoal.id || `${goal.id}-subgoal-${subgoalIndex + 1}-${goalPlanSlug(subgoal.name)}`;
       const total = Math.max(1, Number(subgoal.total) || 1);
@@ -2900,17 +3163,7 @@ function __install() {
         }
       });
       if (!subgoal.aiSeeded && !subgoal.executionTasks.some(task => task.owner === 'ai')) {
-        const aiReady = completeCount >= total;
-        subgoal.executionTasks.push({
-          id: `${subgoal.id}-ai-support`,
-          name: `Prepare support for ${subgoal.name}`,
-          owner: 'ai',
-          aiState: aiReady ? 'prepared' : subgoalIndex === 0 ? 'running' : 'queued',
-          done: aiReady,
-          state: aiReady ? 'Completed' : subgoalIndex === 0 ? 'Working' : 'Queued',
-          startsAt: `${baseDate}T${shiftGoalTime(baseTime, subgoalIndex * 45 - 20)}`,
-          expectedAt: `${baseDate}T${shiftGoalTime(baseTime, subgoalIndex * 45 + 25)}`
-        });
+        // Do not invent AI tasks — only API/agent-created AI work should appear.
         subgoal.aiSeeded = true;
       }
       subgoal.origin = subgoal.origin === 'user' ? 'user' : 'ai';
@@ -2930,6 +3183,8 @@ function __install() {
       const nextIndex = goal.subgoals.findIndex(subgoal => subgoal.done < subgoal.total);
       goal.openSubgoalIndex = nextIndex;
     }
+    refreshGoalMetrics(goal);
+    syncPredictionSuggestions(goal);
   }
 
   function syncGoalTaskStats(goal) {
@@ -3362,7 +3617,7 @@ function __install() {
         <header><span><small>AI OUTPUT</small><h3>${escapeGoalText(task.name)}</h3></span><button type="button" data-goal-intel-close aria-label="Close">&times;</button></header>
         <div class="goal-plan-suggestion-icon"><i>AI</i><span><small>${escapeGoalText(String(task.aiState || 'queued').toUpperCase())}</small><b>${escapeGoalText(subgoal.name)}</b></span></div>
         <div class="goal-plan-fact-grid"><span><small>START</small><b>${formatGoalPlanMoment(task.startsAt)}</b></span><span><small>EXPECTED</small><b>${formatGoalPlanMoment(task.expectedAt)}</b></span></div>
-        <article><small>PREPARED OUTPUT</small><p>${task.aiState === 'prepared' ? 'The preparation is ready for your review. Nothing external has been sent.' : task.aiState === 'running' ? 'Weeple is preparing this now. You can pause it at any time.' : 'This preparation is queued and waiting to run.'}</p></article>
+        <article><small>PREPARED OUTPUT</small><p>${escapeGoalText(task.aiOutput || (task.aiState === 'prepared' ? 'The preparation is ready for your review. Nothing external has been sent.' : task.aiState === 'running' ? 'Weeple is preparing this now. You can pause it at any time.' : 'This preparation is queued and waiting to run.'))}</p></article>
         <div class="goal-plan-detail-actions"><button type="button" data-goal-intel-close>Close</button>${task.aiState === 'prepared' ? '<button class="primary" type="button" data-goal-intel-close>Reviewed</button>' : ''}</div>
         <footer><i></i>No external action without your confirmation</footer>
       </section></aside>`;
@@ -3424,7 +3679,7 @@ function __install() {
     const nextSubgoal = activeSubgoals.find(subgoal => subgoal.done < subgoal.total) || activeSubgoals[0];
     const completedTasks = activeSubgoals.reduce((total, subgoal) => total + subgoal.done, 0);
     const totalTasks = activeSubgoals.reduce((total, subgoal) => total + subgoal.total, 0);
-    const progress = Math.round(completedTasks / Math.max(1, totalTasks) * 100);
+    const progress = Number(goal.progress) || Math.round(completedTasks / Math.max(1, totalTasks) * 100);
     const scheduleLabel = Number(goal.scheduleOffset) === 0 ? 'Today' : Number(goal.scheduleOffset) === 1 ? 'Tomorrow' : prediction.window || 'Next review';
     const compactSubgoalName = (name) => {
       const concise = String(name || '')
@@ -3475,7 +3730,7 @@ function __install() {
       : progress >= 80 ? goalPraise.close : progress >= 50 ? goalPraise.steady : goalPraise.early;
     const scoredObservations = observations.slice(0, 3).map((observation, index) => ({
       ...observation,
-      influence: Number(observation.influence) || Math.max(54, 92 - index * 17)
+      influence: Number(observation.influence) || scoreObservationInfluence(observation, goal, computeGoalProgressStats(goal), index)
     }));
     const highestInfluence = Math.max(0, ...scoredObservations.map(observation => observation.influence));
 
@@ -3592,25 +3847,24 @@ function __install() {
   function renderGoalGameBoard(goal) {
     if (!goalGameContent) return;
     ensureGoalCommandModel(goal);
-    const observations = deriveGoalObservations(goal);
+    const observations = goal.observations || [];
     const prediction = goal.prediction || { probability: 58, risk: 'BUILDING', title: 'The first milestone is achievable.', impact: 'Next milestone', window: 'Next review', confidence: 'Medium confidence' };
     const suggestions = goal.suggestions || [];
     const activeSubgoals = goal.subgoals.filter(subgoal => !subgoal.rejected);
     const allTasks = activeSubgoals.flatMap(subgoal => subgoal.executionTasks);
     const humanTasks = allTasks.filter(task => task.owner === 'human');
     const aiTasks = allTasks.filter(task => task.owner === 'ai');
-    const completedTasks = allTasks.filter(task => task.owner === 'human' ? task.done : task.aiState === 'prepared').length;
-    const progress = Math.round(completedTasks / Math.max(1, allTasks.length) * 100);
-    goal.progress = progress;
-    goal.completed = completedTasks;
-    goal.tasks = allTasks.length;
+    const progress = Number(goal.progress) || 0;
     const nextHuman = humanTasks.filter(task => !task.done).sort((a, b) => String(a.dueAt).localeCompare(String(b.dueAt)))[0];
     const nextAi = aiTasks.find(task => task.aiState === 'running') || aiTasks.find(task => task.aiState === 'queued');
     const nextTask = nextHuman || nextAi;
     const activeAiCount = aiTasks.filter(task => ['queued', 'running', 'blocked'].includes(task.aiState)).length;
     const artwork = resolveGoalArtwork(goal);
     const deadline = `${goalPlanDateKey(goal)}T${goal.scheduledTime || '23:59'}`;
-    const scoredObservations = observations.map((observation, index) => ({ ...observation, influence: Number(observation.influence) || Math.max(42, 92 - index * 13) }));
+    const scoredObservations = (observations.length ? observations : deriveGoalObservations(goal)).map((observation, index) => ({
+      ...observation,
+      influence: Number(observation.influence) || scoreObservationInfluence(observation, goal, computeGoalProgressStats(goal), index),
+    }));
     const highestInfluence = Math.max(0, ...scoredObservations.map(item => item.influence));
     const rankedObservations = scoredObservations.map((observation, index) => ({ ...observation, originalIndex: index })).sort((a, b) => b.influence - a.influence);
     const taskDrawerLabel = goalPlanTaskOwner === 'ai' ? 'AI Subgoals' : 'Your Subgoals';
@@ -3633,7 +3887,7 @@ function __install() {
           <div class="goal-plan-image-actions">
             <button class="goal-plan-image-use" type="button" data-goal-plan-use aria-label="Open Use Data for this goal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v4m0 10v4M3 12h4m10 0h4M6.2 6.2l2.8 2.8m6 6 2.8 2.8m0-11.6-2.8 2.8m-6 6-2.8 2.8"/><circle cx="12" cy="12" r="3.2"/></svg><span>Use Data</span></button>
             <button class="goal-plan-image-share" type="button" data-goal-plan-share aria-label="Share goal"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.5-4.4M8.2 13.2l7.5 4.4"/></svg><span>Share</span></button>
-            <div class="goal-plan-image-more"><button type="button" data-goal-plan-more aria-haspopup="menu" aria-expanded="${String(goalPlanMoreOpen)}" aria-label="More goal actions"><i></i><i></i><i></i></button>${goalPlanMoreOpen ? `<div role="menu" aria-label="Goal actions"><button type="button" role="menuitem" data-goal-plan-edit><span>Edit goal</span></button><button class="delete" type="button" role="menuitem" data-goal-plan-delete><span>Delete goal</span></button></div>` : ''}</div>
+            <div class="goal-plan-image-more"><button type="button" data-goal-plan-more aria-haspopup="menu" aria-expanded="${String(goalPlanMoreOpen)}" aria-label="More goal actions"><i></i><i></i><i></i></button>${goalPlanMoreOpen ? `<div role="menu" aria-label="Goal actions"><header><small>GOAL ACTIONS</small><b>${escapeGoalText(goal.title)}</b></header><button type="button" role="menuitem" data-goal-plan-edit><i class="edit" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></i><span><b>Edit goal</b><small>Update outcome, timing, or constraints</small></span></button><button class="delete" type="button" role="menuitem" data-goal-plan-delete><i class="delete" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M6.5 7l.8 12.2A1.5 1.5 0 0 0 8.8 21h6.4a1.5 1.5 0 0 0 1.5-1.4L17.5 7"/><path d="M10 11v6M14 11v6"/></svg></i><span><b>Delete goal</b><small>Remove this plan and its prepared work</small></span></button></div>` : ''}</div>
           </div>
           <div class="goal-plan-image-progress"><span><small>PROGRESS</small><b>${progress}%</b></span><i><em style="width:${progress}%"></em></i></div>
           <div class="goal-plan-image-deadline"><small>DEADLINE</small><b>${goalPlanCountdown(goal)}</b><em>${formatGoalPlanMoment(deadline)}</em></div>
@@ -3672,12 +3926,27 @@ function __install() {
         <button class="goal-plan-task-summary" type="button" data-goal-task-drawer-toggle aria-expanded="${String(goalPlanTaskDrawerOpen)}"><span><i class="human">YOU</i><b>${humanTasks.filter(task => !task.done).length}</b><small>to do</small></span><span><i class="ai">AI</i><b>${activeAiCount}</b><small>active</small></span><em></em><strong title="${escapeGoalText(nextTask?.name || 'All current work reviewed')}">${escapeGoalText(nextTask?.name || 'All current work reviewed')}</strong><small>${nextTask ? formatGoalPlanMoment(goalPlanTaskMoment(nextTask)) : 'Up to date'}</small><i class="chevron">⌃</i></button>
         ${goalPlanTaskDrawerOpen ? `<div class="goal-plan-task-drawer"><header><div role="tablist" aria-label="Subgoal owner"><button class="${goalPlanTaskOwner === 'human' ? 'active' : ''}" type="button" data-goal-task-owner="human">Your Subgoals <em>${humanTasks.length}</em></button><button class="${goalPlanTaskOwner === 'ai' ? 'active' : ''}" type="button" data-goal-task-owner="ai">AI Subgoals <em>${aiTasks.length}</em></button></div><span><button type="button" data-game-subgoal-add>+ Subgoal</button><button class="primary" type="button" data-goal-task-add>+ Task</button><button type="button" data-goal-task-drawer-close aria-label="Close task drawer">&times;</button></span></header><div class="goal-plan-task-content" aria-label="${taskDrawerLabel}">${goalPlanTaskGroupsMarkup(goal, goalPlanTaskOwner)}</div>${goalPlanTaskEditorMarkup(goal)}${goalPlanSubgoalEditorMarkup(goal)}</div>` : ''}
       </section>
-      ${goalPlanIntelligenceDrawerMarkup(goal, scoredObservations)}
-      ${goalPlanShareMarkup(goal, artwork, progress)}
     </div>`;
+    mountGoalPlanOverlays(
+      goalPlanIntelligenceDrawerMarkup(goal, scoredObservations),
+      goalPlanShareMarkup(goal, artwork, progress)
+    );
     const shouldAnimate = goalPlanTransitionDirection !== 0 || goalPlanVisualEnter;
     if (goalPlanVisualEnter && !goalPlanTransitionDirection) goalPlanVisualEnter = false;
     if (shouldAnimate) kickGoalVisualAnimation();
+  }
+
+  function mountGoalPlanOverlays(intelMarkup, shareMarkup) {
+    const host = osShell || document.body;
+    host.querySelectorAll(':scope > .goal-plan-intel-drawer, :scope > .goal-plan-share').forEach((node) => node.remove());
+    const overlayOpen = Boolean(goalPlanIntelDetail || goalPlanShareOpen);
+    osShell?.classList.toggle('goal-overlay-open', overlayOpen);
+    goalsWorkspace?.classList.toggle('goal-overlay-open', overlayOpen);
+    const html = `${intelMarkup || ''}${shareMarkup || ''}`;
+    if (!html) return;
+    const staging = document.createElement('div');
+    staging.innerHTML = html;
+    [...staging.children].forEach((node) => host.appendChild(node));
   }
 
   function renderGoalCommandCenter(goal) {
@@ -3688,13 +3957,8 @@ function __install() {
     const prediction = goal.prediction || { probability: 58, risk: 'EARLY INFERENCE', title: 'The next milestone is achievable, but additional context may change the timing.', impact: 'Next milestone', window: 'Next review', confidence: 'Medium confidence' };
     const suggestions = goal.suggestions || [];
     const nextSubgoal = goal.subgoals.find(subgoal => subgoal.done < subgoal.total) || goal.subgoals[goal.subgoals.length - 1];
-    const totalTasks = goal.subgoals.reduce((total, subgoal) => total + subgoal.total, 0);
-    const completedTasks = goal.subgoals.reduce((total, subgoal) => total + subgoal.done, 0);
     const primarySuggestion = suggestions.find(suggestion => !suggestion.decision);
     const nextExecutionTask = nextSubgoal?.executionTasks?.find(task => !task.done);
-    goal.progress = Math.round(completedTasks / Math.max(1, totalTasks) * 100);
-    goal.tasks = totalTasks;
-    goal.completed = completedTasks;
 
     goalCommandTitle.textContent = goal.title;
     goalCommandOutcome.textContent = goal.outcome;
@@ -3763,14 +4027,12 @@ function __install() {
   }
 
   function updateGoalCompletionSummary(goal) {
-    const completed = goal.subgoals.reduce((total, subgoal) => total + subgoal.done, 0);
-    const taskTotal = goal.subgoals.reduce((total, subgoal) => total + subgoal.total, 0);
-    goal.completed = completed;
-    goal.tasks = taskTotal;
-    goal.progress = Math.round(completed / Math.max(1, taskTotal) * 100);
+    refreshGoalMetrics(goal);
     state.currentGoalProgress = goal.progress;
     const completedSubgoals = goal.subgoals.filter(subgoal => subgoal.done >= subgoal.total).length;
-    goalCompletionSummary.textContent = `${completedSubgoals} of ${goal.subgoals.length} subgoals complete`;
+    if (goalCompletionSummary) {
+      goalCompletionSummary.textContent = `${completedSubgoals} of ${goal.subgoals.length} subgoals complete`;
+    }
     if (goalCollectionList) renderGoalCollection();
   }
 
@@ -3843,6 +4105,9 @@ function __install() {
     renderGoalCollection();
     triggerReasoningUpdate(announce ? 'Refreshing this goal’s context' : 'Current context synthesized');
     document.documentElement.style.setProperty('--goal-rgb', goal.accent);
+    void refreshGoalIntelFromAgent(goal).then(() => {
+      void maybeAutoRunQueuedGoalAiTasks(goal);
+    });
     if (announce) {
       __showToast(`${goal.title} opened`);
       window.setTimeout(() => {
@@ -3867,83 +4132,526 @@ function __install() {
     const subgoal = goal?.subgoals[subgoalIndex];
     if (!subgoal) return;
     collaborationSheet.dataset.subgoal = subgoal.name;
-    if (subgoal.collaborationEnabled) {
-      collaborationSheet.dataset.mode = 'candidate';
-      collaborationTitle.textContent = 'Review a de-identified match?';
-      collaborationDescription.textContent = `A potential collaborator complements "${subgoal.name}." Identity remains hidden at this stage.`;
-      consentRules.innerHTML = '<span><i>87%</i><b>Complementary goals</b><small>The match has compatible intent, capability, and collaboration preferences.</small></span><span><i>6h</i><b>Compatible availability</b><small>Six overlapping hours are available across the next two weeks.</small></span><span><i>01</i><b>Progressive disclosure</b><small>No identity or contact detail is shared until interest is mutual.</small></span>';
-      collaborationCancel.textContent = 'Not now';
-      collaborationConfirm.textContent = 'Express interest';
-    } else {
-      collaborationSheet.dataset.mode = 'opt-in';
-      collaborationTitle.textContent = 'Open this direct subgoal to collaboration?';
-      collaborationDescription.textContent = `Review the minimum information that may be shared for "${subgoal.name}" before opting in.`;
-      consentRules.innerHTML = defaultConsentRules;
-      collaborationCancel.textContent = 'Keep private';
-      collaborationConfirm.textContent = 'Review & opt in';
-    }
+    collaborationSheet.dataset.mode = 'unavailable';
+    collaborationTitle.textContent = 'Collaboration matching is not connected';
+    collaborationDescription.textContent = `Private matching for "${subgoal.name}" is not available in this build. No candidate profiles are generated.`;
+    consentRules.innerHTML = '<span><i>—</i><b>No demo matches</b><small>Weeple will not invent collaborators or compatibility scores.</small></span><span><i>01</i><b>Privacy first</b><small>Nothing is shared until a real matching service is connected.</small></span>';
+    collaborationCancel.textContent = 'Close';
+    collaborationConfirm.textContent = 'Got it';
     collaborationSheet.classList.add('visible');
     collaborationSheet.setAttribute('aria-hidden', 'false');
     goalsWorkspace.classList.add('consent-open');
     collaborationClose.focus();
   }
 
-  function triggerReasoningUpdate(message = 'New context synthesized') {
+  function triggerReasoningUpdate(message = 'Updating goal context') {
     window.clearTimeout(reasoningUpdateTimer);
     goalPrimaryActionPanel?.classList.remove('is-generating');
     if (goalPrimaryActionPanel) void goalPrimaryActionPanel.offsetWidth;
     goalPrimaryActionPanel?.classList.add('is-generating');
-    if (goalDecisionState) goalDecisionState.textContent = 'Synthesizing';
-    if (goalAIState) {
-      goalAIState.dataset.state = 'working';
-      goalAIState.innerHTML = '<i></i><b>Working</b>';
-    }
+    if (goalDecisionState) goalDecisionState.textContent = 'Updating';
     if (aiReasoningMessage) aiReasoningMessage.textContent = message;
     reasoningUpdateTimer = window.setTimeout(() => {
       goalPrimaryActionPanel?.classList.remove('is-generating');
       const currentGoal = goalProfiles[state.currentGoalIndex];
       if (currentGoal) renderGoalResultsSurface(currentGoal);
-      if (aiReasoningMessage) aiReasoningMessage.textContent = 'Current context synthesized';
-    }, reduceMotion ? 500 : 1750);
+      if (aiReasoningMessage) {
+        aiReasoningMessage.textContent = currentGoal?.prediction?.agentGenerated
+          ? 'AI forecast is current'
+          : 'Waiting for AI analysis';
+      }
+    }, reduceMotion ? 120 : 420);
   }
 
-  function confirmGoalSuggestion(goal, suggestion) {
+  function clearGoalAgentPoll(key) {
+    const timer = goalAgentPollTimers.get(key);
+    if (timer) window.clearInterval(timer);
+    goalAgentPollTimers.delete(key);
+  }
+
+  function agentRunStatus(run) {
+    return String(run?.status || '').toLowerCase();
+  }
+
+  function isAgentRunSuccess(status) {
+    return ['completed', 'complete', 'succeeded', 'success'].includes(String(status || '').toLowerCase());
+  }
+
+  function isAgentRunFailure(status) {
+    return ['failed', 'error', 'cancelled'].includes(String(status || '').toLowerCase());
+  }
+
+  function isAgentRunTerminal(status) {
+    return isAgentRunSuccess(status) || isAgentRunFailure(status);
+  }
+
+  function extractAgentRunSummary(run) {
+    if (!run) return '';
+    if (run.summary) return String(run.summary).trim();
+    if (run.result) return String(run.result).trim();
+    const events = Array.isArray(run.events) ? run.events : [];
+    for (let index = events.length - 1; index >= 0; index -= 1) {
+      const event = events[index];
+      const text = event?.text || event?.detail || event?.message || event?.label || '';
+      if (text) return String(text).trim();
+    }
+    return '';
+  }
+
+  function extractJsonPayload(text) {
+    const raw = String(text || '').trim();
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch (_error) {
+      /* continue */
+    }
+    const arrayStart = raw.indexOf('[');
+    const arrayEnd = raw.lastIndexOf(']');
+    if (arrayStart >= 0 && arrayEnd > arrayStart) {
+      try {
+        return JSON.parse(raw.slice(arrayStart, arrayEnd + 1));
+      } catch (_error) {
+        /* continue */
+      }
+    }
+    const objectStart = raw.indexOf('{');
+    const objectEnd = raw.lastIndexOf('}');
+    if (objectStart >= 0 && objectEnd > objectStart) {
+      try {
+        return JSON.parse(raw.slice(objectStart, objectEnd + 1));
+      } catch (_error) {
+        /* continue */
+      }
+    }
+    return null;
+  }
+
+  function pollAgentRunUntilDone(runId, { key = runId, onProgress = null, maxAttempts = 40, intervalMs = 900 } = {}) {
+    return new Promise((resolve) => {
+      clearGoalAgentPoll(key);
+      let attempts = 0;
+      const timer = window.setInterval(async () => {
+        attempts += 1;
+        const run = await getAgentRunOnApi(runId);
+        if (run && typeof onProgress === 'function') onProgress(run);
+        const status = agentRunStatus(run);
+        if (isAgentRunTerminal(status) || attempts >= maxAttempts) {
+          clearGoalAgentPoll(key);
+          if (!run || (!isAgentRunTerminal(status) && attempts >= maxAttempts)) {
+            resolve({ runId, status: 'failed', summary: '' });
+            return;
+          }
+          resolve(run);
+        }
+      }, intervalMs);
+      goalAgentPollTimers.set(key, timer);
+    });
+  }
+
+  async function runGoalAgentMission({ mission, goalId = null, key = null, onProgress = null } = {}) {
+    if (!isApiEnabled()) return null;
+    const run = await startAgentRunOnApi({ mission, goalId });
+    if (!run?.runId) return null;
+    if (typeof onProgress === 'function') onProgress(run);
+    if (isAgentRunTerminal(agentRunStatus(run))) return run;
+    return pollAgentRunUntilDone(run.runId, {
+      key: key || `run:${run.runId}`,
+      onProgress,
+      maxAttempts: 40,
+      intervalMs: 900,
+    });
+  }
+
+  function buildSuggestionMission(goal, suggestion) {
+    const option = suggestion.selectedOption ? ` Preferred option: ${suggestion.selectedOption}.` : '';
+    const subgoal = goal.subgoals?.[Number(suggestion.updates)];
+    return [
+      'You are Weeple executing a user-confirmed goal action.',
+      `Goal: ${goal.title}.`,
+      `Category: ${goal.category || 'Project'}.`,
+      subgoal ? `Target subgoal: ${subgoal.name}.` : '',
+      `Action: ${suggestion.action || suggestion.title}.`,
+      `Context: ${suggestion.title || ''}.${option}`,
+      'Prepare a concrete result the user can review.',
+      'Do not send external messages or take irreversible actions that require a separate confirmation.',
+      'Reply with the prepared output only.',
+    ].filter(Boolean).join(' ');
+  }
+
+  function buildAiTaskMission(goal, subgoal, task) {
+    return [
+      'You are Weeple preparing an AI-owned goal task for user review.',
+      `Goal: ${goal.title}.`,
+      `Subgoal: ${subgoal?.name || 'General'}.`,
+      `Task: ${task.name}.`,
+      goal.constraints ? `Constraints: ${goal.constraints}.` : '',
+      'Produce a concrete prepared output.',
+      'Do not take external or irreversible actions that require separate confirmation.',
+      'Reply with the prepared output only.',
+    ].filter(Boolean).join(' ');
+  }
+
+  function applySuggestionAgentSuccess(goal, suggestion, summary) {
+    suggestion.executionState = 'completed';
+    suggestion.aiOutput = summary || 'Agent completed the confirmed action.';
+    suggestion.runId = suggestion.runId || null;
+    const subgoal = goal.subgoals?.[Number(suggestion.updates)];
+    if (subgoal) {
+      ensureGoalCommandModel(goal);
+      subgoal.confirmed = true;
+      (subgoal.executionTasks || []).forEach((task) => {
+        if (task.owner !== 'ai') return;
+        if (task.aiState === 'prepared' && task.done) return;
+        task.aiState = 'prepared';
+        task.done = true;
+        task.state = 'Completed';
+        task.aiOutput = summary || task.aiOutput || suggestion.aiOutput;
+      });
+      syncGoalTaskStats(goal);
+      updateGoalCompletionSummary(goal);
+      persistGoalPlanOverrides();
+    }
+    refreshGoalMetrics(goal);
+    persistCustomGoals();
+    commitGoalPlanChange(goal, `${suggestion.action} completed by AI`);
+    void maybeAutoRunQueuedGoalAiTasks(goal);
+  }
+
+  async function confirmGoalSuggestion(goal, suggestion) {
     if (!goal || !suggestion || suggestion.decision) return false;
+    if (suggestion.executionState === 'preparing' || suggestion.executionState === 'executing') return false;
     suggestion.decision = 'confirmed';
     suggestion.executionState = 'preparing';
+    suggestion.aiOutput = '';
     persistCustomGoals();
     renderGoalCommandCenter(goal);
     renderGoalCollection();
     triggerReasoningUpdate('Plan updated from your decision');
     haptic(14);
-    __showToast(`${suggestion.action} approved - AI is preparing`);
-    window.setTimeout(() => {
-      if (!goalProfiles.includes(goal) || suggestion.decision !== 'confirmed') return;
-      suggestion.executionState = 'executing';
-      if (goalProfiles[state.currentGoalIndex] === goal) renderGoalCommandCenter(goal);
-      __showToast(`${suggestion.action} is executing securely`);
-      window.setTimeout(() => {
+    __showToast(`${suggestion.action} approved — AI is working`);
+
+    const pollKey = `suggestion:${goal.id || goal.title}:${suggestion.id || suggestion.action}`;
+    const run = await runGoalAgentMission({
+      mission: buildSuggestionMission(goal, suggestion),
+      goalId: goal.id || null,
+      key: pollKey,
+      onProgress: (progressRun) => {
         if (!goalProfiles.includes(goal) || suggestion.decision !== 'confirmed') return;
-        const subgoal = goal.subgoals[Number(suggestion.updates)];
-        if (subgoal) {
-          ensureGoalCommandModel(goal);
-          const previouslyComplete = subgoal.executionTasks.filter(task => task.done).length;
-          subgoal.executionTasks.forEach(task => { task.done = true; task.state = 'Completed'; });
-          subgoal.confirmed = true;
-          goal.completedThisMonth = Math.max(0, Number(goal.completedThisMonth || 0) + subgoal.executionTasks.length - previouslyComplete);
-          syncGoalTaskStats(goal);
-          updateGoalCompletionSummary(goal);
-          persistGoalPlanOverrides();
-        }
-        suggestion.executionState = 'completed';
-        persistCustomGoals();
+        const status = agentRunStatus(progressRun);
+        suggestion.runId = progressRun.runId || suggestion.runId;
+        suggestion.executionState = isAgentRunSuccess(status) ? 'completed' : 'executing';
         if (goalProfiles[state.currentGoalIndex] === goal) renderGoalCommandCenter(goal);
+      },
+    });
+
+    if (!goalProfiles.includes(goal)) return false;
+    if (!run || isAgentRunFailure(agentRunStatus(run)) || !isAgentRunSuccess(agentRunStatus(run))) {
+      suggestion.decision = null;
+      suggestion.executionState = 'failed';
+      persistCustomGoals();
+      if (goalProfiles[state.currentGoalIndex] === goal) {
+        renderGoalCommandCenter(goal);
         renderGoalCollection();
-        haptic(12);
-        __showToast(`${suggestion.action} completed - goal plan updated`);
-      }, reduceMotion ? 0 : 1700);
-    }, reduceMotion ? 0 : 850);
+      }
+      __showToast('Agent runtime unavailable — suggestion not completed');
+      return false;
+    }
+
+    suggestion.runId = run.runId || suggestion.runId;
+    applySuggestionAgentSuccess(goal, suggestion, extractAgentRunSummary(run));
+    haptic(12);
     return true;
+  }
+
+  async function runGoalAiTask(goal, subgoalIndex, taskIndex) {
+    const subgoal = goal?.subgoals?.[subgoalIndex];
+    const task = subgoal?.executionTasks?.[taskIndex];
+    if (!goal || !task || task.owner !== 'ai') return false;
+    if (task.aiState === 'running') return false;
+    const pollKey = `task:${task.id || `${subgoalIndex}:${taskIndex}`}`;
+    task.aiState = 'running';
+    task.done = false;
+    task.state = 'Working';
+    task.aiOutput = '';
+    commitGoalPlanChange(goal, 'AI preparation started');
+    haptic(9);
+
+    const run = await runGoalAgentMission({
+      mission: buildAiTaskMission(goal, subgoal, task),
+      goalId: goal.id || null,
+      key: pollKey,
+      onProgress: (progressRun) => {
+        if (!goalProfiles.includes(goal)) return;
+        task.runId = progressRun.runId || task.runId;
+        if (goalProfiles[state.currentGoalIndex] === goal && goalPlanTaskDrawerOpen) {
+          renderGoalGameBoard(goal);
+        }
+      },
+    });
+
+    if (!goalProfiles.includes(goal) || !subgoal?.executionTasks?.includes(task)) return false;
+    if (!run || !isAgentRunSuccess(agentRunStatus(run))) {
+      task.aiState = 'queued';
+      task.done = false;
+      task.state = 'Queued';
+      commitGoalPlanChange(goal, 'Agent runtime unavailable');
+      return false;
+    }
+
+    task.runId = run.runId || task.runId;
+    task.aiOutput = extractAgentRunSummary(run) || 'Prepared output ready for review.';
+    task.aiState = 'prepared';
+    task.done = true;
+    task.state = 'Completed';
+    commitGoalPlanChange(goal, 'AI output prepared for review');
+    return true;
+  }
+
+  async function maybeAutoRunQueuedGoalAiTasks(goal) {
+    if (!goal || String(systemSettings?.autonomy || '') !== 'assist') return false;
+    if (!isApiEnabled()) return false;
+    ensureGoalCommandModel(goal);
+    for (let subgoalIndex = 0; subgoalIndex < (goal.subgoals || []).length; subgoalIndex += 1) {
+      const tasks = goal.subgoals[subgoalIndex].executionTasks || [];
+      for (let taskIndex = 0; taskIndex < tasks.length; taskIndex += 1) {
+        const task = tasks[taskIndex];
+        if (task?.owner === 'ai' && (task.aiState === 'queued' || !task.aiState) && !task.done) {
+          return runGoalAiTask(goal, subgoalIndex, taskIndex);
+        }
+      }
+    }
+    return false;
+  }
+
+  function pauseGoalAiTask(goal, subgoalIndex, taskIndex) {
+    const task = goal?.subgoals?.[subgoalIndex]?.executionTasks?.[taskIndex];
+    if (!task || task.owner !== 'ai') return;
+    clearGoalAgentPoll(`task:${task.id || `${subgoalIndex}:${taskIndex}`}`);
+    task.aiState = 'queued';
+    task.done = false;
+    task.state = 'Queued';
+    commitGoalPlanChange(goal, 'AI preparation paused');
+    haptic(8);
+  }
+
+  async function generateGoalSubgoalProposals(goal) {
+    ensureGoalCommandModel(goal);
+    const run = await runGoalAgentMission({
+      mission: [
+        'Propose 2 additional direct subgoals for this goal as JSON only.',
+        `Goal: ${goal.title}.`,
+        `Category: ${goal.category || 'Project'}.`,
+        `Existing subgoals: ${(goal.subgoals || []).map((item) => item.name).join('; ') || 'none'}.`,
+        'Return a JSON array like [{"name":"..."},{"name":"..."}]. No markdown.',
+      ].join(' '),
+      goalId: goal.id || null,
+      key: `subgoals:${goal.id || goal.title}`,
+    });
+    if (!run || !isAgentRunSuccess(agentRunStatus(run))) return null;
+    const parsed = extractJsonPayload(extractAgentRunSummary(run));
+    const names = Array.isArray(parsed)
+      ? parsed.map((item) => (typeof item === 'string' ? item : item?.name)).filter(Boolean)
+      : [];
+    const existing = new Set((goal.subgoals || []).map((item) => String(item.name).toLowerCase()));
+    const drafts = names
+      .filter((name) => !existing.has(String(name).toLowerCase()))
+      .slice(0, 2)
+      .map((name) => ({ name: String(name).trim() }));
+    return drafts.length ? drafts : null;
+  }
+
+  async function refreshGoalIntelFromAgent(goal, { force = false } = {}) {
+    if (!goal || !isApiEnabled()) return false;
+    const key = goal.id || goal.title;
+    if (!key || goalAgentRefreshInFlight.has(key)) return false;
+    const hasAgentIntel = Boolean(goal.prediction?.agentGenerated)
+      && Array.isArray(goal.observations)
+      && goal.observations.some((item) => item.agentGenerated)
+      && (goal.suggestions || []).some((item) => item.agentGenerated && !item.decision);
+    if (!force && hasAgentIntel) return false;
+    goalAgentRefreshInFlight.add(key);
+    try {
+      const stats = computeGoalProgressStats(goal);
+      const hours = goalHoursUntilDeadline(goal);
+      const run = await runGoalAgentMission({
+        mission: [
+          'You are Weeple goal intelligence. Analyze this goal and return JSON only.',
+          `Goal: ${goal.title}.`,
+          `Category: ${goal.category || 'Project'}.`,
+          `Outcome: ${goal.outcome || goal.description || goal.title}.`,
+          goal.currentSituation ? `Situation: ${goal.currentSituation}.` : '',
+          goal.constraints ? `Constraints: ${goal.constraints}.` : '',
+          `Progress: ${stats.progress}% · open tasks: ${stats.openTasks} · sources: ${goal.sources || 0}.`,
+          hours == null ? 'Deadline: not set.' : `Hours until deadline: ${Math.round(hours)}.`,
+          `Subgoals: ${(goal.subgoals || []).map((item) => `${item.name} (${item.done || 0}/${item.total || 1}, ${item.state || 'Active'})`).join('; ') || 'none'}.`,
+          'Return exactly this JSON shape:',
+          '{"observations":[{"type":"context|calendar","title":"...","detail":"...","source":"...","time":"Now","influence":0-100}],',
+          '"prediction":{"probability":0-100,"risk":"...","title":"...","impact":"...","window":"...","confidence":"..."},',
+          '"suggestions":[{"label":"...","title":"...","action":"...","options":["Today","Tomorrow"]}]}',
+          'Provide 2-3 observations, one prediction, and 1-2 suggestions. No markdown.',
+        ].filter(Boolean).join(' '),
+        goalId: goal.id || null,
+        key: `intel:${key}`,
+      });
+      if (!goalProfiles.includes(goal) || !run || !isAgentRunSuccess(agentRunStatus(run))) return false;
+      const parsed = extractJsonPayload(extractAgentRunSummary(run));
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+
+      const observations = Array.isArray(parsed.observations)
+        ? parsed.observations.slice(0, 4).map((item, index) => ({
+            type: String(item.type || 'context'),
+            title: String(item.title || `Signal ${index + 1}`),
+            detail: String(item.detail || item.title || 'AI observed a relevant signal.'),
+            source: String(item.source || 'AI analysis'),
+            time: String(item.time || 'Now'),
+            influence: Math.max(8, Math.min(96, Number(item.influence) || (78 - index * 6))),
+            agentGenerated: true,
+          }))
+        : null;
+
+      const predictionRaw = parsed.prediction && typeof parsed.prediction === 'object' && !Array.isArray(parsed.prediction)
+        ? parsed.prediction
+        : null;
+      const prediction = predictionRaw
+        ? {
+            probability: Math.max(8, Math.min(96, Math.round(Number(predictionRaw.probability) || stats.progress || 56))),
+            risk: String(predictionRaw.risk || 'WATCH'),
+            title: String(predictionRaw.title || predictionRaw.summary || 'AI forecast for this goal.'),
+            impact: String(predictionRaw.impact || (goal.subgoals?.[goal.openSubgoalIndex]?.name) || 'Next milestone'),
+            window: String(predictionRaw.window || 'Next review'),
+            confidence: String(predictionRaw.confidence || 'Medium confidence'),
+            agentGenerated: true,
+            computed: false,
+          }
+        : null;
+
+      const suggestionItems = Array.isArray(parsed.suggestions)
+        ? parsed.suggestions
+        : Array.isArray(parsed) ? parsed : [];
+      const settled = (goal.suggestions || []).filter((item) => item.decision);
+      const suggestions = suggestionItems.slice(0, 2).map((item, index) => ({
+        id: `${key}-agent-${index + 1}`,
+        label: String(item.label || 'NEXT MOVE'),
+        title: String(item.title || item.action || 'Continue the plan'),
+        action: String(item.action || item.title || 'Prepare next step'),
+        updates: Math.max(0, Math.min(Number(item.updates) || goal.openSubgoalIndex || 0, Math.max(0, (goal.subgoals || []).length - 1))),
+        options: Array.isArray(item.options) && item.options.length ? item.options.map(String) : ['Today', 'Tomorrow', 'Choose time'],
+        agentGenerated: true,
+      }));
+
+      if (observations?.length) goal.observations = observations;
+      if (prediction) goal.prediction = prediction;
+      if (suggestions.length) {
+        goal.suggestions = [...settled, ...suggestions];
+        goal.recommendation = suggestions[0].title;
+      }
+      goal.agentIntelAt = Date.now();
+      goal.updated = 'AI refreshed';
+      persistCustomGoals();
+      persistGoalProgressOnApi(goal);
+      if (goalProfiles[state.currentGoalIndex] === goal) {
+        renderGoalCommandCenter(goal);
+        renderGoalCollection();
+      }
+      return Boolean(observations?.length || prediction || suggestions.length);
+    } finally {
+      goalAgentRefreshInFlight.delete(key);
+    }
+  }
+
+  async function refreshGoalSuggestionsFromAgent(goal, options = {}) {
+    return refreshGoalIntelFromAgent(goal, options);
+  }
+
+  async function createGoalPlanFromAgent(outcome, situation, constraints) {
+    const fallback = buildAdaptiveGoalProfile(outcome, situation, constraints);
+    const run = await runGoalAgentMission({
+      mission: [
+        'Create a goal plan as JSON only.',
+        `Outcome: ${outcome}.`,
+        situation ? `Situation: ${situation}.` : '',
+        constraints ? `Constraints: ${constraints}.` : '',
+        'Return JSON: {"category":"Learning|Wellbeing|Travel|Finance|Relationships|Project","subgoals":[{"name":"...","tasks":["..."]}],"observations":[{"type":"context","title":"...","detail":"...","source":"...","time":"Now","influence":70}],"prediction":{"probability":56,"risk":"...","title":"...","impact":"...","window":"...","confidence":"..."},"suggestions":[{"label":"...","title":"...","action":"...","options":["..."]}]}',
+        'No markdown.',
+      ].filter(Boolean).join(' '),
+      goalId: null,
+      key: `create-goal:${outcome.slice(0, 40)}`,
+    });
+    if (!run || !isAgentRunSuccess(agentRunStatus(run))) return fallback;
+    const parsed = extractJsonPayload(extractAgentRunSummary(run));
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return fallback;
+    const allowed = new Set(['Learning', 'Wellbeing', 'Travel', 'Finance', 'Relationships', 'Project']);
+    const category = allowed.has(parsed.category) ? parsed.category : fallback.category;
+    const subgoals = Array.isArray(parsed.subgoals) && parsed.subgoals.length
+      ? parsed.subgoals.slice(0, 4).map((item) => {
+          const name = String(item?.name || item || '').trim();
+          const tasks = Array.isArray(item?.tasks) ? item.tasks.map(String).filter(Boolean) : [];
+          return {
+            name: name || 'Advance the plan',
+            done: 0,
+            total: Math.max(1, tasks.length || 1),
+            state: 'Proposed',
+            origin: 'ai',
+            confirmed: false,
+            executionTasks: (tasks.length ? tasks : [`Advance ${name || 'the plan'}`]).map((taskName, index) => ({
+              name: taskName,
+              done: false,
+              state: index === 0 ? 'Ready now' : 'Queued',
+              owner: 'human',
+            })),
+          };
+        })
+      : fallback.subgoals;
+    const suggestions = Array.isArray(parsed.suggestions) && parsed.suggestions.length
+      ? parsed.suggestions.slice(0, 2).map((item, index) => ({
+          id: `created-agent-${index + 1}`,
+          label: String(item.label || 'NEXT MOVE'),
+          title: String(item.title || item.action || 'Continue the plan'),
+          action: String(item.action || item.title || 'Prepare next step'),
+          updates: Math.min(index, Math.max(0, subgoals.length - 1)),
+          options: Array.isArray(item.options) && item.options.length ? item.options.map(String) : ['Today', 'Tomorrow', 'Choose time'],
+          agentGenerated: true,
+        }))
+      : fallback.suggestions;
+    const observations = Array.isArray(parsed.observations) && parsed.observations.length
+      ? parsed.observations.slice(0, 4).map((item, index) => ({
+          type: String(item.type || 'context'),
+          title: String(item.title || `Signal ${index + 1}`),
+          detail: String(item.detail || item.title || 'AI observed a relevant signal.'),
+          source: String(item.source || 'AI analysis'),
+          time: String(item.time || 'Now'),
+          influence: Math.max(8, Math.min(96, Number(item.influence) || (76 - index * 6))),
+          agentGenerated: true,
+        }))
+      : fallback.observations;
+    const predictionRaw = parsed.prediction && typeof parsed.prediction === 'object' ? parsed.prediction : null;
+    const prediction = predictionRaw
+      ? {
+          probability: Math.max(8, Math.min(96, Math.round(Number(predictionRaw.probability) || 56))),
+          risk: String(predictionRaw.risk || fallback.prediction?.risk || 'EARLY INFERENCE'),
+          title: String(predictionRaw.title || fallback.prediction?.title || ''),
+          impact: String(predictionRaw.impact || fallback.prediction?.impact || 'First milestone'),
+          window: String(predictionRaw.window || fallback.prediction?.window || 'After first review'),
+          confidence: String(predictionRaw.confidence || fallback.prediction?.confidence || 'Low-medium confidence'),
+          agentGenerated: true,
+        }
+      : { ...fallback.prediction, agentGenerated: false };
+    return {
+      ...fallback,
+      category,
+      accent: category === 'Learning' ? '139,92,246' : category === 'Wellbeing' ? '16,185,129' : category === 'Finance' ? '255,183,3' : category === 'Relationships' ? '255,124,89' : fallback.accent,
+      description: situation || fallback.description,
+      subgoals,
+      taskLabels: subgoals.map((item) => item.name),
+      suggestion: suggestions[0]?.title,
+      recommendation: suggestions[0]?.title || fallback.recommendation,
+      suggestions,
+      observations,
+      prediction,
+      agentPlanned: true,
+      agentIntelAt: Date.now(),
+    };
   }
 
   function closeGoalActionMenu() {
@@ -3955,6 +4663,7 @@ function __install() {
   function openGoalDeleteSheet() {
     const goal = goalProfiles[state.currentGoalIndex];
     if (!goal) return;
+    dismissGoalPlanOverlaysForSheet();
     closeGoalActionMenu();
     goalDeleteTitle.textContent = `Delete "${goal.title}"?`;
     goalDeleteDescription.textContent = `This removes "${goal.title}", its direct subgoals, execution tasks, and prepared outputs from this device.`;
@@ -3973,6 +4682,7 @@ function __install() {
   function renderEmptyGoalWorkspace() {
     goalsWorkspace.classList.add('no-goals');
     if (goalGameContent) goalGameContent.innerHTML = '<div class="goal-game-empty-state"><b>Create your first goal</b><button type="button" data-empty-goal-add>New goal</button></div>';
+    mountGoalPlanOverlays('', '');
     renderGoalCollection();
     renderGoalRail();
     goalCommandTitle.textContent = 'Create your first goal';
@@ -4050,20 +4760,32 @@ function __install() {
     goalsWorkspace.classList.remove('consent-open');
   }
 
+  function dismissGoalPlanOverlaysForSheet() {
+    const shouldRerender = goalPlanListOpen || goalPlanMoreOpen || goalPlanShareOpen;
+    goalPlanListOpen = false;
+    goalPlanMoreOpen = false;
+    goalPlanShareOpen = false;
+    if (!shouldRerender) return;
+    const goal = goalProfiles[state.currentGoalIndex];
+    if (goal) renderGoalGameBoard(goal);
+  }
+
   function openGoalCreateSheet() {
+    dismissGoalPlanOverlaysForSheet();
     goalFormMode = 'create';
     editingGoalIndex = -1;
     state.goalProposalReady = false;
     goalCreateForm.reset();
     goalCreateSheet.dataset.mode = 'create';
-    goalCreateTitle.textContent = 'Describe the outcome—not the hierarchy.';
-    goalCreateDescription.textContent = 'Weeple may propose direct subgoals and execution tasks, but nothing is added until you confirm it.';
+    goalCreateTitle.textContent = 'What do you want to achieve?';
+    goalCreateDescription.textContent = 'Write the outcome in plain language. Weeple drafts a starter plan when you create the goal.';
     const today = new Date();
     const localToday = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     newGoalDateInput.min = localToday;
     newGoalTimeInput.disabled = true;
-    goalProposalPreview.innerHTML = '<i></i><span><strong>AI proposal not generated yet</strong><small>Your description stays editable until you confirm the goal.</small></span>';
-    goalProposeButton.textContent = 'Propose direct subgoals';
+    goalProposalPreview.innerHTML = '<i></i><span><strong>Ready when you are</strong><small>Fill in the outcome, then create the goal. A starter plan is generated automatically.</small></span>';
+    goalProposeButton.textContent = 'Create goal';
+    goalProposeButton.disabled = false;
     goalCreateSheet.classList.add('visible');
     goalCreateSheet.setAttribute('aria-hidden', 'false');
     goalsWorkspace.classList.add('goal-create-open');
@@ -4073,14 +4795,15 @@ function __install() {
   function openGoalEditSheet() {
     const goal = goalProfiles[state.currentGoalIndex];
     if (!goal) return;
+    dismissGoalPlanOverlaysForSheet();
     ensureGoalCommandModel(goal);
     goalFormMode = 'edit';
     editingGoalIndex = state.currentGoalIndex;
     state.goalProposalReady = true;
     goalCreateForm.reset();
     goalCreateSheet.dataset.mode = 'edit';
-    goalCreateTitle.textContent = 'Edit this goal without losing its progress.';
-    goalCreateDescription.textContent = 'Update the goal or its constraints. The confirmed plan, completed work, and current AI context stay connected.';
+    goalCreateTitle.textContent = 'Edit this goal';
+    goalCreateDescription.textContent = 'Update the outcome or constraints. Progress, completed work, and AI context stay connected.';
     document.getElementById('newGoalOutcome').value = goal.title || '';
     document.getElementById('newGoalSituation').value = goal.currentSituation || goal.description || '';
     document.getElementById('newGoalConstraints').value = goal.constraints || '';
@@ -4095,8 +4818,8 @@ function __install() {
     newGoalDateInput.value = goalDate;
     newGoalTimeInput.disabled = !goalDate;
     newGoalTimeInput.value = goalDate ? (goal.scheduledTime || '') : '';
-    goalProposalPreview.innerHTML = '<i></i><span><strong>Current AI plan will be preserved</strong><small>Completed work, observations, predictions, and approved actions remain attached to this goal.</small></span>';
-    goalProposeButton.textContent = 'Save goal changes';
+    goalProposalPreview.innerHTML = '<i></i><span><strong>Existing plan stays attached</strong><small>Completed work, observations, and approved actions remain linked to this goal.</small></span>';
+    goalProposeButton.textContent = 'Save changes';
     goalCreateSheet.classList.add('visible');
     goalCreateSheet.setAttribute('aria-hidden', 'false');
     goalsWorkspace.classList.add('goal-create-open');
@@ -4137,34 +4860,25 @@ function __install() {
   function closeGoalsWorkspace() {
     if (!state.goalWorkspaceActive) return;
     state.goalWorkspaceActive = false;
-    goalsWorkspace.classList.remove('visible');
+    goalsWorkspace.classList.remove('visible', 'goal-overlay-open');
     goalsWorkspace.setAttribute('aria-hidden', 'true');
-    osShell.classList.remove('goals-page');
+    osShell.classList.remove('goals-page', 'goal-overlay-open');
+    goalPlanIntelDetail = null;
+    goalPlanShareOpen = false;
+    mountGoalPlanOverlays('', '');
     closeCollaborationSheet();
     closeGoalCreateSheet();
     resetGoalNodes();
   }
 
-  let dataSources = [
-    { id: 'iphone', name: 'Xiaomi Phone', category: 'device', type: 'Personal device', method: 'Local device bridge', status: 'Connected', statusType: 'connected', lastSync: '2m ago', assets: '286 signals', scopes: ['App activity', 'Selected photos', 'Device health'], purposes: ['Daily context', 'Goal support'], usedBy: 'Morning brief · 09:10' },
-    { id: 'macbook', name: 'Work Laptop', category: 'device', type: 'Personal device', method: 'Encrypted LAN', status: 'Connected', statusType: 'connected', lastSync: '6m ago', assets: '42 work items', scopes: ['Selected folders', 'Work activity'], purposes: ['Project planning'], usedBy: 'Product recommendation · Now' },
-    { id: 'dashcam', name: 'Dash Cam', category: 'device', type: 'Storage device', method: 'USB connection', status: 'Needs attention', statusType: 'attention', lastSync: 'Failed 1h ago', assets: '0 new assets', scopes: ['Selected recordings'], purposes: ['Travel archive'], usedBy: 'No AI task used this source' },
-    { id: 'documents', name: 'Personal Documents', category: 'files', type: 'Files & folders', method: 'Explicit local selection', status: 'Connected', statusType: 'connected', lastSync: '12m ago', assets: '124 files', scopes: ['Selected documents'], purposes: ['Local semantic search'], usedBy: 'Research summary · Today' },
-    { id: 'research', name: 'Product Research', category: 'files', type: 'Knowledge materials', method: 'Watched local folder', status: 'Processing', statusType: 'processing', lastSync: 'Processing now', assets: '38 notes', scopes: ['Research folder'], purposes: ['Product goal'], usedBy: 'Prototype recommendation · Now' },
-    { id: 'calendar', name: 'Calendar', category: 'productivity', type: 'Calendar & productivity', method: 'Official API', status: 'Connected', statusType: 'connected', lastSync: 'Live', assets: '18 upcoming events', scopes: ['Event title', 'Time & availability'], purposes: ['Planning', 'Reminders'], usedBy: 'Today plan · Now', connectionId: 'conn-google-calendar', connection: { id: 'conn-google-calendar', status: 'connected', authProvider: 'nango', externalConnectionId: null, errorMessage: null, connectedAt: null } },
-    { id: 'notion', name: 'Notion Workspace', category: 'productivity', type: 'Productivity service', method: 'MCP extension', status: 'Connected', statusType: 'connected', lastSync: '14m ago', assets: '62 pages', scopes: ['Selected workspace'], purposes: ['Project context'], usedBy: 'Weekly review · Yesterday', connectionId: 'conn-notion', connection: { id: 'conn-notion', status: 'connected', authProvider: 'nango', externalConnectionId: null, errorMessage: null, connectedAt: null } },
-    { id: 'fitness', name: 'Apple Fitness', category: 'health', type: 'Health & lifestyle', method: 'Account authorization', status: 'Connected', statusType: 'connected', lastSync: '8m ago', assets: '42 metrics', scopes: ['Activity', 'Sleep summary'], purposes: ['Health goal'], usedBy: 'Recovery insight · 08:40' },
-    { id: 'identity', name: 'Digital Identity', category: 'identity', type: 'Public identity candidates', method: 'Maigret discovery', status: 'Review required', statusType: 'attention', lastSync: 'Yesterday', assets: '4 candidates', scopes: ['Public usernames only'], purposes: ['Identity review'], usedBy: 'Not available to AI until confirmed' },
-    { id: 'wechat', name: 'WeChat', category: 'communication', type: 'Communication data', method: 'Authorized adapter', status: 'Connected', statusType: 'connected', lastSync: '21m ago', assets: 'Selected conversations', scopes: ['Chosen chats only'], purposes: ['Relationship context'], usedBy: 'Family reminder · Yesterday' },
-    { id: 'drive', name: 'Cloud Drive', category: 'files', type: 'Third-party service', method: 'Official API', status: 'Connected', statusType: 'connected', lastSync: '33m ago', assets: '86 files', scopes: ['Selected folders'], purposes: ['Document retrieval'], usedBy: 'Meeting preparation · Today' },
-    { id: 'web', name: 'DeepSearch', category: 'identity', type: 'External public information', method: 'On-demand tool', status: 'Available on demand', statusType: 'idle', lastSync: 'Never runs automatically', assets: '0 retained results', scopes: ['Per-task query only'], purposes: ['Current research'], usedBy: 'External use always disclosed' }
-  ];
+  let dataSources = [];
 
   function applyRemoteSources(remoteSources) {
-    if (!Array.isArray(remoteSources) || !remoteSources.length) return;
+    if (!Array.isArray(remoteSources)) return;
     dataSources.splice(0, dataSources.length, ...remoteSources);
     try { renderSourceGrid(); } catch (_error) { /* grid may not be ready */ }
     try { invalidateTopology(); } catch (_error) { /* topology may not be ready */ }
+    try { rebuildUseDashboardGoals({ preserveSelection: true }); } catch (_error) { /* use-data may not be ready */ }
   }
 
   async function hydrateSourcesFromApi() {
@@ -4172,10 +4886,10 @@ function __install() {
     // with ?category= would replace dataSources with a subset (3 of 13 for
     // Devices) and hide every other source until a full reload.
     const remote = await loadSourcesFromApi('all');
-    if (remote?.sources?.length) applyRemoteSources(remote.sources);
+    if (!remote) return false;
+    applyRemoteSources(Array.isArray(remote.sources) ? remote.sources : []);
+    return true;
   }
-
-  void hydrateSourcesFromApi();
 
   function sourceStatusLabel(source) {
     if (source.aiEnabled === false && source.statusType !== 'revoked') return '<span class="source-status paused"><i></i>Paused</span>';
@@ -4487,28 +5201,88 @@ function __install() {
     connectionWizard.querySelectorAll('[data-wizard-source]').forEach(item => item.classList.remove('active'));
   }
 
-  const memories = [
-    { id: 1, type: 'goal', title: 'Product outcome', detail: 'Wants the personal AI product to produce a verifiable first result quickly.', source: 'Confirmed from goal setup', use: true },
-    { id: 2, type: 'preference', title: 'Deep-work preference', detail: 'Best focus time is 9:30–11:30 on weekdays.', source: 'Confirmed from calendar pattern', use: true },
-    { id: 3, type: 'relationship', title: 'Family planning preference', detail: 'Protect Sunday afternoon for shared family time when possible.', source: 'User-confirmed correction', use: true },
-    { id: 4, type: 'preference', title: 'Recommendation style', detail: 'Prefers concise recommendations with evidence and one clear next action.', source: 'Derived, then confirmed', use: true },
-    { id: 5, type: 'goal', title: 'Spanish practice', detail: 'Conversational confidence is more important than test performance.', source: 'Goal description', use: false }
-  ];
+  let memories = [];
+  let memoriesApiReady = false;
+
+  function inferMemoryType(title = '', content = '') {
+    const text = `${title} ${content}`.toLowerCase();
+    if (/relationship|family|friend|partner/.test(text)) return 'relationship';
+    if (/prefer|style|focus|habit|window/.test(text)) return 'preference';
+    if (/goal|outcome|practice|learn|startup|trip/.test(text)) return 'goal';
+    return 'preference';
+  }
+
+  function mapApiMemory(record) {
+    const useForAi = record.useForAi ?? record.use_for_ai;
+    return {
+      id: String(record.id),
+      type: inferMemoryType(record.title, record.content),
+      title: record.title || 'Memory',
+      detail: record.content || '',
+      source: record.source || record.mode || 'Memory',
+      use: useForAi !== false && useForAi !== 0,
+    };
+  }
+
+  async function hydrateMemoriesFromApi() {
+    const remote = await loadMemoriesFromApi('');
+    if (!Array.isArray(remote)) {
+      memories = [];
+      memoriesApiReady = false;
+      return false;
+    }
+    memories = remote.map(mapApiMemory);
+    memoriesApiReady = true;
+    try {
+      const proposals = await loadMemoryProposalsFromApi();
+      if (Array.isArray(proposals) && proposals.length && memoryProposal) {
+        const proposal = proposals[0];
+        memoryProposal.dataset.proposalId = proposal.id || '';
+        memoryProposal.dataset.proposalTitle = proposal.title || '';
+        memoryProposal.dataset.proposalSummary = proposal.summary || '';
+        memoryProposal.dataset.proposalSource = proposal.source || '';
+        const titleEl = memoryProposal.querySelector('h2, strong, [data-memory-proposal-title]');
+        const summaryEl = memoryProposal.querySelector('p, [data-memory-proposal-summary]');
+        if (titleEl && proposal.title) titleEl.textContent = proposal.title;
+        if (summaryEl && proposal.summary) summaryEl.textContent = proposal.summary;
+      }
+    } catch (_error) { /* proposal UI is optional */ }
+    try { renderMemories(); } catch (_error) { /* drawer may not be ready */ }
+    return true;
+  }
 
   function renderMemories(filter = 'all') {
+    if (!memoryList) return;
     const visible = filter === 'all' ? memories : memories.filter(memory => memory.type === filter);
     memoryList.innerHTML = visible.map(memory => `
-      <article class="memory-item" data-memory-id="${memory.id}"><header><span>${memory.type.toUpperCase()}</span><em>${memory.source}</em></header><p>${memory.detail}</p><footer><button class="memory-use${memory.use ? ' on' : ''}" type="button" aria-pressed="${memory.use}"><i></i>${memory.use ? 'Available to AI' : 'Excluded from AI'}</button><button class="memory-edit" type="button">Correct</button><button class="memory-delete" type="button">Delete</button></footer></article>
+      <article class="memory-item" data-memory-id="${escapeGoalText(String(memory.id))}"><header><span>${escapeGoalText(String(memory.type || 'memory').toUpperCase())}</span><em>${escapeGoalText(memory.source || '')}</em></header><p>${escapeGoalText(memory.detail || memory.title || '')}</p><footer><button class="memory-use${memory.use ? ' on' : ''}" type="button" aria-pressed="${memory.use}"><i></i>${memory.use ? 'Available to AI' : 'Excluded from AI'}</button><button class="memory-edit" type="button">Correct</button><button class="memory-delete" type="button">Delete</button></footer></article>
     `).join('');
     memoryList.querySelectorAll('.memory-item').forEach(item => {
-      const memory = memories.find(entry => entry.id === Number(item.dataset.memoryId));
-      item.querySelector('.memory-use').addEventListener('click', event => {
-        memory.use = !memory.use; renderMemories(filter); __showToast(memory.use ? 'Memory available to future AI tasks' : 'Memory excluded from future AI tasks');
+      const memory = memories.find(entry => String(entry.id) === String(item.dataset.memoryId));
+      if (!memory) return;
+      item.querySelector('.memory-use').addEventListener('click', async () => {
+        const nextUse = !memory.use;
+        memory.use = nextUse;
+        renderMemories(filter);
+        try {
+          if (memoriesApiReady) {
+            const updated = await updateMemoryOnApi(memory.id, { useForAi: nextUse });
+            if (updated) Object.assign(memory, mapApiMemory(updated));
+          }
+          __showToast(memory.use ? 'Memory available to future AI tasks' : 'Memory excluded from future AI tasks');
+        } catch (_error) {
+          memory.use = !nextUse;
+          renderMemories(filter);
+          __showToast('Could not update memory availability');
+        }
       });
       item.querySelector('.memory-edit').addEventListener('click', openMemoryProposal);
-      item.querySelector('.memory-delete').addEventListener('click', event => {
+      item.querySelector('.memory-delete').addEventListener('click', async (event) => {
         const button = event.currentTarget;
         if (!button.classList.contains('confirming')) { button.classList.add('confirming'); button.textContent = 'Confirm'; return; }
+        try {
+          if (memoriesApiReady) await deleteMemoryOnApi(memory.id);
+        } catch (_error) { /* keep local delete even if API fails */ }
         const index = memories.indexOf(memory); if (index >= 0) memories.splice(index, 1); renderMemories(filter); __showToast('Memory permanently deleted');
       });
     });
@@ -4524,11 +5298,20 @@ function __install() {
   function appendAssistantExchange(prompt) {
     const user = document.createElement('article'); user.className = 'conversation-message user-message'; user.innerHTML = `<span>YOU</span><p>${prompt.replace(/[<>]/g, '')}</p>`; conversationStream.appendChild(user);
     const preparing = document.createElement('article'); preparing.className = 'conversation-message ai-message preparing'; preparing.innerHTML = '<header><span class="output-type"><i></i>AI TASK IN PROGRESS</span><time>Now</time></header><p>Weeple is checking your authorized context and selecting the minimum tools needed…</p><div class="thinking-line"><i></i><i></i><i></i></div>'; conversationStream.appendChild(preparing); conversationStream.scrollTop = conversationStream.scrollHeight;
-    window.setTimeout(() => {
-      preparing.classList.remove('preparing');
-      preparing.innerHTML = '<header><span class="output-type inference"><i></i>INFERENCE</span><time>Prepared now</time></header><p>The strongest pattern is that your active goals compete for the same morning focus window. I suggest protecting one primary outcome per day.</p><div class="answer-evidence"><small>DATA USED</small><span>Goal plans</span><span>Calendar</span><span>Confirmed preferences</span></div><div class="answer-tools"><small>TOOLS</small><span><i></i>Local semantic search</span><em>No external action taken</em></div>';
+    void (async () => {
+      try {
+        const result = await sendMessageOnApi({ content: prompt });
+        const reply = result?.message?.content || result?.content || 'Message sent.';
+        preparing.classList.remove('preparing');
+        preparing.innerHTML = `<header><span class="output-type inference"><i></i>MESSAGING</span><time>Prepared now</time></header><p>${String(reply).replace(/[<>]/g, '')}</p><div class="answer-evidence"><small>CHANNEL</small><span>Messaging API</span></div>`;
+        try { await hydrateOverviewFromApi(); } catch (_error) { /* optional */ }
+      } catch (_error) {
+        preparing.classList.remove('preparing');
+        preparing.innerHTML = '<header><span class="output-type"><i></i>UNAVAILABLE</span><time>Now</time></header><p>Messaging backend is offline. Your message was not sent.</p>';
+        __showToast('Backend offline');
+      }
       conversationStream.scrollTop = conversationStream.scrollHeight;
-    }, 900);
+    })();
   }
 
   const useMissionStates = ['idle', 'working'];
@@ -4559,6 +5342,7 @@ function __install() {
     missionListeningTimer = 0;
     missionMonitorTimer = 0;
     missionSourceSliderTimer = 0;
+    try { clearUseMissionRunPoll(); } catch (_error) { /* poll helper may not exist yet during boot */ }
   }
 
   function scheduleUseMission(callback, delay) {
@@ -4645,7 +5429,7 @@ function __install() {
       const elapsed = document.getElementById('missionVoiceElapsed');
       if (elapsed) elapsed.textContent = formatMissionTime(state.useMissionElapsed);
     }, 1000);
-    scheduleUseMission(() => setUseMissionState('review'), 5200);
+    /* voice auto-advance disabled — require real capture end */
   }
 
   function renderVoiceMission() {
@@ -4659,7 +5443,7 @@ function __install() {
             ? `<div class="voice-content"><header><b>Listening...</b><time id="missionVoiceElapsed">${formatMissionTime(state.useMissionElapsed)}</time></header>${renderWaveform(62)}</div><button class="mission-button" id="missionVoiceCancel" type="button">Cancel</button>`
             : `<label class="voice-text-entry" for="missionPromptInput"><input id="missionPromptInput" type="text" maxlength="500" autocomplete="off" placeholder="Type your request, or use the microphone..."></label><button class="mission-send" id="missionPromptSend" type="submit" aria-label="Submit typed request">${missionIcon('send')}</button>`}
         </form>
-        <p class="voice-tip"><b>Tip:</b> Try “Find investors for my startup”</p>
+        <p class="voice-tip"><b>Tip:</b> Describe a mission tied to your current goal</p>
       </div>
     </section>`;
   }
@@ -4733,14 +5517,14 @@ function __install() {
       { name: 'Strategy Agent', status: 'Working', color: '#7650d4', soft: 'rgba(118,80,212,.11)', avatar: 'assets/avater/agents/4-Strategy-Agent.png?v=20260812' }
     ];
     return `<section class="mission-screen team-screen" data-mission-state="team" data-od-id="mission-state-team">
-      <div class="team-heading"><div class="mission-copy"><p class="mission-kicker">Understanding</p><h1>My AI team is working</h1><p>Multiple agents are collaborating on your request.</p></div><aside class="mission-brief mission-surface"><small>MISSION</small><b>Find investors for my startup</b></aside></div>
+      <div class="team-heading"><div class="mission-copy"><p class="mission-kicker">Understanding</p><h1>My AI team is working</h1><p>Multiple agents are collaborating on your request.</p></div><aside class="mission-brief mission-surface"><small>MISSION</small><b>Current goal mission</b></aside></div>
       <div class="agent-board">${agents.map(agent => `<article class="agent-card mission-surface${agent.waiting ? ' waiting' : ''}" style="--agent-color:${agent.color};--agent-soft:${agent.soft}"><header class="agent-status"><span><i></i>${agent.name}</span><em>${agent.status}</em></header><figure class="mission-avatar"><img src="${agent.avatar}" alt="${agent.name} ${agent.status.toLowerCase()}"></figure></article>`).join('')}</div>
     </section>`;
   }
 
   function renderActionMission() {
     const contacts = [
-      { name: 'Michael Chen', note: 'Northstar Learning Fund', image: 'assets/avater/1.png', status: 'Email sent', time: '2m ago', sent: true },
+      { name: 'Agent contact', note: 'Authorized match', image: 'assets/avater/1.png', status: 'Email sent', time: '2m ago', sent: true },
       { name: 'Sarah Johnson', note: 'Brightpath Ventures', image: 'assets/avater/3.png', status: 'Waiting reply', time: '—' },
       { name: 'David Lee', note: 'Seedline Capital', image: 'assets/avater/4.png', status: 'Waiting reply', time: '—' }
     ];
@@ -4753,7 +5537,7 @@ function __install() {
   function renderMonitoringMission() {
     return `<section class="mission-screen monitor-screen" data-mission-state="monitoring" data-od-id="mission-state-monitoring">
       <div class="monitor-column">
-        <article class="monitor-card mission-surface"><header><b>Mission</b><span>82%</span></header><h3>Find investors for my startup</h3><div class="monitor-progress"><span><i></i></span><b>82%</b></div></article>
+        <article class="monitor-card mission-surface"><header><b>Mission</b><span>82%</span></header><h3>Current goal mission</h3><div class="monitor-progress"><span><i></i></span><b>82%</b></div></article>
         <article class="monitor-card mission-surface"><header><b>Latest update</b></header><h3>Waiting for investor replies</h3><div class="monitor-updates"><span><i style="--update-color:#15b889"></i>1 reply received</span><span><i style="--update-color:#ff5e00"></i>2 emails opened</span></div></article>
         <article class="monitor-card mission-surface"><header><b>Time elapsed</b></header><div class="elapsed"><span><b id="missionElapsedHours">01</b><small>HRS</small></span><span><b id="missionElapsedMinutes">26</b><small>MIN</small></span><span><b id="missionElapsedSeconds">40</b><small>SEC</small></span></div></article>
       </div>
@@ -4766,16 +5550,16 @@ function __install() {
 
   function renderCompleteMission() {
     return `<section class="mission-screen complete-screen" data-mission-state="complete" data-od-id="mission-state-complete">
-      <div class="complete-hero mission-surface">${renderMissionAvatar('success')}<div class="complete-copy"><div class="mission-copy"><p class="mission-kicker">Mission delivered</p><h1>Mission complete!</h1></div><p>I found 12 investors, mailed them, and 1 showed interest.</p><div class="result-audio"><button class="audio-play" id="missionAudioPlay" type="button" aria-label="Play spoken mission result">${missionIcon('play')}</button>${renderWaveform(58, true)}</div></div></div>
-      <div class="result-goal mission-surface"><span><i>◎</i><span><small>MISSION GOAL</small><b>Find investors for my startup</b></span></span><em class="completed-chip">✓ Completed</em></div>
+      <div class="complete-hero mission-surface">${renderMissionAvatar('success')}<div class="complete-copy"><div class="mission-copy"><p class="mission-kicker">Mission delivered</p><h1>Mission complete!</h1></div><p>Agent run finished. Review the live report.</p><div class="result-audio"><button class="audio-play" id="missionAudioPlay" type="button" aria-label="Play spoken mission result">${missionIcon('play')}</button>${renderWaveform(58, true)}</div></div></div>
+      <div class="result-goal mission-surface"><span><i>◎</i><span><small>MISSION GOAL</small><b>Current goal mission</b></span></span><em class="completed-chip">✓ Completed</em></div>
       <div class="result-metrics mission-surface"><span class="result-metric" style="--metric-color:#15b889"><i>${missionIcon('users')}</i><b>12</b><small>Investors Found</small></span><span class="result-metric" style="--metric-color:#7650d4"><i>${missionIcon('mail')}</i><b>12</b><small>Emails Mailed</small></span><span class="result-metric" style="--metric-color:#ff5e00"><i>${missionIcon('star')}</i><b>1</b><small>Interested</small></span></div>
       <div class="result-actions"><button class="mission-button primary" id="missionDownload" type="button">${missionIcon('download')} Download Report</button><button class="mission-button" id="missionShare" type="button">${missionIcon('share')} Share Report</button><button class="view-details" id="missionViewDetails" type="button">View Details ›</button></div>
     </section>`;
   }
 
-  const useDashboardGoals = [
+  const USE_DASHBOARD_GOAL_FALLBACK = [
     {
-      title: 'Find investors for my startup', short: 'Find investors', progress: 78, state: 'On track', icon: '◎', tone: 'orange',
+      title: 'Current goal mission', short: 'Current goal', progress: 78, state: 'On track', icon: '◎', tone: 'orange',
       sources: [
         ['LinkedIn', 'assets/logos/linkedin.svg', 'Live', 'linkedin'],
         ['Gmail', '', 'Connected', 'gmail'],
@@ -4846,6 +5630,11 @@ function __install() {
       results: [['Workouts planned', 3], ['Minutes protected', 135], ['Recovery days', 2], ['Week target', '60%']]
     }
   ];
+  let useDashboardGoals = [];
+  const EMPTY_USE_DASHBOARD_GOAL = {
+    title: 'No goals yet', short: 'No goals', progress: 0, state: 'Idle', icon: '◎', tone: 'orange',
+    sources: [], tasks: [], guidelines: [], results: [], linkedGoalId: null, linkedGoalIndex: -1,
+  };
   const useMcpDataDetails = {
     linkedin: {
       summary: 'Professional network context used to identify relevant people and trusted introduction paths.',
@@ -5044,37 +5833,215 @@ function __install() {
   }
 
   function getUseDashboardGoal() {
-    return useDashboardGoals[state.useMissionGoalIndex] || useDashboardGoals[0];
+    return useDashboardGoals[state.useMissionGoalIndex] || useDashboardGoals[0] || EMPTY_USE_DASHBOARD_GOAL;
+  }
+
+  function useSourceLogoPath(source) {
+    const key = `${source?.id || ''} ${source?.name || ''}`.toLowerCase();
+    if (/notion/.test(key)) return 'assets/logos/notion.webp';
+    if (/calendar/.test(key)) return 'assets/logos/Google_Calendar.webp';
+    if (/github/.test(key)) return 'assets/logos/github.svg';
+    if (/linear/.test(key)) return 'assets/logos/linear.svg';
+    if (/figma/.test(key)) return 'assets/logos/figma.svg';
+    if (/linkedin/.test(key)) return 'assets/logos/linkedin.svg';
+    if (/telegram/.test(key)) return 'assets/logos/telegram.webp';
+    if (/whatsapp/.test(key)) return 'assets/logos/whatsapp.svg';
+    if (/drive|onedrive|cloud/.test(key)) return 'assets/logos/one_drive.svg';
+    if (/pdf|document/.test(key)) return 'assets/logos/pdf.png';
+    if (/map/.test(key)) return 'assets/logos/google_maps.svg';
+    if (/task/.test(key)) return 'assets/logos/googletasks.svg';
+    return '';
+  }
+
+  function useSourceStatusLabel(source) {
+    if (source?.statusType === 'processing') return 'Syncing';
+    if (source?.statusType === 'attention') return 'Needs attention';
+    if (source?.statusType === 'revoked') return 'Not connected';
+    if (source?.statusType === 'idle') return 'Available';
+    if (/live/i.test(String(source?.lastSync || ''))) return 'Live';
+    if (source?.statusType === 'connected') return 'Connected';
+    return source?.status || 'Connected';
+  }
+
+  function buildUseSourcesForGoal(goal) {
+    const pool = Array.isArray(dataSources) ? dataSources.slice() : [];
+    const hints = new Set(
+      (goal.observations || [])
+        .flatMap((item) => [item.source, item.title])
+        .map((value) => String(value || '').toLowerCase())
+        .filter(Boolean)
+    );
+    const ranked = pool
+      .filter((source) => source.statusType !== 'revoked')
+      .sort((left, right) => {
+        const leftHint = [...hints].some((hint) => `${left.name} ${left.id}`.toLowerCase().includes(hint)) ? 1 : 0;
+        const rightHint = [...hints].some((hint) => `${right.name} ${right.id}`.toLowerCase().includes(hint)) ? 1 : 0;
+        if (leftHint !== rightHint) return rightHint - leftHint;
+        const leftLive = left.statusType === 'connected' && left.aiEnabled !== false ? 1 : 0;
+        const rightLive = right.statusType === 'connected' && right.aiEnabled !== false ? 1 : 0;
+        return rightLive - leftLive;
+      })
+      .slice(0, 6);
+    if (!ranked.length) {
+      return [['Authorized sources', '', 'Available', 'sources']];
+    }
+    return ranked.map((source) => [
+      source.name,
+      useSourceLogoPath(source),
+      useSourceStatusLabel(source),
+      source.id || 'source',
+    ]);
+  }
+
+  function buildUseTasksForGoal(goal) {
+    try { ensureGoalCommandModel(goal); } catch (_error) { /* model may still be initializing */ }
+    if (goal?.id && tasksApiReady) {
+      const related = apiTasks.filter((task) => task.goalId === goal.id).slice(0, 5);
+      if (related.length) {
+        return related.map((task) => {
+          const done = /complete|done|prepared|confirmed|ready/i.test(String(task.state || ''));
+          return [
+            task.name,
+            task.subgoalName || (task.owner === 'ai' ? 'AI work' : 'Your work'),
+            done ? 100 : 0,
+          ];
+        });
+      }
+    }
+    const tasks = [];
+    (goal.subgoals || []).forEach((subgoal) => {
+      (subgoal.executionTasks || []).forEach((task) => {
+        if (tasks.length >= 5) return;
+        tasks.push([task.name || 'Advance work', subgoal.name || 'Subgoal', task.done ? 100 : 0]);
+      });
+    });
+    if (!tasks.length && Array.isArray(goal.taskLabels) && goal.taskLabels.length) {
+      return goal.taskLabels.slice(0, 5).map((label) => [
+        label,
+        goal.short || 'Plan',
+        0,
+      ]);
+    }
+    if (!tasks.length) {
+      return [];
+    }
+    return tasks;
+  }
+
+  function buildUseGuidelinesForGoal(goal) {
+    const subgoals = Array.isArray(goal.subgoals) ? goal.subgoals : [];
+    if (!subgoals.length) {
+      return [];
+    }
+    return subgoals.slice(0, 4).map((subgoal) => {
+      const done = Number(subgoal.done) || 0;
+      const total = Math.max(1, Number(subgoal.total) || 1);
+      const complete = /done|complete/i.test(String(subgoal.state || '')) || done >= total;
+      const progress = complete ? 100 : Math.max(0, Math.min(100, Math.round((done / total) * 100)));
+      return [subgoal.name || 'Step', subgoal.state || 'In plan', progress];
+    });
+  }
+
+  function buildUseResultsForGoal(goal) {
+    const subgoals = Array.isArray(goal.subgoals) ? goal.subgoals : [];
+    const openTasks = subgoals.reduce((total, subgoal) => {
+      const tasks = Array.isArray(subgoal.executionTasks) ? subgoal.executionTasks : [];
+      return total + tasks.filter((task) => !task.done).length;
+    }, 0);
+    return [
+      ['Progress', Number(goal.progress) || 0],
+      ['Subgoals', subgoals.length],
+      ['Open tasks', openTasks || (goal.taskLabels || []).length],
+      ['Signals', Array.isArray(goal.observations) ? goal.observations.length : 0],
+    ];
+  }
+
+  function profileToUseDashboardGoal(goal, index) {
+    const tones = ['orange', 'blue', 'green', 'coral'];
+    const symbol = goalCategorySymbols[goal.category] || 'GO';
+    return {
+      title: goal.title,
+      short: goal.short || goal.title,
+      progress: Number(goal.progress) || 0,
+      state: goal.status || 'In progress',
+      icon: symbol.slice(0, 2),
+      tone: tones[index % tones.length],
+      linkedGoalId: goal.id || null,
+      linkedGoalIndex: goalProfiles.indexOf(goal),
+      sources: buildUseSourcesForGoal(goal),
+      tasks: buildUseTasksForGoal(goal),
+      guidelines: buildUseGuidelinesForGoal(goal),
+      results: buildUseResultsForGoal(goal),
+      report: {
+        headline: goal.prediction?.title || `${goal.title} · live plan`,
+        summary: (typeof goal.prediction === 'object' ? goal.prediction?.title : goal.prediction)
+          || goal.description
+          || `Authorized context for “${goal.title}”.`,
+        interpretation: goal.prediction?.impact
+          || goal.impact
+          || 'Continue only with confirmed steps and authorized sources.',
+        findings: (goal.observations || []).filter((item) => item.agentGenerated || item.title).slice(0, 4).map((item) => [
+          item.title || 'Signal',
+          item.detail || item.source || 'Authorized context',
+        ]),
+        drivers: [
+          ['Goal progress', Number(goal.progress) || 0],
+          ['Open tasks', Math.max(0, 100 - Math.min(100, ((goal.tasks || 0) ? Math.round(((goal.completed || 0) / Math.max(1, goal.tasks || 1)) * 100) : Number(goal.progress) || 0)))],
+          ['Connected sources', Math.min(100, (Array.isArray(dataSources) ? dataSources.filter((source) => source.statusType === 'connected').length : 0) * 10)],
+          ['AI confidence', Number(goal.prediction?.probability) || 0],
+        ],
+        recommendation: (goal.suggestions || []).find((item) => !item.decision)?.title
+          || (goal.suggestions && goal.suggestions[0]?.title)
+          || `Review the next confirmed move on “${goal.title}”.`,
+      },
+    };
+  }
+
+  function rebuildUseDashboardGoals({ preserveSelection = true } = {}) {
+    const previousId = preserveSelection ? useDashboardGoals[state.useMissionGoalIndex]?.linkedGoalId : null;
+    const previousTitle = preserveSelection ? useDashboardGoals[state.useMissionGoalIndex]?.title : null;
+    if (Array.isArray(goalProfiles) && goalProfiles.length) {
+      useDashboardGoals = goalProfiles.map((goal, index) => profileToUseDashboardGoal(goal, index));
+    } else {
+      useDashboardGoals = [];
+    }
+    let nextIndex = 0;
+    if (previousId) {
+      nextIndex = useDashboardGoals.findIndex((entry) => entry.linkedGoalId === previousId);
+    }
+    if (nextIndex < 0 && previousTitle) {
+      nextIndex = useDashboardGoals.findIndex((entry) => entry.title === previousTitle);
+    }
+    if (nextIndex < 0) {
+      nextIndex = Math.min(state.useMissionGoalIndex || 0, Math.max(0, useDashboardGoals.length - 1));
+    }
+    state.useMissionGoalIndex = useDashboardGoals.length ? Math.max(0, nextIndex) : 0;
+    if (state.useWorkspaceActive && useMissionStage) {
+      useMissionStage.innerHTML = '';
+      try { renderUseMission({ refreshPanels: true }); } catch (_error) { /* stage may remount */ }
+    }
   }
 
   function syncUseDashboardGoalFromProfile(goal) {
-    if (!goal || !useDashboardGoals.length) return 0;
-    const title = String(goal.title || '').toLowerCase();
-    const short = String(goal.short || '').toLowerCase();
-    let index = useDashboardGoals.findIndex((entry) => {
-      const entryTitle = String(entry.title || '').toLowerCase();
-      const entryShort = String(entry.short || '').toLowerCase();
-      return entryTitle === title
-        || (short && entryShort === short)
-        || (short && entryTitle.includes(short))
-        || (entryShort && title.includes(entryShort))
-        || entry.linkedGoalId && goal.id && entry.linkedGoalId === goal.id;
-    });
+    if (!goal) return 0;
+    try { rebuildUseDashboardGoals({ preserveSelection: false }); } catch (_error) { /* keep current list */ }
+    let index = useDashboardGoals.findIndex((entry) => (
+      (goal.id && entry.linkedGoalId === goal.id)
+      || entry.title === goal.title
+      || (goal.short && entry.short === goal.short)
+    ));
     if (index < 0) {
-      const category = String(goal.category || '').toLowerCase();
-      if (/wellbeing|health|fitness/.test(category)) index = Math.min(3, useDashboardGoals.length - 1);
-      else if (/learn|spanish|chinese|study/.test(category) || /learn|spanish|chinese|study/.test(title)) index = Math.min(2, useDashboardGoals.length - 1);
-      else if (/finance|investor|startup|money/.test(category) || /investor|startup|finance/.test(title)) index = 0;
-      else if (/project|build|product/.test(category) || /build|product|prototype/.test(title)) index = Math.min(1, useDashboardGoals.length - 1);
-      else index = Math.max(0, Math.min(useDashboardGoals.length - 1, state.currentGoalIndex));
+      index = Math.max(0, Math.min(useDashboardGoals.length - 1, state.currentGoalIndex));
     }
     const entry = useDashboardGoals[index];
-    entry.title = goal.title || entry.title;
-    entry.short = goal.short || goal.title || entry.short;
-    entry.progress = Number.isFinite(Number(goal.progress)) ? Number(goal.progress) : entry.progress;
-    entry.state = goal.status || entry.state;
-    entry.linkedGoalId = goal.id || null;
-    entry.linkedGoalIndex = goalProfiles.findIndex((item) => item === goal);
+    if (entry) {
+      entry.title = goal.title || entry.title;
+      entry.short = goal.short || goal.title || entry.short;
+      entry.progress = Number.isFinite(Number(goal.progress)) ? Number(goal.progress) : entry.progress;
+      entry.state = goal.status || entry.state;
+      entry.linkedGoalId = goal.id || entry.linkedGoalId || null;
+      entry.linkedGoalIndex = goalProfiles.findIndex((item) => item === goal || item.id === goal.id);
+    }
     return index;
   }
 
@@ -5102,8 +6069,8 @@ function __install() {
   }
 
   function getMissionPhaseProgress(value) {
-    const phaseFactor = Math.min(1, Math.max(.08, state.useMissionExecutionPhase / 8));
-    return Math.round(Number(value) * phaseFactor);
+    // Show real dashboard values; do not invent progress from animation phase.
+    return Math.round(Number(value) || 0);
   }
 
   function renderUseSourceIcon(source, className = '') {
@@ -5145,7 +6112,9 @@ function __install() {
             <circle class="use-goal-flow-packet head secondary" r="3" filter="url(#useGoalPacketGlow)"><animateMotion dur="4.6s" begin="-2.48s" repeatCount="indefinite"><mpath href="#useGoalFlowPath"/></animateMotion></circle>
           </g>
         </svg>
-        <div class="use-goal-list">${useDashboardGoals.map((goal, index) => `<button class="use-goal-node tone-${goal.tone}${index === activeIndex ? ' active' : ''}" type="button" data-use-goal="${index}" aria-pressed="${index === activeIndex}" data-od-id="use-goal-${index + 1}"><span class="use-goal-anchor"><i class="use-goal-pin"></i><i class="use-goal-icon">${goalGlyphs[index]}</i></span><span class="use-goal-card"><b>${goal.title}</b><strong>${goal.progress}%</strong><span class="use-goal-progress"><i style="--value:${goal.progress}%"></i></span><small><i></i>${goal.state}</small></span></button>`).join('')}</div>
+        <div class="use-goal-list">${useDashboardGoals.length
+          ? useDashboardGoals.map((goal, index) => `<button class="use-goal-node tone-${goal.tone}${index === activeIndex ? ' active' : ''}" type="button" data-use-goal="${index}" aria-pressed="${index === activeIndex}" data-od-id="use-goal-${index + 1}"><span class="use-goal-anchor"><i class="use-goal-pin"></i><i class="use-goal-icon">${goalGlyphs[index % goalGlyphs.length]}</i></span><span class="use-goal-card"><b>${goal.title}</b><strong>${goal.progress}%</strong><span class="use-goal-progress"><i style="--value:${goal.progress}%"></i></span><small><i></i>${goal.state}</small></span></button>`).join('')
+          : '<p class="use-goal-empty">No goals yet. Open Goals to create one, then return here to run missions.</p>'}</div>
       </div>
     </section>`;
   }
@@ -5250,14 +6219,32 @@ function __install() {
 
   function renderResultPanel(goal) {
     const resultFactor = Math.min(1, Math.max(0, (state.useMissionExecutionPhase - 3) / 5));
+    const liveTools = Array.isArray(state.useMissionToolsUsed) ? state.useMissionToolsUsed : [];
+    const summary = state.useMissionSummary || state.useMissionStatusText || '';
+    const metrics = (goal.results || []).length
+      ? goal.results.map((result, index) => {
+        const numeric = typeof result[1] === 'number';
+        const shown = numeric ? Math.round(result[1] * resultFactor) : (resultFactor >= .6 ? result[1] : '—');
+        return `<span data-od-id="use-result-${index + 1}"><b>${shown}</b><small>${result[0]}</small></span>`;
+      }).join('')
+      : (summary
+        ? `<span data-od-id="use-result-1"><b>${escapeMissionText(summary.slice(0, 48))}</b><small>Run status</small></span>`
+        : '<span data-od-id="use-result-1"><b>—</b><small>Waiting for agent</small></span>');
     return `<section class="use-panel use-results composition-${state.useMissionGoalIndex}" data-od-id="use-data-results-panel"><header><span><small>LIVE OUTCOME</small><b>Results snapshot</b></span><div class="use-result-header-actions"><button class="use-result-details-button" id="useResultViewDetails" type="button" aria-expanded="false" aria-controls="missionDetailDrawer">View details <i>›</i></button></div></header>
-      <div class="use-result-scroll" role="region" aria-label="Result snapshot metrics" tabindex="0"><div class="use-result-grid">${goal.results.map((result, index) => { const numeric = typeof result[1] === 'number'; const shown = numeric ? Math.round(result[1] * resultFactor) : (resultFactor >= .6 ? result[1] : '—'); return `<span data-od-id="use-result-${index + 1}"><b>${shown}</b><small>${result[0]}</small></span>`; }).join('')}</div></div>
+      <div class="use-result-scroll" role="region" aria-label="Result snapshot metrics" tabindex="0"><div class="use-result-grid">${metrics}</div>
+      ${liveTools.length ? `<p class="use-result-tools"><small>TOOLS USED</small> ${liveTools.map((tool) => `<span>${escapeMissionText(tool)}</span>`).join(' ')}</p>` : ''}
+      ${summary ? `<p class="use-result-summary">${escapeMissionText(summary)}</p>` : ''}</div>
     </section>`;
   }
 
   function renderExpertPanel() {
+    const toolCount = agentToolsCache.length;
+    const subtitle = toolCount
+      ? `${useAgentDefinitions.length} specialists · ${toolCount} live tools available`
+      : `${useAgentDefinitions.length} specialists collaborating on this goal`;
     return `<section class="use-panel use-experts" data-od-id="use-data-experts-panel"><header><span><small>ACTIVE TEAM</small><b>AI experts</b></span><em>${useAgentDefinitions.length}</em></header>
-      <p>${useAgentDefinitions.length} specialists collaborating on this goal</p>
+      <p>${escapeMissionText(subtitle)}</p>
+      ${toolCount ? `<div class="use-expert-tools" aria-label="Allowed tools">${agentToolsCache.slice(0, 6).map((tool) => `<span>${escapeMissionText(tool.name || tool.serverName || 'tool')}</span>`).join('')}</div>` : ''}
       <div class="use-expert-grid">${useAgentDefinitions.map((agent, index) => `<figure class="use-expert tone-${agent[2]} stage-item" style="--delay:${index * 70}ms" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" aria-controls="useAgentDetailPopover" aria-label="View ${agent[0]} Agent profile" title="View ${agent[0]} Agent profile" data-use-agent-detail="${index}" data-od-id="use-expert-${index + 1}"><span><img src="${agent[1]}" alt=""><i></i></span><figcaption>${agent[0]}</figcaption></figure>`).join('')}</div>
     </section>`;
   }
@@ -5269,6 +6256,45 @@ function __install() {
 
   function getUseMcpDataDetail(source) {
     const key = String(source?.[0] || '').trim().toLowerCase();
+    const sourceId = String(source?.[3] || '').trim();
+    const matchedServer = mcpServersCache.find((server) => {
+      const name = String(server.name || server.serverName || '').toLowerCase();
+      const id = String(server.serverId || server.id || '').toLowerCase();
+      return (sourceId && (id === sourceId.toLowerCase() || name.includes(sourceId.toLowerCase())))
+        || (key && (name.includes(key) || key.includes(name)));
+    });
+    const serverId = matchedServer?.serverId || matchedServer?.id;
+    const liveTools = serverId ? (mcpToolsByServer.get(serverId) || []) : [];
+    if (liveTools.length) {
+      return {
+        summary: matchedServer?.description
+          || `${source?.[0] || 'Source'} tools registered through the MCP gateway for authorized goal work.`,
+        scope: matchedServer?.name || source?.[0] || 'Authorized MCP scope',
+        items: liveTools.slice(0, 8).map((tool) => [tool.name || 'tool', 'process']),
+        serverId,
+        invokeTool: liveTools[0]?.name || null,
+      };
+    }
+    if (messagingSourcesCache.length && /telegram|whatsapp|message|chat/i.test(key)) {
+      return {
+        summary: 'Messaging platforms connected through AstrBot for authorized conversation context.',
+        scope: messagingPlatformsCache.map((item) => item.name || item.id).filter(Boolean).join(', ') || 'Messaging',
+        items: messagingSourcesCache.slice(0, 5).map((item) => [item.name || item.id || 'Thread', 'mail']),
+        messagingConnect: messagingPlatformsCache.find((item) => String(item.status || '').toLowerCase() !== 'connected')?.id || null,
+      };
+    }
+    const disconnected = messagingPlatformsCache.find((item) => {
+      const name = String(item.name || item.id || '').toLowerCase();
+      return /telegram|whatsapp|message|chat/i.test(key) && String(item.status || '').toLowerCase() !== 'connected' && (key.includes(name) || name.includes(key.split(' ')[0]));
+    });
+    if (disconnected) {
+      return {
+        summary: 'Connect this messaging platform through AstrBot to use authorized conversation context.',
+        scope: disconnected.name || disconnected.id || 'Messaging',
+        items: [['Conversations', 'mail'], ['Contacts', 'users']],
+        messagingConnect: disconnected.id || 'telegram',
+      };
+    }
     return useMcpDataDetails[key] || {
       summary: 'Connected source context used only when it is relevant to the current goal and authorized task.',
       scope: 'Data authorized through this MCP connection',
@@ -5296,7 +6322,9 @@ function __install() {
         <div class="use-mcp-data-types">${detail.items.map(item => `<span><i>${missionIcon(item[1])}</i><b>${escapeMissionText(item[0])}</b></span>`).join('')}</div>
       </section>
       <div class="use-mcp-activity"><i></i><span><b>Current activity</b><small>${escapeMissionText(activity)}</small></span></div>
-      <footer class="use-mcp-popover-footer"><span><i>✓</i><b>Authorized scope</b><small>${escapeMissionText(detail.scope)}</small></span><em>Read only</em></footer>`;
+      <footer class="use-mcp-popover-footer"><span><i>✓</i><b>Authorized scope</b><small>${escapeMissionText(detail.scope)}</small></span><em>Read only</em></footer>
+      ${detail.serverId && detail.invokeTool ? `<div class="use-mcp-invoke"><button type="button" class="mission-button primary" data-mcp-invoke data-server-id="${escapeMissionText(detail.serverId)}" data-tool="${escapeMissionText(detail.invokeTool)}">Invoke ${escapeMissionText(detail.invokeTool)}</button></div>` : ''}
+      ${detail.messagingConnect ? `<div class="use-mcp-invoke"><button type="button" class="mission-button" data-messaging-connect="${escapeMissionText(detail.messagingConnect)}">Connect ${escapeMissionText(detail.messagingConnect)}</button></div>` : ''}`;
   }
 
   function positionUseMcpDetail(trigger = useMcpDetailTrigger) {
@@ -5352,6 +6380,41 @@ function __install() {
     popover.classList.add('visible');
     popover.setAttribute('aria-hidden', 'false');
     popover.querySelector('[data-use-mcp-close]')?.addEventListener('click', () => closeUseMcpDetail(true));
+    popover.querySelector('[data-mcp-invoke]')?.addEventListener('click', async (event) => {
+      const button = event.currentTarget;
+      const tool = button.dataset.tool;
+      const serverId = button.dataset.serverId;
+      if (!tool) return;
+      button.disabled = true;
+      try {
+        const result = await invokeMcpToolOnApi({ tool, serverId, args: {} });
+        __showToast(result?.ok === false ? `MCP invoke failed: ${tool}` : `MCP invoked: ${tool}`);
+        try { await loadMcpAuditFromApi(); } catch (_error) { /* optional */ }
+        try { await hydrateOverviewFromApi(); } catch (_error) { /* optional */ }
+      } catch (_error) {
+        __showToast('MCP invoke unavailable');
+      } finally {
+        button.disabled = false;
+      }
+    });
+    popover.querySelector('[data-messaging-connect]')?.addEventListener('click', async (event) => {
+      const button = event.currentTarget;
+      const platform = button.dataset.messagingConnect;
+      if (!platform) return;
+      button.disabled = true;
+      try {
+        const connected = await connectMessagingPlatformOnApi(platform);
+        if (!connected) throw new Error('connect failed');
+        __showToast(`${platform} connected`);
+        await hydrateMcpAndAgentsFromApi();
+        try { await hydrateOverviewFromApi(); } catch (_error) { /* optional */ }
+        openUseMcpDetail(trigger);
+      } catch (_error) {
+        __showToast('Messaging connect unavailable');
+      } finally {
+        button.disabled = false;
+      }
+    });
     window.requestAnimationFrame(() => positionUseMcpDetail(trigger));
     haptic(5);
   }
@@ -5666,7 +6729,28 @@ function __install() {
   }
 
   function getUseResultReport() {
-    return useResultReportDetails[state.useMissionGoalIndex] || useResultReportDetails[0];
+    const goal = getUseDashboardGoal();
+    const agentSummary = String(state.useMissionSummary || '').trim();
+    if (agentSummary) {
+      return {
+        headline: goal?.title ? `${goal.title} · agent result` : 'Agent result',
+        summary: agentSummary,
+        interpretation: state.useMissionStatusText || 'Generated by the live agent run.',
+        findings: (goal?.report?.findings || []).slice(0, 4),
+        drivers: goal?.report?.drivers || [['Run progress', Math.round((Number(state.useMissionExecutionPhase) || 0) / 8 * 100)]],
+        recommendation: (goal?.report?.recommendation)
+          || 'Review the prepared output before any external action.',
+      };
+    }
+    if (goal?.report) return goal.report;
+    return {
+      headline: goal?.title || 'No active goal',
+      summary: 'No agent report yet. Start a Use Data mission to generate one.',
+      interpretation: 'Reports come from live agent runs, not demo content.',
+      findings: [],
+      drivers: [['Goal progress', Number(goal?.progress) || 0]],
+      recommendation: 'Start a mission from your current goal.',
+    };
   }
 
   function renderUseResultReport() {
@@ -5910,7 +6994,7 @@ function __install() {
     state.useMissionListening = false;
     window.clearInterval(missionListeningTimer);
     missionListeningTimer = 0;
-    if (!state.useMissionDraft.trim()) state.useMissionDraft = 'Find investors who invest in AI education startups';
+    if (!state.useMissionDraft.trim()) state.useMissionDraft = state.useMissionDraft || getUseDashboardGoal()?.title || '';
     refreshUseComposer({ focusInput: true });
   }
 
@@ -5947,9 +7031,120 @@ function __install() {
     try { missionRecognition.start(); } catch (error) { __showToast('Microphone access is unavailable'); }
   }
 
-  function runUseMissionExecution() {
-    state.useMissionExecutionPhase = 8;
+  let useMissionRunTimer = null;
+  let useMissionRunId = null;
+
+  function clearUseMissionRunPoll() {
+    if (useMissionRunTimer) {
+      window.clearInterval(useMissionRunTimer);
+      useMissionRunTimer = null;
+    }
+  }
+
+  function applyAgentRunProgress(run) {
+    if (!run) return;
+    const phase = Number(run.phase);
+    if (Number.isFinite(phase) && phase > 0) {
+      state.useMissionExecutionPhase = Math.max(1, Math.min(8, Math.round(phase)));
+    } else {
+      const progress = Number(run.progress);
+      if (Number.isFinite(progress)) {
+        state.useMissionExecutionPhase = Math.max(1, Math.min(8, Math.round(progress * 8) || 1));
+      }
+    }
+    const events = Array.isArray(run.events) ? run.events : [];
+    if (events.length) {
+      const latest = events[events.length - 1];
+      const detail = latest?.text || latest?.detail || latest?.message || latest?.label || '';
+      if (detail) state.useMissionStatusText = String(detail);
+      const tools = events
+        .map((event) => event?.tool || event?.toolName || event?.name)
+        .filter(Boolean);
+      if (tools.length) state.useMissionToolsUsed = [...new Set(tools)].slice(-6);
+    }
+    const summary = extractAgentRunSummary(run);
+    if (summary) {
+      state.useMissionSummary = summary;
+    }
     if (state.useMissionState === 'working') {
+      refreshUseSidePanels();
+      syncUsePersistentDashboard();
+    }
+  }
+
+  async function pollUseMissionRun(runId) {
+    clearUseMissionRunPoll();
+    useMissionRunId = runId;
+    let attempts = 0;
+    useMissionRunTimer = window.setInterval(async () => {
+      attempts += 1;
+      const run = await getAgentRunOnApi(runId);
+      if (run) applyAgentRunProgress(run);
+      const status = String(run?.status || '').toLowerCase();
+      if (['completed', 'complete', 'succeeded', 'success', 'failed', 'error', 'cancelled'].includes(status) || attempts >= 24) {
+        clearUseMissionRunPoll();
+        if (status === 'failed' || status === 'error' || status === 'cancelled' || (!run && attempts >= 24)) {
+          state.useMissionState = 'idle';
+          state.useMissionExecutionPhase = 1;
+          __showToast('Agent runtime unavailable');
+          try { hydrateOverviewFromApi(); } catch (_error) { /* optional */ }
+          syncUsePersistentDashboard({ refreshPanels: true });
+          return;
+        }
+        state.useMissionExecutionPhase = 8;
+        if (state.useMissionState === 'working') {
+          refreshUseSidePanels();
+          syncUsePersistentDashboard();
+        }
+        try { hydrateOverviewFromApi(); } catch (_error) { /* optional */ }
+      }
+    }, 900);
+  }
+
+  async function startUseMissionFromPrompt(prompt) {
+    state.useMissionRequest = prompt;
+    state.useMissionDraft = prompt;
+    state.useMissionExecutionPhase = 1;
+    state.useMissionStatusText = '';
+    state.useMissionToolsUsed = [];
+    state.useMissionSummary = '';
+    setUseMissionState('working', { announce: false });
+    const goal = getUseDashboardGoal();
+    const run = await startAgentRunOnApi({
+      mission: prompt,
+      goalId: goal?.linkedGoalId || null,
+    });
+    if (!run?.runId) {
+      state.useMissionState = 'idle';
+      state.useMissionExecutionPhase = 1;
+      __showToast('Agent runtime unavailable');
+      syncUsePersistentDashboard({ refreshPanels: true });
+      return;
+    }
+    applyAgentRunProgress(run);
+    const status = String(run.status || '').toLowerCase();
+    if (['completed', 'complete', 'succeeded', 'success'].includes(status)) {
+      state.useMissionExecutionPhase = 8;
+      refreshUseSidePanels();
+      syncUsePersistentDashboard();
+      try { hydrateOverviewFromApi(); } catch (_error) { /* optional */ }
+      return;
+    }
+    if (['failed', 'error', 'cancelled'].includes(status)) {
+      state.useMissionState = 'idle';
+      state.useMissionExecutionPhase = 1;
+      __showToast('Agent runtime unavailable');
+      syncUsePersistentDashboard({ refreshPanels: true });
+      return;
+    }
+    await pollUseMissionRun(run.runId);
+  }
+
+  function runUseMissionExecution() {
+    // Kept for compatibility; do not fake success when the agent API is offline.
+    state.useMissionState = 'idle';
+    state.useMissionExecutionPhase = 1;
+    if (state.useWorkspaceActive) {
       refreshUseSidePanels();
       syncUsePersistentDashboard();
     }
@@ -5960,6 +7155,8 @@ function __install() {
     if (!Number.isInteger(goalIndex) || !useDashboardGoals[goalIndex] || goalIndex === state.useMissionGoalIndex) return;
 
     state.useMissionGoalIndex = goalIndex;
+    const linkedIndex = useDashboardGoals[goalIndex]?.linkedGoalIndex;
+    if (Number.isInteger(linkedIndex) && linkedIndex >= 0) state.currentGoalIndex = linkedIndex;
     if (state.useMissionState === 'idle') state.useMissionDraft = useDashboardGoals[goalIndex].title;
     useMissionStage?.querySelectorAll('[data-use-goal]').forEach(button => {
       const active = Number(button.dataset.useGoal) === goalIndex;
@@ -5984,10 +7181,7 @@ function __install() {
       if (state.useMissionListening) return;
       const prompt = input?.value.trim();
       if (!prompt) { __showToast('Add a request before sending'); input?.focus(); return; }
-      state.useMissionRequest = prompt;
-      state.useMissionDraft = prompt;
-      state.useMissionExecutionPhase = 8;
-      setUseMissionState('working', { announce: false });
+      void startUseMissionFromPrompt(prompt);
     };
     input?.addEventListener('input', event => { state.useMissionDraft = event.currentTarget.value; });
     composer.querySelector('#missionVoiceStart')?.addEventListener('click', startMissionListeningDashboard);
@@ -6076,7 +7270,7 @@ function __install() {
     const requestText = byId('missionRequestText');
     requestText?.addEventListener('input', () => { state.useMissionRequest = requestText.value; const count = byId('missionRequestCount'); if (count) count.textContent = `${requestText.value.length} / 500`; });
     byId('missionConfirmRequest')?.addEventListener('click', () => { if (!state.useMissionRequest.trim()) { __showToast('Add a request before continuing'); requestText?.focus(); return; } setUseMissionState('collecting'); });
-    byId('missionRestart')?.addEventListener('click', () => { state.useMissionRequest = 'Find investors for my startup who are interested in AI education platforms and can invest between $100K to $500K.'; state.useMissionElapsed = 0; setUseMissionState('voice'); });
+    byId('missionRestart')?.addEventListener('click', () => { state.useMissionRequest = getUseDashboardGoal()?.title || state.useMissionDraft || ''; state.useMissionElapsed = 0; setUseMissionState('idle'); });
     const sourceLanes = [...(useMissionStage?.querySelectorAll('[data-source-lane]') || [])];
     sourceLanes.forEach(lane => {
       const slider = lane.querySelector('[data-source-slider]');
@@ -6111,20 +7305,21 @@ function __install() {
     if (sourceLanes.length) missionSourceSliderTimer = window.setInterval(() => {
       sourceLanes.forEach(lane => lane.querySelector('[data-source-slide="next"]')?.click());
     }, 3000);
-    byId('missionNotify')?.addEventListener('click', event => { event.currentTarget.textContent = 'Notifications on ✓'; event.currentTarget.disabled = true; __showToast('You will be notified about new investor replies'); });
+    byId('missionNotify')?.addEventListener('click', event => { event.currentTarget.textContent = 'Notifications on ✓'; event.currentTarget.disabled = true; __showToast('You will be notified about mission updates'); });
     byId('missionCompleteNow')?.addEventListener('click', () => setUseMissionState('complete'));
     byId('missionAudioPlay')?.addEventListener('click', event => {
       const button = event.currentTarget;
       const playing = button.classList.toggle('playing');
       const waveform = button.parentElement.querySelector('.waveform');
       waveform?.classList.toggle('paused', !playing);
-      if (playing && 'speechSynthesis' in window) { window.speechSynthesis.cancel(); const utterance = new SpeechSynthesisUtterance('Mission complete. I found 12 investors, mailed them, and 1 showed interest.'); utterance.onend = () => { button.classList.remove('playing'); waveform?.classList.add('paused'); }; window.speechSynthesis.speak(utterance); }
+      if (playing && 'speechSynthesis' in window) { window.speechSynthesis.cancel(); const utterance = new SpeechSynthesisUtterance(getUseResultReport().summary || 'Mission complete.'); utterance.onend = () => { button.classList.remove('playing'); waveform?.classList.add('paused'); }; window.speechSynthesis.speak(utterance); }
     });
     byId('missionDownload')?.addEventListener('click', () => {
-      const report = ['Weeple Investor Mission Report', '', 'Mission: Find investors for my startup', 'Status: Completed', '', '12 investors found', '12 emails mailed', '1 interested reply', '', 'Interested: Michael Chen — Northstar Learning Fund — AI education — $250K–$500K'].join('\n');
-      const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([report], { type: 'text/plain' })); link.download = 'weeple-investor-mission-report.txt'; link.click(); window.setTimeout(() => URL.revokeObjectURL(link.href), 1000); __showToast('Mission report downloaded');
+      const reportObj = getUseResultReport();
+      const report = ['Weeple Mission Report', '', `Mission: ${state.useMissionRequest || getUseDashboardGoal()?.title || 'Untitled'}`, `Status: ${state.useMissionState}`, '', reportObj.summary || '', '', reportObj.recommendation || ''].join('\n');
+      const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([report], { type: 'text/plain' })); link.download = 'weeple-mission-report.txt'; link.click(); window.setTimeout(() => URL.revokeObjectURL(link.href), 1000); __showToast('Mission report downloaded');
     });
-    byId('missionShare')?.addEventListener('click', async () => { const text = 'Weeple found 12 investors, mailed all 12, and received 1 interested reply.'; try { if (navigator.share) await navigator.share({ title: 'Weeple mission report', text }); else { await navigator.clipboard.writeText(text); __showToast('Report summary copied to clipboard'); } } catch (error) { /* User cancelled sharing. */ } });
+    byId('missionShare')?.addEventListener('click', async () => { const text = getUseResultReport().summary || state.useMissionSummary || 'No agent report yet.'; try { if (navigator.share) await navigator.share({ title: 'Weeple mission report', text }); else { await navigator.clipboard.writeText(text); __showToast('Report summary copied to clipboard'); } } catch (error) { /* User cancelled sharing. */ } });
     byId('missionViewDetails')?.addEventListener('click', openUseResultReport);
   }
 
@@ -6178,6 +7373,7 @@ function __install() {
   }
   function closeDataWorkspace() { state.dataWorkspaceActive = false; dataWorkspace.classList.remove('visible'); dataWorkspace.setAttribute('aria-hidden', 'true'); osShell.classList.remove('data-page'); closeSourceInspector(false); closeConnectionWizard(); }
   function openUseWorkspace(announce = true) {
+    try { rebuildUseDashboardGoals({ preserveSelection: true }); } catch (_error) { /* keep fallback goals */ }
     state.useWorkspaceActive = true; stopTopologyLoop(); useWorkspace.classList.add('visible'); useWorkspace.setAttribute('aria-hidden', 'false'); osShell.classList.add('use-page'); focusCluster('memory', false); renderUseMission(); if (announce) __showToast('Use Data mission workspace opened');
   }
   function closeUseWorkspace() { clearUseMissionTimers(); closeUseMcpDetail(false); closeUseAgentDetail(false); closeUseTaskDetail(false); closeUseGuidelineDetail(false); closeUseResultReport(false); state.useWorkspaceActive = false; useWorkspace.classList.remove('visible'); useWorkspace.setAttribute('aria-hidden', 'true'); osShell.classList.remove('use-page'); closeMemoryDrawer(); closeMemoryProposal(); }
@@ -6321,6 +7517,22 @@ closeDataWorkspace();
     goal.updated = 'Updated now';
     persistCustomGoals();
     persistGoalPlanOverrides();
+    persistGoalProgressOnApi(goal);
+    if (tasksApiReady && goal?.id) {
+      (goal.subgoals || []).forEach((subgoal) => {
+        (subgoal.executionTasks || []).forEach((task) => {
+          if (!task?.id || !task.apiSynced) return;
+          void updateTaskOnApi(task.id, {
+            name: task.name,
+            state: task.done || task.aiState === 'prepared' ? 'Completed' : (task.state || 'Active'),
+            owner: task.owner === 'ai' ? 'ai' : 'human',
+            subgoalName: subgoal.name,
+            dueAt: task.dueAt || null,
+          }).catch(() => {});
+        });
+      });
+    }
+    try { rebuildUseDashboardGoals({ preserveSelection: true }); } catch (_error) { /* use-data optional */ }
     renderGoalCommandCenter(goal);
     renderGoalCollection();
     if (typeof renderCalendar === 'function') renderCalendar('left', false);
@@ -6389,7 +7601,7 @@ closeDataWorkspace();
       haptic(8);
       return;
     }
-    if (event.target.closest('[data-goal-create]')) { goalPlanListOpen = false; openGoalCreateSheet(); return; }
+    if (event.target.closest('[data-goal-create]')) { openGoalCreateSheet(); return; }
     if (event.target.closest('[data-goal-plan-more]')) {
       goalPlanMoreOpen = !goalPlanMoreOpen;
       renderGoalGameBoard(goal);
@@ -6437,13 +7649,22 @@ closeDataWorkspace();
         goal.subgoals[subgoalIndex].executionTasks.splice(taskIndex, 1); goalPlanTaskEditor = null; commitGoalPlanChange(goal, `${task.name} deleted`); return;
       }
       if (action === 'toggle') { task.done = !task.done; task.state = task.done ? 'Completed' : 'Ready now'; commitGoalPlanChange(goal, task.done ? 'Task completed' : 'Task reopened'); haptic(10); return; }
-      if (action === 'run') { task.aiState = 'running'; task.done = false; task.state = 'Working'; commitGoalPlanChange(goal, 'AI preparation started'); haptic(9); return; }
-      if (action === 'pause') { task.aiState = 'queued'; task.done = false; task.state = 'Queued'; commitGoalPlanChange(goal, 'AI preparation paused'); haptic(8); return; }
+      if (action === 'run') { void runGoalAiTask(goal, subgoalIndex, taskIndex); return; }
+      if (action === 'pause') { pauseGoalAiTask(goal, subgoalIndex, taskIndex); return; }
       if (action === 'review') { goalPlanIntelDetail = { type: 'task', subgoalIndex, taskIndex }; renderGoalGameBoard(goal); haptic(6); return; }
       if (action === 'cycle') {
-        task.aiState = task.aiState === 'queued' ? 'running' : task.aiState === 'running' ? 'prepared' : 'queued';
-        task.done = task.aiState === 'prepared'; task.state = task.aiState === 'running' ? 'Working' : task.aiState === 'prepared' ? 'Completed' : 'Queued';
-        commitGoalPlanChange(goal, task.aiState === 'running' ? 'AI work started' : task.aiState === 'prepared' ? 'AI output prepared for review' : 'AI work queued'); haptic(9); return;
+        if (task.aiState === 'prepared') {
+          goalPlanIntelDetail = { type: 'task', subgoalIndex, taskIndex };
+          renderGoalGameBoard(goal);
+          haptic(6);
+          return;
+        }
+        if (task.aiState === 'running') {
+          pauseGoalAiTask(goal, subgoalIndex, taskIndex);
+          return;
+        }
+        void runGoalAiTask(goal, subgoalIndex, taskIndex);
+        return;
       }
     }
     const acceptButton = event.target.closest('[data-game-subgoal-accept]');
@@ -6534,6 +7755,67 @@ closeDataWorkspace();
         __showToast('Suggestion skipped - no action taken'); haptic(8);
       }
     }
+  });
+
+  // Overlays are portaled onto .os-shell so they sit above the topbar.
+  osShell?.addEventListener('click', (event) => {
+    const overlay = event.target.closest('.goal-plan-intel-drawer, .goal-plan-share');
+    if (!overlay) return;
+    const goal = goalProfiles[state.currentGoalIndex];
+    if (!goal) return;
+    if (event.target.closest('[data-goal-intel-close],[data-goal-share-close]')) {
+      goalPlanIntelDetail = null;
+      goalPlanShareOpen = false;
+      renderGoalGameBoard(goal);
+      return;
+    }
+    const shareButton = event.target.closest('[data-goal-share-confirm],[data-goal-share-download]');
+    if (shareButton) {
+      shareButton.disabled = true;
+      shareButton.textContent = 'Preparing...';
+      createGoalShareCard(goal, shareButton.hasAttribute('data-goal-share-download')).then((result) => {
+        goalPlanShareOpen = false;
+        renderGoalGameBoard(goal);
+        __showToast(result === 'shared' ? 'Goal momentum shared' : 'Private goal card downloaded');
+      }).catch(() => {
+        shareButton.disabled = false;
+        shareButton.textContent = 'Try again';
+        __showToast('Sharing is unavailable in this browser');
+      });
+      return;
+    }
+    const suggestionButton = event.target.closest('[data-game-suggestion]');
+    if (suggestionButton) {
+      const suggestion = goal.suggestions?.[Number(suggestionButton.dataset.suggestionIndex)];
+      if (!suggestion || suggestion.decision) return;
+      if (suggestionButton.dataset.gameSuggestion === 'confirm') confirmGoalSuggestion(goal, suggestion);
+      else {
+        suggestion.decision = 'rejected';
+        goalPlanIntelDetail = null;
+        persistCustomGoals();
+        renderGoalGameBoard(goal);
+        __showToast('Suggestion skipped - no action taken');
+        haptic(8);
+      }
+    }
+  });
+
+  osShell?.addEventListener('submit', (event) => {
+    const suggestionForm = event.target.closest('.goal-plan-intel-drawer [data-goal-suggestion-schedule]');
+    if (!suggestionForm) return;
+    event.preventDefault();
+    const goal = goalProfiles[state.currentGoalIndex];
+    const suggestion = goal?.suggestions?.[Number(suggestionForm.dataset.suggestionIndex)];
+    if (!goal || !suggestion) return;
+    const data = new FormData(suggestionForm);
+    suggestion.scheduledAt = `${data.get('suggestionDate')}T${data.get('suggestionTime')}`;
+    suggestion.approvalConfirmed = true;
+    goalPlanIntelDetail = null;
+    persistCustomGoals();
+    persistGoalPlanOverrides();
+    renderGoalGameBoard(goal);
+    __showToast('Suggestion timing saved');
+    haptic(8);
   });
   goalGameContent?.addEventListener('submit', (event) => {
     const suggestionForm = event.target.closest('[data-goal-suggestion-schedule]');
@@ -7020,13 +8302,24 @@ closeDataWorkspace();
       generateButton.disabled = true;
       generateButton.textContent = 'AI preparing...';
       generateButton.setAttribute('aria-busy', 'true');
-      window.setTimeout(() => {
-        const candidates = subgoalDraftsByCategory[goal.category] || subgoalDraftsByCategory.Project;
-        goal.draftSubgoals = candidates.filter(name => !goal.subgoals.some(subgoal => subgoal.name === name)).slice(0, 2).map(name => ({ name }));
+      void generateGoalSubgoalProposals(goal).then((drafts) => {
+        if (!drafts) {
+          const candidates = subgoalDraftsByCategory[goal.category] || subgoalDraftsByCategory.Project;
+          goal.draftSubgoals = candidates.filter(name => !goal.subgoals.some(subgoal => subgoal.name === name)).slice(0, 2).map(name => ({ name }));
+          __showToast(isApiEnabled() ? 'Agent runtime unavailable — using local proposals' : 'AI subgoal proposals are ready for your review');
+        } else {
+          goal.draftSubgoals = drafts;
+          __showToast('AI subgoal proposals are ready for your review');
+        }
         renderGoalProposalInbox(goal);
         haptic(9);
-        __showToast('AI subgoal proposals are ready for your review');
-      }, reduceMotion ? 0 : 520);
+      }).finally(() => {
+        if (generateButton.isConnected) {
+          generateButton.disabled = false;
+          generateButton.textContent = 'Refine';
+          generateButton.removeAttribute('aria-busy');
+        }
+      });
       return;
     }
     const proposal = event.target.closest('[data-proposal-index]');
@@ -7252,7 +8545,7 @@ closeDataWorkspace();
     const unresolved = reasoningSuggestionList.querySelectorAll('.suggestion-card:not(.is-confirmed):not(.is-rejected)').length;
     suggestionCount.textContent = unresolved > 1 ? `1 best + ${unresolved - 1} more` : unresolved === 1 ? 'Ready' : 'Reviewed';
   });
-  document.getElementById('settingsButton').addEventListener('click', () => __showToast('System settings ready'));
+  document.getElementById('settingsButton')?.addEventListener('click', () => toggleSettings());
   document.getElementById('goalCreateClose').addEventListener('click', closeGoalCreateSheet);
   document.getElementById('goalCreateCancel').addEventListener('click', closeGoalCreateSheet);
   newGoalDateInput.addEventListener('change', () => {
@@ -7294,72 +8587,56 @@ closeDataWorkspace();
       editingGoalIndex = -1;
       return;
     }
-    if (!state.goalProposalReady) {
-      state.goalProposalReady = true;
-      const previewProfile = buildAdaptiveGoalProfile(
-        outcome,
-        situation,
-        constraints
-      );
-      goalProposalPreview.innerHTML = '<i></i><span><strong>AI proposal · Awaiting your confirmation</strong><small>01 Clarify success criteria · 02 Build the first milestone · 03 Review progress weekly</small></span>';
+    goalProposeButton.disabled = true;
+    goalProposeButton.textContent = 'AI planning...';
+    goalProposeButton.setAttribute('aria-busy', 'true');
+    __showToast('AI is drafting your goal plan');
+    void createGoalPlanFromAgent(outcome, situation, constraints).then((adaptiveProfile) => {
+      adaptiveProfile.scheduledDate = scheduledDate;
+      adaptiveProfile.scheduledTime = scheduledTime;
+      adaptiveProfile.calendarLinked = Boolean(scheduledDate);
       const scheduleSummary = formatGoalSchedule(scheduledDate, scheduledTime);
-      goalProposalPreview.innerHTML = `<i></i><span><strong>${escapeGoalText(previewProfile.category)} goal proposal · Awaiting your confirmation</strong><small>${previewProfile.subgoals.map((subgoal, index) => `0${index + 1} ${escapeGoalText(subgoal.name)}`).join(' · ')}${scheduleSummary ? ` · Calendar: ${escapeGoalText(scheduleSummary)}` : ''}</small></span>`;
-      goalProposeButton.textContent = 'Confirm goal & direct subgoals';
-      __showToast('AI proposal ready — review before confirming');
-      return;
-    }
-    const adaptiveProfile = buildAdaptiveGoalProfile(outcome, situation, constraints);
-    adaptiveProfile.scheduledDate = scheduledDate;
-    adaptiveProfile.scheduledTime = scheduledTime;
-    adaptiveProfile.calendarLinked = Boolean(scheduledDate);
-    goalProfiles.push(adaptiveProfile);
-    persistCustomGoals();
-    void createGoalOnApi({
-      title: adaptiveProfile.title,
-      short: adaptiveProfile.short,
-      status: adaptiveProfile.status,
-      progress: adaptiveProfile.progress,
-      scheduledTime: adaptiveProfile.scheduledTime || null,
-      description: adaptiveProfile.description,
-      accent: adaptiveProfile.accent,
-      category: adaptiveProfile.category,
-      subgoals: adaptiveProfile.subgoals,
-      taskLabels: adaptiveProfile.taskLabels,
-      custom: true,
-    }).then((remote) => {
-      if (!remote?.id) return;
-      adaptiveProfile.id = remote.id;
+      goalProposalPreview.innerHTML = `<i></i><span><strong>${escapeGoalText(adaptiveProfile.category)} plan ready</strong><small>${adaptiveProfile.subgoals.map((subgoal, index) => `${index + 1}. ${escapeGoalText(subgoal.name)}`).join(' · ')}${scheduleSummary ? ` · Calendar: ${escapeGoalText(scheduleSummary)}` : ''}</small></span>`;
+      goalProfiles.push(adaptiveProfile);
       persistCustomGoals();
+      void createGoalOnApi({
+        title: adaptiveProfile.title,
+        short: adaptiveProfile.short,
+        status: adaptiveProfile.status,
+        progress: adaptiveProfile.progress,
+        scheduledTime: adaptiveProfile.scheduledTime || null,
+        description: adaptiveProfile.description,
+        accent: adaptiveProfile.accent,
+        category: adaptiveProfile.category,
+        subgoals: adaptiveProfile.subgoals,
+        taskLabels: adaptiveProfile.taskLabels,
+        custom: true,
+      }).then((remote) => {
+        if (!remote?.id) return;
+        adaptiveProfile.id = remote.id;
+        persistCustomGoals();
+        void refreshGoalIntelFromAgent(adaptiveProfile, { force: !adaptiveProfile.agentPlanned });
+      });
+      if (scheduledDate) renderCalendar('left', false);
+      closeGoalCreateSheet();
+      selectGoal(goalProfiles.length - 1, false);
+      haptic(10);
+      __showToast(scheduledDate ? `Goal created for ${formatGoalSchedule(scheduledDate, scheduledTime)}` : (adaptiveProfile.agentPlanned ? 'Goal created with AI plan' : 'Goal created'));
+    }).finally(() => {
+      goalProposeButton.disabled = false;
+      goalProposeButton.textContent = goalProposeButton.dataset.label || 'Create goal';
+      goalProposeButton.removeAttribute('aria-busy');
     });
-    if (scheduledDate) renderCalendar('left', false);
-    closeGoalCreateSheet();
-    selectGoal(goalProfiles.length - 1, false);
-    __showToast(scheduledDate ? `Goal scheduled for ${formatGoalSchedule(scheduledDate, scheduledTime)}` : 'Goal created from your confirmed proposal');
   });
   collaborationClose.addEventListener('click', closeCollaborationSheet);
   collaborationCancel.addEventListener('click', closeCollaborationSheet);
   collaborationConfirm.addEventListener('click', () => {
-    collaborationConfirm.classList.add('is-loading');
-    collaborationConfirm.setAttribute('aria-busy', 'true');
-    window.setTimeout(() => {
-      collaborationConfirm.classList.remove('is-loading');
-      collaborationConfirm.removeAttribute('aria-busy');
-      if (collaborationSheet.dataset.mode === 'candidate') {
-        closeCollaborationSheet();
-        __showToast('Interest recorded — identity stays private until the match is mutual');
-        return;
-      }
-      const profile = goalProfiles[state.currentGoalIndex];
-      const subgoal = profile?.subgoals.find(item => item.name === collaborationSheet.dataset.subgoal);
-      if (subgoal) subgoal.collaborationEnabled = true;
+    if (collaborationSheet.dataset.mode === 'unavailable') {
       closeCollaborationSheet();
-      if (profile) {
-        renderGoalInspector(profile);
-        renderGoalCommandCenter(profile);
-        persistCustomGoals();
-      }
-      __showToast('Private collaboration matching enabled');
-    }, 680);
+      return;
+    }
+    closeCollaborationSheet();
+    __showToast('Collaboration matching is not connected');
   });
   document.querySelectorAll('[data-source-filter]').forEach(button => button.addEventListener('click', () => {
     state.sourceFilter = button.dataset.sourceFilter;
@@ -7427,10 +8704,37 @@ closeDataWorkspace();
   document.getElementById('memoryClose').addEventListener('click', closeMemoryDrawer);
   document.getElementById('voiceMemoryEdit').addEventListener('click', openMemoryProposal);
   document.getElementById('memoryProposalCancel').addEventListener('click', closeMemoryProposal);
-  document.getElementById('memoryProposalConfirm').addEventListener('click', () => {
-    const preference = memories.find(memory => memory.id === 2);
-    if (preference) preference.detail = 'Best focus time is 8:30–11:00 on weekdays.';
-    closeMemoryProposal(); renderMemories(); __showToast('Memory corrected with your confirmation');
+  document.getElementById('memoryProposalConfirm').addEventListener('click', async () => {
+    const title = memoryProposal?.dataset.proposalTitle || 'Preferred morning focus window';
+    const summary = memoryProposal?.dataset.proposalSummary || 'Best focus time is 8:30–11:00 on weekdays.';
+    const source = memoryProposal?.dataset.proposalSource || 'Calendar + fitness';
+    const existing = memories.find((memory) => memory.title === title)
+      || memories.find((memory) => /focus|deep-work|morning/i.test(`${memory.title} ${memory.detail}`));
+    try {
+      if (existing && memoriesApiReady) {
+        const updated = await updateMemoryOnApi(existing.id, { title, content: summary, source });
+        if (updated) Object.assign(existing, mapApiMemory(updated));
+        else {
+          existing.title = title;
+          existing.detail = summary;
+          existing.source = source;
+        }
+      } else if (memoriesApiReady) {
+        const created = await createMemoryOnApi({ title, content: summary, source });
+        if (created) memories.unshift(mapApiMemory(created));
+        else memories.unshift({ id: `local-${Date.now()}`, type: inferMemoryType(title, summary), title, detail: summary, source, use: true });
+      } else if (existing) {
+        existing.detail = summary;
+        existing.source = source;
+      } else {
+        memories.unshift({ id: `local-${Date.now()}`, type: 'preference', title, detail: summary, source, use: true });
+      }
+    } catch (_error) {
+      if (existing) existing.detail = summary;
+    }
+    closeMemoryProposal();
+    renderMemories();
+    __showToast('Memory corrected with your confirmation');
   });
   document.querySelectorAll('[data-memory-filter]').forEach(button => button.addEventListener('click', () => {
     document.querySelectorAll('[data-memory-filter]').forEach(item => item.classList.toggle('active', item === button)); renderMemories(button.dataset.memoryFilter);
@@ -7477,13 +8781,166 @@ closeDataWorkspace();
 
   const commandPanel = document.getElementById('commandPanel');
   const commandInput = document.getElementById('commandInput');
+  const commandResults = document.getElementById('commandResults');
+  const commandResultsMeta = document.getElementById('commandResultsMeta');
+  const commandResultsList = document.getElementById('commandResultsList');
   const searchButton = document.getElementById('searchButton');
   const noticeButton = document.getElementById('noticeButton');
   const notificationPanel = document.getElementById('notificationPanel');
+  const notificationList = document.getElementById('notificationList');
+  const notificationCount = document.getElementById('notificationCount');
   const voiceButton = document.getElementById('voiceButton');
   const activityExpand = document.getElementById('activityExpand');
-  const activityFeed = document.querySelector('.activity-feed');
-  let activityItems = [...document.querySelectorAll('.activity-item[data-activity-action]')];
+  const activityFeed = document.getElementById('activityFeed') || document.querySelector('.activity-feed');
+  const activityLiveLabel = document.getElementById('activityLiveLabel');
+  const activityLiveDetail = document.getElementById('activityLiveDetail');
+  let activityItems = [];
+  let overviewActivityItems = [];
+  let commandSearchTimer = 0;
+  let commandSearchRequest = 0;
+  let commandSearchItems = [];
+  let commandActiveIndex = -1;
+
+  function notificationPriorityClass(index, item) {
+    const route = String(item?.route || '');
+    if (/import-data|sources/i.test(route) || index >= 2) return 'priority-completed';
+    if (index === 0) return 'priority-progress';
+    return 'priority-important';
+  }
+
+  function notificationPriorityLabel(index, item) {
+    const route = String(item?.route || '');
+    if (/import-data|sources/i.test(route) || index >= 2) return 'Completed';
+    if (index === 0) return 'In progress';
+    return 'Important';
+  }
+
+  function notificationTargetFromRoute(route) {
+    if (route === 'import-data') return 'data';
+    if (route === 'use-data') return 'memory';
+    if (route === 'overview') return 'calendar';
+    return route || 'goals';
+  }
+
+  function activityStatusClass(index, item) {
+    const route = String(item?.route || '');
+    if (/import-data|sources/i.test(route)) return 'status-completed';
+    if (/use-data|memory/i.test(route)) return 'status-progress';
+    if (index === 0) return 'status-progress priority';
+    if (index === 1) return 'status-important';
+    return 'status-completed';
+  }
+
+  function activityDotClass(index, item) {
+    const route = String(item?.route || '');
+    if (/import-data|sources/i.test(route)) return 'violet';
+    if (/use-data|memory/i.test(route)) return 'coral';
+    if (index === 1) return 'amber';
+    return '';
+  }
+
+  function activityActionLabel(item) {
+    const route = String(item?.route || '');
+    if (route === 'goals') return 'Open goals';
+    if (route === 'import-data') return 'View sources';
+    if (route === 'use-data') return 'View insight';
+    if (route === 'overview') return 'Open overview';
+    return 'Open';
+  }
+
+  function updateNoticeBadge(count) {
+    const dot = noticeButton?.querySelector('.notice-dot');
+    if (dot) dot.hidden = count <= 0;
+    noticeButton?.classList.toggle('has-notices', count > 0);
+    noticeButton?.setAttribute('aria-label', count > 0 ? `Open notifications, ${count} updates` : 'Open notifications');
+  }
+
+  function bindNotificationItems() {
+    notificationList?.querySelectorAll('[data-notification-action]').forEach((button) => {
+      button.addEventListener('click', () => {
+        if (button.classList.contains('is-loading')) return;
+        const action = button.dataset.notificationAction;
+        const target = button.dataset.actionTarget;
+        button.classList.add('is-loading');
+        button.setAttribute('aria-busy', 'true');
+        haptic();
+        window.setTimeout(() => {
+          button.classList.remove('is-loading');
+          button.removeAttribute('aria-busy');
+          notificationPanel.classList.remove('open');
+          noticeButton.classList.remove('active');
+          noticeButton.setAttribute('aria-expanded', 'false');
+          if (target === 'goals') openRoutedView('goals', false);
+          if (target === 'data') openRoutedView('data', false);
+          if (target === 'memory') openRoutedView('memory', false);
+          if (target === 'calendar') {
+            try { __navigate('overview'); } catch (_n) { openPrimaryView('overview', false); }
+            selectedCalendarDate = new Date(calendarReferenceDate);
+            renderCalendar('left');
+          }
+          __showToast(`${action} opened`);
+        }, 540);
+      });
+    });
+  }
+
+  function renderNotificationPanel(activity = []) {
+    overviewActivityItems = Array.isArray(activity) ? activity.slice() : [];
+    const items = overviewActivityItems;
+    const count = items.length;
+    if (notificationCount) {
+      notificationCount.textContent = count === 1 ? '1 update' : `${count} updates`;
+    }
+    updateNoticeBadge(count);
+    if (!notificationList) return;
+    if (!count) {
+      notificationList.innerHTML = `<p class="notification-empty">No live updates right now.</p>`;
+      return;
+    }
+    notificationList.innerHTML = items.map((item, index) => {
+      const target = notificationTargetFromRoute(item.route);
+      const priority = notificationPriorityClass(index, item);
+      const label = notificationPriorityLabel(index, item);
+      return `<button type="button" data-notification-action="${escapeGoalText(item.label || 'Open update')}" data-action-target="${escapeGoalText(target)}"><i class="${priority}"></i><span><em>${escapeGoalText(label)}</em><b>${escapeGoalText(item.label || 'Update')}</b><small>${escapeGoalText(item.detail || '')}</small></span><time>${escapeGoalText(item.timestamp || '')}</time></button>`;
+    }).join('');
+    bindNotificationItems();
+  }
+
+  function renderActivityFeed(activity = []) {
+    const feed = document.getElementById('activityFeed') || document.querySelector('.activity-feed') || activityFeed;
+    const items = Array.isArray(activity) ? activity : [];
+    if (activityLiveLabel) activityLiveLabel.textContent = items.length ? 'LIVE' : 'IDLE';
+    if (activityLiveDetail) {
+      activityLiveDetail.textContent = items.length
+        ? `${items.length} live update${items.length === 1 ? '' : 's'}`
+        : 'No live activity yet';
+    }
+    if (activityExpand) {
+      activityExpand.hidden = items.length === 0;
+      activityExpand.setAttribute('aria-label', items.length ? `View all ${items.length} updates` : 'View all notifications');
+    }
+    if (!feed) return;
+    if (!items.length) {
+      feed.innerHTML = `<div class="activity-empty">No live AI activity yet.</div>`;
+      activityItems = [];
+      return;
+    }
+    const visible = items.slice(0, 4);
+    feed.innerHTML = visible.map((item, index) => {
+      const target = notificationTargetFromRoute(item.route);
+      const status = activityStatusClass(index, item);
+      const dot = activityDotClass(index, item);
+      const action = activityActionLabel(item);
+      const statusLabel = notificationPriorityLabel(index, item);
+      return `<button class="activity-item ${status}" type="button" data-activity-action="${escapeGoalText(item.label || action)}" data-action-target="${escapeGoalText(target)}" aria-label="${escapeGoalText(item.label || 'Update')}. ${escapeGoalText(statusLabel)}.">
+          <span class="activity-dot${dot ? ` ${dot}` : ''}"><i></i></span>
+          <span><strong>${escapeGoalText(item.label || 'Update')}</strong><small>${escapeGoalText(item.detail || '')}</small><em class="activity-action">${escapeGoalText(action)} <b>→</b></em></span>
+          <span class="activity-meta"><time>${escapeGoalText(item.timestamp || '')}</time><em>${escapeGoalText(statusLabel)}</em></span>
+        </button>`;
+    }).join('');
+    bindActivityItems();
+  }
+
   function bindActivityItems() {
     activityItems = [...document.querySelectorAll('.activity-item[data-activity-action]')];
     activityItems.forEach((item) => {
@@ -7501,25 +8958,21 @@ closeDataWorkspace();
   async function hydrateOverviewFromApi() {
     // Resolved per call: this also runs after a connect, by which point the
     // overview view may have been re-injected and the cached node is stale.
-    const feed = document.querySelector('.activity-feed') || activityFeed;
     const overview = await loadOverviewFromApi();
-    if (!overview) return;
+    if (!overview) {
+      apiCalendarTasks = [];
+      renderNotificationPanel([]);
+      renderActivityFeed([]);
+      return false;
+    }
     if (Array.isArray(overview.calendarTasks)) {
       apiCalendarTasks = overview.calendarTasks;
       try { renderCalendar('left', false); } catch (_e) { /* overview may be paused */ }
     }
-    if (!overview.activity?.length || !feed) return;
-    const items = overview.activity.slice(0, 4);
-    feed.innerHTML = items.map((item, index) => {
-      const status = index === 0 ? 'status-progress' : index === 1 ? 'status-important' : 'status-completed';
-      const target = item.route === 'import-data' ? 'data' : item.route === 'use-data' ? 'memory' : item.route || 'goals';
-      return `<button class="activity-item ${status}" type="button" data-activity-action="${item.label}" data-action-target="${target}">
-          <span class="activity-dot"><i></i></span>
-          <span><strong>${item.label}</strong><small>${item.detail || ''}</small><em class="activity-action">Open <b>→</b></em></span>
-          <span class="activity-meta"><time>${item.timestamp || ''}</time><em>Live</em></span>
-        </button>`;
-    }).join('');
-    bindActivityItems();
+    const activity = Array.isArray(overview.activity) ? overview.activity : [];
+    renderNotificationPanel(activity);
+    renderActivityFeed(activity);
+    return true;
   }
   const deviceClock = document.querySelector('.device-clock');
   const deviceTime = document.getElementById('deviceTime');
@@ -7629,30 +9082,36 @@ closeDataWorkspace();
   let calendarTransitioning = false;
   let calendarUserTasks = [];
   let apiCalendarTasks = [];
-  try {
-    const storedCalendarTasks = JSON.parse(localStorage.getItem('weeple-calendar-tasks') || '[]');
-    if (Array.isArray(storedCalendarTasks)) calendarUserTasks = storedCalendarTasks;
-  } catch (error) {
-    // Local persistence is optional; the task still works for this session.
-  }
+  // One-shot migration: upload leftover local calendar tasks, then stop using localStorage as source of truth.
+  void (async () => {
+    let stored = [];
+    try {
+      stored = JSON.parse(localStorage.getItem('weeple-calendar-tasks') || '[]');
+    } catch (_error) {
+      stored = [];
+    }
+    if (!Array.isArray(stored) || !stored.length) {
+      try { localStorage.removeItem('weeple-calendar-tasks'); } catch (_error) { /* optional */ }
+      return;
+    }
+    for (const item of stored) {
+      if (!item?.title || !item?.date || !item?.time) continue;
+      try {
+        await createTaskOnApi({
+          name: item.title,
+          dueAt: `${item.date}T${item.time}`,
+          owner: item.owner === 'ai' ? 'ai' : 'human',
+          state: item.owner === 'ai' ? 'Queued' : 'Pending',
+        });
+      } catch (_error) { /* leave leftovers if offline */ return; }
+    }
+    calendarUserTasks = [];
+    try { localStorage.removeItem('weeple-calendar-tasks'); } catch (_error) { /* optional */ }
+    try { await hydrateTasksFromApi(); } catch (_error) { /* optional */ }
+    try { await hydrateOverviewFromApi(); } catch (_error) { /* optional */ }
+  })();
 
-  const calendarAgendaSets = [
-    [
-      { type: 'complete', label: 'AI COMPLETED', title: 'Morning priorities prepared', detail: 'Your goal plan has been organized', status: 'Ready', icon: 'check' },
-      { type: 'action', label: 'NEEDS YOUR ACTION', title: 'Client Meeting · 14:00', detail: 'Agenda and documents are ready', status: 'Confirm', icon: 'alert' },
-      { type: 'planning', label: 'AI PLANNING', title: '19:30 Project Review', detail: 'Review this week’s goal progress', status: 'Planned', icon: 'spark' }
-    ],
-    [
-      { type: 'complete', label: 'AI COMPLETED', title: 'Fitness summary analyzed', detail: 'Recovery insights added to your goal', status: 'Done', icon: 'check' },
-      { type: 'action', label: 'CALENDAR', title: 'Focus block · 10:30', detail: '90 minutes protected for deep work', status: 'Reserved', icon: 'clock' },
-      { type: 'planning', label: 'AI SUGGESTION', title: 'Call family · 18:00', detail: 'Suggested from your weekly pattern', status: 'Review', icon: 'spark' }
-    ],
-    [
-      { type: 'complete', label: 'MEMORY CONNECTED', title: 'Meeting context retrieved', detail: '6 relevant notes prepared', status: 'Ready', icon: 'check' },
-      { type: 'action', label: 'UPCOMING', title: 'Product Sync · 15:30', detail: '3 decisions need your attention', status: 'Open', icon: 'alert' },
-      { type: 'planning', label: 'AI PLANNING', title: 'Tomorrow’s top priority', detail: 'Execution plan is being prepared', status: 'Planning', icon: 'spark' }
-    ]
-  ];
+  const calendarAgendaSets = [];
 
   function calendarDayOffset(date) {
     return Math.round((date - calendarReferenceDate) / 86400000);
@@ -7666,20 +9125,75 @@ closeDataWorkspace();
         const owner = item.owner === 'ai' ? 'ai' : 'human';
         const goalId = item.goalId || item.goal_id;
         const goalIndex = goalId ? goalProfiles.findIndex((goal) => goal.id === goalId) : -1;
+        const calendarId = String(item.id || '');
+        const taskId = calendarId.startsWith('task-')
+          ? calendarId.slice(5)
+          : (item.taskId || item.task_id || null);
+        const status = item.status || (owner === 'ai' ? 'Queued' : 'To do');
         return {
           type: item.type || (owner === 'ai' ? 'planning' : 'action'),
           owner,
           label: item.label || (owner === 'ai' ? 'AI TASK' : 'YOUR TASK'),
           title: escapeGoalText(item.title),
           detail: escapeGoalText(item.detail || ''),
-          status: item.status || (owner === 'ai' ? 'Queued' : 'To do'),
+          status,
+          needsConfirm: String(status).toLowerCase() === 'confirm',
           icon: item.icon || (owner === 'ai' ? 'spark' : 'target'),
           timelineTime: item.time || null,
           rgb: owner === 'ai' ? '139,92,246' : (goalIndex >= 0 && goalProfiles[goalIndex].accent) || '255,94,0',
           goalIndex: goalIndex >= 0 ? goalIndex : undefined,
+          taskId,
+          calendarId,
           fromApi: true,
         };
       });
+  }
+
+  async function confirmCalendarTask(taskId, button) {
+    if (!taskId || button?.disabled) return;
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Saving…';
+      button.setAttribute('aria-busy', 'true');
+    }
+    try {
+      const updated = await updateTaskOnApi(taskId, { state: 'Confirmed' });
+      if (!updated) throw new Error('offline');
+      const calendarId = `task-${taskId}`;
+      const nextState = String(updated.state || 'Confirmed');
+      const owner = updated.owner === 'ai' ? 'ai' : 'human';
+      const done = /completed|done|ready|confirmed/i.test(nextState);
+      apiCalendarTasks = apiCalendarTasks.map((item) => {
+        if (String(item.id) !== calendarId) return item;
+        if (owner === 'ai') {
+          return {
+            ...item,
+            status: done ? 'Ready' : nextState,
+            label: done ? 'AI COMPLETED' : 'AI TASK',
+            type: done ? 'complete' : 'planning',
+            icon: done ? 'check' : 'spark',
+          };
+        }
+        return {
+          ...item,
+          status: done ? 'Confirmed' : nextState,
+          label: 'YOUR TASK',
+          type: 'action',
+          icon: 'target',
+        };
+      });
+      try { await hydrateOverviewFromApi(); } catch (_error) { /* soft refresh */ }
+      renderCalendar('left', false);
+      haptic(10);
+      __showToast(owner === 'ai' ? 'AI task confirmed' : 'Task confirmed');
+    } catch (_error) {
+      if (button) {
+        button.disabled = false;
+        button.textContent = 'Confirm';
+        button.removeAttribute('aria-busy');
+      }
+      __showToast('Could not confirm — check backend connection');
+    }
   }
 
   function sortAgendaItems(items) {
@@ -7716,9 +9230,9 @@ closeDataWorkspace();
   };
 
   const sideDayStories = [
-    { label: 'AI COMPLETED', detail: 'Key decisions have been organized', badge: 'AI Running', icon: 'check' },
-    { label: 'FOUND 3 INSIGHTS', detail: 'Useful patterns were discovered', badge: 'AI Discovery', icon: 'spark' },
-    { label: 'AI IS PREPARING', detail: 'Materials are being assembled', badge: 'AI Planning', icon: 'clock' }
+    { label: 'NO TASKS', detail: 'Nothing scheduled for this day yet', badge: 'Empty', icon: 'spark' },
+    { label: 'NO TASKS', detail: 'Nothing scheduled for this day yet', badge: 'Empty', icon: 'spark' },
+    { label: 'NO TASKS', detail: 'Nothing scheduled for this day yet', badge: 'Empty', icon: 'spark' }
   ];
   const calendarCardColors = ['16,185,129', '139,92,246', '255,183,3'];
 
@@ -7874,13 +9388,7 @@ closeDataWorkspace();
       const isToday = sameCalendarDay(date, calendarReferenceDate);
       const isFuture = !isToday && date > calendarReferenceDate;
       const isPast = !isToday && date < calendarReferenceDate;
-      const setIndex = sameCalendarDay(date, calendarReferenceDate)
-        ? 0
-        : Math.abs(date.getDate() + date.getMonth()) % calendarAgendaSets.length;
-      const baseAgenda = calendarAgendaSets[setIndex];
-      const backgroundAgenda = isFuture
-        ? baseAgenda.map(item => ({ ...item, type: 'planning', label: 'AI IS PREPARING', status: 'Preparing', icon: 'clock' }))
-        : baseAgenda;
+      const setIndex = Math.abs(date.getDate() + date.getMonth()) % Math.max(1, calendarCardColors.length);
       const scheduledGoals = scheduledGoalsForDate(date);
       const linkedTasks = linkedGoalTasksForDate(date).map(({ goal, goalIndex, subgoal, subgoalIndex, task, taskIndex }) => ({
         type: task.owner === 'ai' ? 'planning' : 'action',
@@ -7914,33 +9422,31 @@ closeDataWorkspace();
         timelineTime: goal.scheduledTime || 'GOAL', rgb: goal.accent || '255,94,0'
       }));
       const apiAgenda = apiAgendaForDate(date);
-      const apiHasAi = apiAgenda.some((item) => item.owner === 'ai');
       const apiHasTaskRows = apiAgenda.some((item) => item.type && item.type !== 'goal');
-      // Only replace local linked tasks when the API actually sent YOU/AI work
-      // rows. A goals-only overview payload must not wipe AI agenda items.
-      const preferApiTasks = apiHasTaskRows && apiHasAi;
+      // Prefer API task rows for this day when present; keep local linked/user rows
+      // when the API has nothing scheduled for this specific day.
+      const preferApiTasks = apiHasTaskRows;
       const realAgenda = dedupeAgenda([
         ...(preferApiTasks ? [] : linkedTasks),
         ...addedTasks,
         ...goalAgenda,
         ...apiAgenda,
       ]);
-      const agenda = sortAgendaItems(
-        realAgenda.length
-          ? realAgenda
-          : backgroundAgenda.map((item) => ({
-              ...item,
-              owner: item.type === 'action' ? 'human' : 'ai',
-              rgb: item.type === 'action' ? '255,94,0' : '139,92,246',
-            }))
-      );
+      const agenda = sortAgendaItems(realAgenda);
       const story = scheduledGoals.length
         ? { label: 'GOAL SCHEDULED', detail: scheduledGoals[0].goal.title, badge: scheduledGoals[0].goal.scheduledTime || 'Open goal', icon: 'target' }
+        : agenda.length
+          ? {
+            label: isFuture ? 'UPCOMING TASKS' : isPast ? 'DAY COMPLETE' : 'ACTIVE TODAY',
+            detail: `${agenda.length} YOU + AI item${agenda.length === 1 ? '' : 's'} on this day`,
+            badge: isFuture ? 'Scheduled' : isPast ? 'Logged' : 'Live',
+            icon: isFuture ? 'clock' : isPast ? 'check' : 'spark',
+          }
         : isFuture
-        ? sideDayStories[2]
-        : isPast
-          ? sideDayStories[0]
-          : sideDayStories[setIndex];
+          ? { label: 'OPEN DAY', detail: 'No tasks scheduled yet — add one anytime', badge: 'Free', icon: 'spark' }
+          : isPast
+            ? sideDayStories[0]
+            : sideDayStories[setIndex];
       // Keep adjacent day cards visually distinct. Goal accents belong to the
       // agenda item inside the card, not to the calendar day itself.
       const cardRgb = isToday ? '255,94,0' : calendarCardColors[setIndex];
@@ -7952,21 +9458,31 @@ closeDataWorkspace();
       card.dataset.position = String(offset);
       card.style.setProperty('--card-rgb', cardRgb);
       card.setAttribute('aria-label', new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(date));
+      const dayLabel = offset === 0
+        ? (agenda.length ? `${agenda.length} TASK${agenda.length === 1 ? '' : 'S'} · YOU + AI` : 'NO TASKS YET')
+        : new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(date).toUpperCase();
+      const dayBlurb = agenda.length
+        ? 'Scroll to see every YOU and AI task for this day'
+        : scheduledGoals.length
+          ? 'Scheduled goals are connected to your Goals workspace'
+          : isFuture
+            ? 'Nothing scheduled yet for this day'
+            : 'See what you will do and what AI will handle';
       card.innerHTML = `
         <header class="day-card-heading">
-          <small>${offset === 0 ? (agenda.length ? `${agenda.length} TASK${agenda.length === 1 ? '' : 'S'} · YOU + AI` : isFuture ? 'YOU + AI PLAN' : 'NO TASKS YET') : new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(date).toUpperCase()}</small>
+          <small>${dayLabel}${offset !== 0 && agenda.length ? ` · ${agenda.length} TASK${agenda.length === 1 ? '' : 'S'}` : ''}</small>
           <strong>${heading}</strong>
-          <p>${agenda.length ? 'Scroll to see every YOU and AI task for this day' : scheduledGoals.length ? 'Scheduled goals are connected to your Goals workspace' : isFuture ? 'Your actions and AI support are ready for this day' : 'See what you will do and what AI will handle'}</p>
+          <p>${dayBlurb}</p>
         </header>
         <div class="side-day-overview">
           <span class="side-orb"><svg viewBox="0 0 24 24" aria-hidden="true">${calendarIcons[story.icon]}</svg></span>
           <strong>${story.label}</strong>
           <p>${story.detail}</p>
           <span>${story.badge}</span>
-          ${isFuture ? '<span class="preparing-loader" aria-label="AI preparation in progress"><i></i><i></i><i></i></span>' : ''}
+          ${isFuture && agenda.length ? '<span class="preparing-loader" aria-label="Upcoming schedule"><i></i><i></i><i></i></span>' : ''}
         </div>
         <div class="expanded-agenda">
-          ${agenda.map(item => {
+          ${agenda.length ? agenda.map((item) => {
             const owner = calendarItemOwner(item);
             const itemRgb = item.rgb || (owner === 'ai' ? '139,92,246' : '255,94,0');
             const timeMatch = String(item.title).match(/(?:^|[^\d])(\d{1,2}:\d{2})(?:\b|$)/);
@@ -7975,23 +9491,34 @@ closeDataWorkspace();
               <time class="calendar-timeline-time">${timelineTime}</time>
               <span class="carousel-agenda-icon"><svg viewBox="0 0 24 24" aria-hidden="true">${calendarIcons[item.icon]}</svg></span>
               <span class="carousel-agenda-copy"><small><em class="calendar-owner owner-${owner}">${owner === 'ai' ? 'AI' : 'YOU'}</em>${item.label}</small><strong>${item.title}</strong><span>${item.detail}</span></span>
-              <span class="carousel-agenda-status">${item.status}</span>`;
-            return item.goalIndex !== undefined
-              ? `<button class="carousel-agenda-item calendar-goal-item${item.linkedTask ? ' linked-task' : ''}" type="button" data-calendar-goal="${item.goalIndex}"${item.linkedTask ? ` data-calendar-task="${item.taskId}" data-calendar-task-owner="${item.owner}"` : ''} style="--item-rgb:${itemRgb}" aria-label="Open goal: ${escapeGoalText(goalProfiles[item.goalIndex]?.title || item.title)}">${itemContent}</button>`
-              : `<div class="carousel-agenda-item" style="--item-rgb:${itemRgb}">${itemContent}</div>`;
-          }).join('')}
+              ${item.needsConfirm && item.taskId
+                ? `<button class="carousel-agenda-status is-confirm" type="button" data-calendar-confirm="${escapeGoalText(item.taskId)}" aria-label="Confirm task: ${item.title}">Confirm</button>`
+                : `<span class="carousel-agenda-status">${item.status}</span>`}`;
+            const goalAttrs = item.goalIndex !== undefined
+              ? ` data-calendar-goal="${item.goalIndex}"${item.linkedTask ? ` data-calendar-task="${item.taskId}" data-calendar-task-owner="${item.owner}"` : ''} aria-label="Open goal: ${escapeGoalText(goalProfiles[item.goalIndex]?.title || item.title)}"`
+              : '';
+            return `<div class="carousel-agenda-item${item.goalIndex !== undefined ? ' calendar-goal-item' : ''}${item.linkedTask ? ' linked-task' : ''}${item.goalIndex !== undefined ? ' is-openable' : ''}" style="--item-rgb:${itemRgb}"${goalAttrs}>${itemContent}</div>`;
+          }).join('') : `<div class="calendar-agenda-empty">${isFuture ? 'No upcoming tasks for this day yet.' : isPast ? 'No tasks were logged for this day.' : 'No tasks for today yet — add one from Task.'}</div>`}
         </div>
       `;
-      card.querySelectorAll('[data-calendar-goal]').forEach(goalButton => {
-        goalButton.addEventListener('click', (event) => {
+      card.querySelectorAll('[data-calendar-confirm]').forEach((confirmButton) => {
+        confirmButton.addEventListener('click', (event) => {
+          event.preventDefault();
           event.stopPropagation();
-          const goalIndex = Number(goalButton.dataset.calendarGoal);
+          void confirmCalendarTask(confirmButton.dataset.calendarConfirm, confirmButton);
+        });
+      });
+      card.querySelectorAll('[data-calendar-goal]').forEach((goalRow) => {
+        goalRow.addEventListener('click', (event) => {
+          if (event.target.closest('[data-calendar-confirm]')) return;
+          event.stopPropagation();
+          const goalIndex = Number(goalRow.dataset.calendarGoal);
           if (!goalProfiles[goalIndex]) return;
           state.currentGoalIndex = goalIndex;
-          if (goalButton.dataset.calendarTask) {
+          if (goalRow.dataset.calendarTask) {
             goalPlanTaskDrawerOpen = true;
-            goalPlanTaskOwner = goalButton.dataset.calendarTaskOwner === 'ai' ? 'ai' : 'human';
-            goalPlanFocusedTaskId = goalButton.dataset.calendarTask;
+            goalPlanTaskOwner = goalRow.dataset.calendarTaskOwner === 'ai' ? 'ai' : 'human';
+            goalPlanFocusedTaskId = goalRow.dataset.calendarTask;
           }
           openRoutedView('goals');
           haptic(8);
@@ -8055,7 +9582,7 @@ closeDataWorkspace();
   calendarTaskTime.addEventListener('change', () => {
     if (calendarTaskEndField.classList.contains('visible')) calendarTaskEndTime.value = shiftGoalTime(calendarTaskTime.value || '09:00', 45);
   });
-  calendarTaskForm?.addEventListener('submit', (event) => {
+  calendarTaskForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const title = calendarTaskName.value.trim();
     const date = calendarTaskDate.value;
@@ -8066,28 +9593,33 @@ closeDataWorkspace();
     const subgoalIndex = calendarTaskSubgoal.value === '' ? -1 : Number(calendarTaskSubgoal.value);
     const goal = goalProfiles[goalIndex];
     const subgoal = goal?.subgoals?.[subgoalIndex];
-    if (goal && subgoal) {
-      const task = { id: `goal-task-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name: title, owner, done: false };
-      if (owner === 'ai') {
-        task.aiState = 'queued'; task.state = 'Queued'; task.startsAt = `${date}T${time}`;
-        task.expectedAt = `${date}T${calendarTaskEndTime.value || shiftGoalTime(time, 45)}`;
-      } else {
-        task.state = 'Ready now'; task.dueAt = `${date}T${time}`;
+    const dueAt = `${date}T${time}`;
+    try {
+      const created = await createTaskOnApi({
+        name: title,
+        goalId: goal?.id || null,
+        dueAt,
+        owner,
+        subgoalName: subgoal?.name || null,
+        state: owner === 'ai' ? 'Queued' : 'Pending',
+      });
+      if (!created) throw new Error('create failed');
+      if (goal && subgoal) {
+        try { ensureGoalCommandModel(goal); } catch (_error) { /* optional */ }
+        syncGoalTaskStats(goal);
+        goal.updated = 'Updated now';
+        persistCustomGoals(); persistGoalPlanOverrides(); renderGoalCollection();
+        if (state.goalWorkspaceActive && state.currentGoalIndex === goalIndex) renderGoalCommandCenter(goal);
       }
-      subgoal.executionTasks.push(task);
-      syncGoalTaskStats(goal);
-      goal.updated = 'Updated now';
-      persistCustomGoals(); persistGoalPlanOverrides(); renderGoalCollection();
-      if (state.goalWorkspaceActive && state.currentGoalIndex === goalIndex) renderGoalCommandCenter(goal);
-    } else {
-      calendarUserTasks.unshift({ id: `task-${Date.now()}`, title, date, time, owner, expectedTime: owner === 'ai' ? (calendarTaskEndTime.value || shiftGoalTime(time, 45)) : '' });
-      persistCalendarTasks();
+      await Promise.all([hydrateTasksFromApi(), hydrateOverviewFromApi()]);
+      selectedCalendarDate = calendarDateFromKey(date);
+      monthPickerCursor = new Date(selectedCalendarDate.getFullYear(), selectedCalendarDate.getMonth(), 1, 12);
+      closeCalendarTaskModal();
+      renderCalendar('left');
+      __showToast(goal && subgoal ? 'Task linked to Goal and Calendar' : owner === 'ai' ? 'AI task added to the calendar' : 'Your task was added to the calendar');
+    } catch (_error) {
+      __showToast('Could not create task — backend offline');
     }
-    selectedCalendarDate = calendarDateFromKey(date);
-    monthPickerCursor = new Date(selectedCalendarDate.getFullYear(), selectedCalendarDate.getMonth(), 1, 12);
-    closeCalendarTaskModal();
-    renderCalendar('left');
-    __showToast(goal && subgoal ? 'Task linked to Goal and Calendar' : owner === 'ai' ? 'AI task added to the calendar' : 'Your task was added to the calendar');
   });
   calendarMonthButton?.addEventListener('click', () => toggleMonthPicker());
   monthPickerPrevious?.addEventListener('click', () => {
@@ -8158,9 +9690,352 @@ closeDataWorkspace();
     if (open) {
       notificationPanel.classList.remove('open');
       noticeButton.setAttribute('aria-expanded', 'false');
+      toggleSettings(false);
       setTimeout(() => commandInput.focus(), 100);
+      if (commandInput.value.trim()) void runCommandSearch(commandInput.value.trim());
+    } else {
+      clearCommandResults();
+      commandPanel.classList.remove('is-loading');
     }
   }
+
+  function clearCommandResults() {
+    commandSearchItems = [];
+    commandActiveIndex = -1;
+    if (commandResults) commandResults.hidden = true;
+    if (commandResultsMeta) commandResultsMeta.textContent = '';
+    if (commandResultsList) commandResultsList.innerHTML = '';
+  }
+
+  function escapeCommandText(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function commandTypeLabel(type) {
+    const map = {
+      goal: 'Goal',
+      source: 'Source',
+      catalog: 'Catalog',
+      task: 'Task',
+      memory: 'Memory',
+      activity: 'Activity',
+    };
+    return map[type] || 'Result';
+  }
+
+  function setCommandActiveIndex(index) {
+    commandActiveIndex = index;
+    commandResultsList?.querySelectorAll('.command-result').forEach((button, i) => {
+      button.classList.toggle('is-active', i === index);
+    });
+  }
+
+  function renderCommandResults(payload, query) {
+    if (!commandResults || !commandResultsList || !commandResultsMeta) return;
+    const items = Array.isArray(payload?.items) ? payload.items : [];
+    commandSearchItems = items;
+    commandActiveIndex = items.length ? 0 : -1;
+    commandResults.hidden = false;
+    commandResultsMeta.textContent = payload?.summary || (items.length ? `${items.length} results` : `No matches for “${query}”`);
+    if (!items.length) {
+      commandResultsList.innerHTML = `<div class="command-results-empty">Nothing matched. Try another goal, source, or memory phrase.</div>`;
+      return;
+    }
+    commandResultsList.innerHTML = items.map((item, index) => `
+      <button class="command-result${index === 0 ? ' is-active' : ''}" type="button" role="option" data-command-index="${index}">
+        <span class="command-result-type" data-type="${escapeCommandText(item.type)}">${escapeCommandText(commandTypeLabel(item.type))}</span>
+        <span>
+          <strong>${escapeCommandText(item.title)}</strong>
+          <small>${escapeCommandText(item.detail || '')}</small>
+        </span>
+        <em>Open</em>
+      </button>
+    `).join('');
+    commandResultsList.querySelectorAll('[data-command-index]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const idx = Number(button.dataset.commandIndex);
+        openCommandResult(commandSearchItems[idx]);
+      });
+    });
+  }
+
+  function openCommandResult(item) {
+    if (!item) return;
+    const route = item.route || 'overview';
+    const meta = item.meta || {};
+    toggleCommand(false);
+    if (route === 'goals') {
+      const goalId = meta.goalId || (item.type === 'goal' ? item.id : null);
+      if (goalId) {
+        const index = goalProfiles.findIndex((goal) => goal.id === goalId);
+        if (index >= 0) {
+          openRoutedView('goals', false);
+          try { selectGoal(index, false); } catch (_error) { /* optional */ }
+          __showToast(`Opened goal · ${item.title}`);
+          return;
+        }
+        openRoutedView('goals', false, { goal: goalId });
+        __showToast(`Opened goals · ${item.title}`);
+        return;
+      }
+      openRoutedView('goals', false);
+    } else if (route === 'import-data' || route === 'data') {
+      openRoutedView('data', false, meta.sourceId ? { source: meta.sourceId } : (meta.catalogKey ? { catalog: meta.catalogKey } : null));
+    } else if (route === 'use-data' || route === 'memory') {
+      openRoutedView('memory', false);
+    } else {
+      openRoutedView('overview', false);
+    }
+    __showToast(`Opened · ${item.title}`);
+  }
+
+  async function runCommandSearch(query) {
+    const q = String(query || '').trim();
+    if (!q) {
+      clearCommandResults();
+      return;
+    }
+    const requestId = ++commandSearchRequest;
+    commandPanel.classList.add('is-loading');
+    const payload = await searchPlatformFromApi(q, { limit: 12 });
+    if (requestId !== commandSearchRequest) return;
+    commandPanel.classList.remove('is-loading');
+    if (!payload) {
+      if (commandResults && commandResultsList && commandResultsMeta) {
+        commandResults.hidden = false;
+        commandResultsMeta.textContent = 'Search API offline';
+        commandResultsList.innerHTML = `<div class="command-results-empty">Could not reach the server. Check that the backend is running.</div>`;
+      }
+      __showToast('Search unavailable — backend offline');
+      return;
+    }
+    renderCommandResults(payload, q);
+  }
+
+  function scheduleCommandSearch(query) {
+    window.clearTimeout(commandSearchTimer);
+    const q = String(query || '').trim();
+    if (!q) {
+      clearCommandResults();
+      return;
+    }
+    commandSearchTimer = window.setTimeout(() => { void runCommandSearch(q); }, 220);
+  }
+
+  const settingsOverlay = document.getElementById('settingsOverlay');
+  const settingsButton = document.getElementById('settingsButton');
+  const SETTINGS_STORAGE_KEY = 'weeple-system-settings';
+  const defaultSystemSettings = {
+    autonomy: 'prepare',
+    confirmMemory: true,
+    goalScopedContext: true,
+    pauseMonitoring: false,
+    notifyDecisions: true,
+    showActivityDock: true,
+    calendarReminders: true,
+    reduceMotion: reduceMotion,
+    compactActivity: false
+  };
+  systemSettings = { ...defaultSystemSettings };
+  let settingsSyncedFromApi = false;
+
+  function normalizeSystemSettings(payload) {
+    if (!payload || typeof payload !== 'object') return null;
+    return {
+      autonomy: payload.autonomy ?? payload.Autonomy ?? defaultSystemSettings.autonomy,
+      confirmMemory: payload.confirmMemory ?? payload.confirm_memory,
+      goalScopedContext: payload.goalScopedContext ?? payload.goal_scoped_context,
+      pauseMonitoring: payload.pauseMonitoring ?? payload.pause_monitoring,
+      notifyDecisions: payload.notifyDecisions ?? payload.notify_decisions,
+      showActivityDock: payload.showActivityDock ?? payload.show_activity_dock,
+      calendarReminders: payload.calendarReminders ?? payload.calendar_reminders,
+      reduceMotion: payload.reduceMotion ?? payload.reduce_motion,
+      compactActivity: payload.compactActivity ?? payload.compact_activity
+    };
+  }
+
+  function mergeSystemSettings(partial) {
+    const next = { ...systemSettings };
+    Object.entries(partial || {}).forEach(([key, value]) => {
+      if (value !== undefined) next[key] = value;
+    });
+    systemSettings = { ...defaultSystemSettings, ...next };
+    return systemSettings;
+  }
+
+  function loadSystemSettingsLocal() {
+    try {
+      const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        // Motion + activity dock are owned by the server settings file after hydrate.
+        // Applying stale local copies was freezing topology and hiding the dock.
+        const { reduceMotion: _rm, showActivityDock: _sad, ...rest } = parsed;
+        mergeSystemSettings(rest);
+      }
+    } catch (_error) { /* storage optional */ }
+  }
+
+  function persistSystemSettingsLocal() {
+    try { localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(systemSettings)); } catch (_error) { /* storage optional */ }
+  }
+
+  function setSettingsSaveStatus(message, resetTo = 'Synced with Weeple server') {
+    const status = document.getElementById('settingsSaveStatus');
+    if (!status) return;
+    status.textContent = message;
+    window.setTimeout(() => {
+      if (status) status.textContent = settingsSyncedFromApi ? resetTo : 'Changes save on this device';
+    }, 1600);
+  }
+
+  function applySystemSettings() {
+    const previousReduceMotion = reduceMotion;
+    reduceMotion = Boolean(systemSettings.reduceMotion);
+    try { localStorage.setItem('weeple-reduce-motion', reduceMotion ? '1' : '0'); } catch (_error) { /* storage optional */ }
+    osShell?.classList.toggle('settings-hide-activity', systemSettings.showActivityDock === false);
+    osShell?.classList.toggle('settings-compact-activity', Boolean(systemSettings.compactActivity));
+    const accountUser = document.getElementById('settingsAccountUser');
+    if (accountUser) accountUser.textContent = window.__WEEple_USER__ || currentUserProfile?.username || 'admin';
+    // Re-kick topology when motion is re-enabled (settings hydrate / toggle).
+    if (previousReduceMotion && !reduceMotion) {
+      try {
+        invalidateTopology();
+        startTopologyLoop();
+      } catch (_error) { /* topology optional during boot */ }
+    }
+  }
+
+  function syncSettingsForm() {
+    if (!settingsOverlay) return;
+    settingsOverlay.querySelectorAll('[data-setting="autonomy"]').forEach((input) => {
+      input.checked = input.value === systemSettings.autonomy;
+    });
+    settingsOverlay.querySelectorAll('[data-setting]').forEach((input) => {
+      const key = input.dataset.setting;
+      if (!key || key === 'autonomy') return;
+      if (input.type === 'checkbox') input.checked = Boolean(systemSettings[key]);
+    });
+  }
+
+  async function hydrateSettingsFromApi() {
+    const remote = await loadSettingsFromApi();
+    const normalized = normalizeSystemSettings(remote);
+    if (!normalized) return false;
+    mergeSystemSettings(normalized);
+    // Prefer server values over stale local overrides for motion / dock visibility.
+    try {
+      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(systemSettings));
+      localStorage.setItem('weeple-reduce-motion', systemSettings.reduceMotion ? '1' : '0');
+    } catch (_error) { /* storage optional */ }
+    applySystemSettings();
+    syncSettingsForm();
+    settingsSyncedFromApi = true;
+    const status = document.getElementById('settingsSaveStatus');
+    if (status) status.textContent = 'Synced with Weeple server';
+    return true;
+  }
+
+  async function persistSystemSettingsRemote(patch) {
+    persistSystemSettingsLocal();
+    applySystemSettings();
+    const saved = await saveSettingsOnApi(patch);
+    const normalized = normalizeSystemSettings(saved);
+    if (normalized) {
+      mergeSystemSettings(normalized);
+      persistSystemSettingsLocal();
+      applySystemSettings();
+      settingsSyncedFromApi = true;
+      setSettingsSaveStatus('Saved to server');
+      return true;
+    }
+    setSettingsSaveStatus('Saved on this device (server offline)');
+    return false;
+  }
+
+  async function refreshSettingsApiStatus() {
+    const statusEl = document.getElementById('settingsApiStatus');
+    if (!statusEl) return;
+    statusEl.textContent = 'Checking…';
+    try {
+      const base = (window.__WEEple_API__ || '').replace(/\/api\/v1\/?$/, '') || 'http://127.0.0.1:8000';
+      const response = await fetch(`${base}/health`, { method: 'GET' });
+      statusEl.textContent = response.ok ? 'Online' : `Error ${response.status}`;
+    } catch (_error) {
+      statusEl.textContent = 'Offline';
+    }
+  }
+
+  function toggleSettings(force) {
+    if (!settingsOverlay) return;
+    const open = typeof force === 'boolean' ? force : !settingsOverlay.classList.contains('open');
+    settingsOverlay.classList.toggle('open', open);
+    settingsOverlay.setAttribute('aria-hidden', String(!open));
+    settingsButton?.classList.toggle('active', open);
+    settingsButton?.setAttribute('aria-expanded', String(open));
+    if (open) {
+      syncSettingsForm();
+      void refreshSettingsApiStatus();
+      void hydrateSettingsFromApi();
+      notificationPanel.classList.remove('open');
+      noticeButton.classList.remove('active');
+      noticeButton.setAttribute('aria-expanded', 'false');
+      toggleCommand(false);
+      haptic(6);
+    }
+  }
+
+  settingsButton?.setAttribute('aria-expanded', 'false');
+
+  // Local settings are a fallback only. Prefer API hydrate; do not stomp
+  // motion/dock flags after a successful sync.
+  if (!settingsSyncedFromApi) {
+    loadSystemSettingsLocal();
+    applySystemSettings();
+  }
+  syncSettingsForm();
+
+  settingsOverlay?.querySelectorAll('[data-setting]').forEach((input) => {
+    input.addEventListener('change', () => {
+      const key = input.dataset.setting;
+      if (!key) return;
+      const patch = {};
+      if (key === 'autonomy') {
+        systemSettings.autonomy = input.value;
+        patch.autonomy = input.value;
+      } else {
+        systemSettings[key] = Boolean(input.checked);
+        patch[key] = Boolean(input.checked);
+      }
+      void persistSystemSettingsRemote(patch);
+      haptic(4);
+    });
+  });
+
+  document.getElementById('settingsClose')?.addEventListener('click', () => toggleSettings(false));
+  document.getElementById('settingsBackdrop')?.addEventListener('click', () => toggleSettings(false));
+  document.getElementById('settingsDone')?.addEventListener('click', () => {
+    toggleSettings(false);
+    __showToast(settingsSyncedFromApi ? 'Settings synced' : 'Settings updated');
+  });
+  document.getElementById('settingsResetHints')?.addEventListener('click', () => {
+    try {
+      localStorage.removeItem('weeple-topology-hint-seen');
+      localStorage.removeItem('weeple-goal-hint-seen');
+    } catch (_error) { /* storage optional */ }
+    interactionHint?.classList.remove('dismissed');
+    __showToast('Interaction hints restored');
+    haptic(6);
+  });
+  document.getElementById('settingsOpenOnboarding')?.addEventListener('click', () => {
+    toggleSettings(false);
+    openOnboarding();
+  });
 
   searchButton.addEventListener('click', () => toggleCommand());
   noticeButton.addEventListener('click', () => {
@@ -8168,13 +10043,17 @@ closeDataWorkspace();
     notificationPanel.classList.toggle('open', open);
     noticeButton.classList.toggle('active', open);
     noticeButton.setAttribute('aria-expanded', String(open));
-    if (open) toggleCommand(false);
+    if (open) {
+      toggleCommand(false);
+      toggleSettings(false);
+    }
   });
   activityExpand.addEventListener('click', () => {
     notificationPanel.classList.add('open');
     noticeButton.classList.add('active');
     noticeButton.setAttribute('aria-expanded', 'true');
     toggleCommand(false);
+    toggleSettings(false);
   });
 
   function performActivityAction(item) {
@@ -8200,24 +10079,8 @@ closeDataWorkspace();
   }
 
   bindActivityItems();
-  void hydrateOverviewFromApi();
-
-  document.querySelectorAll('[data-notification-action]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const action = button.dataset.notificationAction;
-      button.classList.add('is-loading');
-      button.setAttribute('aria-busy', 'true');
-      haptic();
-      window.setTimeout(() => {
-        button.classList.remove('is-loading');
-        button.removeAttribute('aria-busy');
-        notificationPanel.classList.remove('open');
-        noticeButton.classList.remove('active');
-        noticeButton.setAttribute('aria-expanded', 'false');
-        __showToast(`${action} opened`);
-      }, 540);
-    });
-  });
+  renderNotificationPanel([]);
+  renderActivityFeed([]);
   async function startVoiceVisualization() {
     state.voiceActive = true;
     voiceButton.classList.add('active');
@@ -8260,12 +10123,36 @@ closeDataWorkspace();
     if (state.voiceActive) stopVoiceVisualization();
     else startVoiceVisualization();
   });
+  commandInput.addEventListener('input', () => {
+    scheduleCommandSearch(commandInput.value);
+  });
   commandInput.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' && commandInput.value.trim()) {
-      __showToast(`Weeple is thinking about “${commandInput.value.trim().slice(0, 32)}${commandInput.value.length > 32 ? '…' : ''}”`);
-      commandInput.value = '';
-      toggleCommand(false);
+    const items = commandSearchItems;
+    if (event.key === 'ArrowDown' && items.length) {
+      event.preventDefault();
+      setCommandActiveIndex(Math.min(items.length - 1, Math.max(0, commandActiveIndex) + 1));
+      return;
     }
+    if (event.key === 'ArrowUp' && items.length) {
+      event.preventDefault();
+      setCommandActiveIndex(Math.max(0, commandActiveIndex - 1));
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const q = commandInput.value.trim();
+      if (!q) return;
+      if (commandActiveIndex >= 0 && items[commandActiveIndex]) {
+        openCommandResult(items[commandActiveIndex]);
+        return;
+      }
+      void runCommandSearch(q);
+    }
+  });
+  document.addEventListener('pointerdown', (event) => {
+    if (!commandPanel?.classList.contains('open')) return;
+    if (commandPanel.contains(event.target) || searchButton?.contains(event.target)) return;
+    toggleCommand(false);
   });
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
@@ -8293,6 +10180,7 @@ closeDataWorkspace();
       closeMemoryDrawer();
       closeCalendarTaskModal();
       closeOnboarding();
+      toggleSettings(false);
       toggleCommand(false);
       notificationPanel.classList.remove('open');
       noticeButton.classList.remove('active');
@@ -8372,6 +10260,8 @@ closeDataWorkspace();
     });
 
     if (pageId === 'use-data') {
+      void hydrateMemoriesFromApi();
+      try { rebuildUseDashboardGoals({ preserveSelection: true }); } catch (_error) { /* list may still be seeding */ }
       const goalId = params.get('goal');
       const goalIndexParam = params.get('goalIndex');
       let profileIndex = -1;

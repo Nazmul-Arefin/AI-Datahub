@@ -10,6 +10,8 @@ from app.api import (
     memories,
     messaging,
     overview,
+    search,
+    settings,
     sources,
     tasks,
 )
@@ -22,6 +24,8 @@ api_router.include_router(tasks.router, prefix="/tasks", tags=["tasks"])
 api_router.include_router(sources.router, prefix="/sources", tags=["sources"])
 api_router.include_router(integrations.router, prefix="/integrations", tags=["integrations"])
 api_router.include_router(overview.router, prefix="/overview", tags=["overview"])
+api_router.include_router(search.router, prefix="/search", tags=["search"])
+api_router.include_router(settings.router, prefix="/settings", tags=["settings"])
 api_router.include_router(memories.router, prefix="/memories", tags=["memories"])
 api_router.include_router(agents.router, prefix="/agents", tags=["agents"])
 api_router.include_router(mcp.router, prefix="/mcp", tags=["mcp"])

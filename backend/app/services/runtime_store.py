@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
+from app.core.config import settings
 from app.schemas.overview import ActivityItem
 from app.schemas.sources import IntegrationCatalogItem, Source
 from app.services.seed_data import (
@@ -24,13 +25,15 @@ class RuntimeStore:
     """In-memory store used when USE_DATABASE=false."""
 
     def reset(self) -> None:
-        self.goals = {goal.id: goal.model_copy(deep=True) for goal in SEED_GOALS if goal.id}
+        mock = settings.use_mock_data
+        self.goals = {goal.id: goal.model_copy(deep=True) for goal in SEED_GOALS if goal.id} if mock else {}
         self.sources = {source.id: source.model_copy(deep=True) for source in SEED_SOURCES}
         self.catalog = [item.model_copy(deep=True) for item in INTEGRATION_CATALOG]
-        self.tasks = [task.model_copy(deep=True) for task in SEED_TASKS]
-        self.activity = [item.model_copy(deep=True) for item in SEED_ACTIVITY]
+        self.tasks = [task.model_copy(deep=True) for task in SEED_TASKS] if mock else []
+        self.activity = [item.model_copy(deep=True) for item in SEED_ACTIVITY] if mock else []
         self.connections: dict[str, dict] = self._seed_connections()
         self.oauth_states: dict[str, dict] = {}
+        self.settings: dict[str, object] = {}
 
     def _seed_connections(self) -> dict[str, dict]:
         """Mirror the connection rows `seed_db` creates, so both modes agree."""

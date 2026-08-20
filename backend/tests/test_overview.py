@@ -24,6 +24,12 @@ async def test_overview_calendar_lists_all_you_and_ai_tasks(client):
     assert "ai" in owners
     today = [item for item in tasks if item["dayOffset"] == 0]
     assert len(today) > 3
+    tomorrow = [item for item in tasks if item["dayOffset"] == 1]
+    assert len(tomorrow) >= 3
+    day_two = [item for item in tasks if item["dayOffset"] == 2]
+    assert len(day_two) >= 2
+    day_three = [item for item in tasks if item["dayOffset"] == 3]
+    assert len(day_three) >= 2
     for item in tasks:
         assert item["id"]
         assert item["title"]

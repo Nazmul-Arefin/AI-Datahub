@@ -26,6 +26,9 @@ class MemoryRecord(BaseModel):
     content: str
     source: str | None = None
     mode: str | None = None
+    use_for_ai: bool = Field(default=True, alias="useForAi")
+
+    model_config = {"populate_by_name": True}
 
 
 class MemoryDeleteResponse(BaseModel):
@@ -37,7 +40,9 @@ class MemoryPatchRequest(BaseModel):
     title: str | None = None
     content: str | None = None
     source: str | None = None
+    use_for_ai: bool | None = Field(default=None, alias="useForAi")
 
+    model_config = {"populate_by_name": True}
 
 class MemorySearchResponse(BaseModel):
     items: list[MemoryRecord]

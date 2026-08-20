@@ -200,6 +200,20 @@
   background: rgba(var(--card-rgb), .35);
 }
 
+.calendar-agenda-empty {
+  display: grid;
+  place-items: center;
+  min-height: 72px;
+  padding: 14px 12px;
+  border: 1px dashed rgba(var(--card-rgb), .28);
+  border-radius: 14px;
+  color: #8a929d;
+  background: rgba(255, 255, 255, .42);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+}
+
 .calendar-swipe-hint { position: relative; z-index: 12; display: flex; align-items: center; justify-content: center; gap: 9px; margin-top: -6px; color: #a0a6af; font-size: 6px; font-weight: 650; letter-spacing: .03em; }
 
 .calendar-swipe-hint span { width: 24px; height: 1px; background: linear-gradient(90deg, transparent, rgba(17,24,39,.12)); }
@@ -714,3 +728,207 @@
 .calendar-task-end-field.visible { display:flex !important; }
 
 .calendar-goal-item.linked-task { box-shadow:inset 3px 0 0 rgb(var(--item-rgb)); }
+
+/* Readable overview type — bump micro fonts to comfortable sizes */
+.page--overview .calendar-live,
+.page--overview .calendar-toolbar > div:first-child span,
+.page--overview .calendar-swipe-hint {
+  font-size: 11px;
+  letter-spacing: .08em;
+}
+
+.page--overview .calendar-header h1 {
+  font-size: clamp(26px, 2.4vw, 32px);
+}
+
+.page--overview .calendar-header p {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.page--overview .calendar-month-row strong,
+.page--overview .calendar-toolbar > div:first-child strong {
+  font-size: 15px;
+}
+
+.page--overview .calendar-month-row span,
+.page--overview .calendar-footer > span,
+.page--overview .calendar-footer button,
+.page--overview .calendar-toolbar .today-button {
+  font-size: 12px;
+}
+
+.page--overview .day-card-heading small {
+  font-size: 12px;
+}
+
+.page--overview .day-card-heading strong {
+  font-size: clamp(22px, 2.2vw, 28px);
+}
+
+.page--overview .day-card-heading p,
+.page--overview .side-day-overview p {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.page--overview .side-day-overview strong {
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.page--overview .side-day-overview span {
+  font-size: 12px;
+}
+
+.page--overview .month-weekdays span,
+.page--overview .month-day {
+  font-size: 12px;
+}
+
+.page--overview .month-popover header strong {
+  font-size: 15px;
+}
+
+.page--overview .month-popover footer button {
+  font-size: 13px;
+}
+
+.page--overview .agenda-copy small,
+.page--overview .carousel-agenda-copy small,
+.page--overview .agenda-status,
+.page--overview .carousel-agenda-status {
+  font-size: 9.5px;
+}
+
+.page--overview .agenda-copy strong,
+.page--overview .carousel-agenda-copy strong {
+  font-size: 12px;
+}
+
+.page--overview .agenda-copy span,
+.page--overview .carousel-agenda-copy span {
+  font-size: 10.5px;
+}
+
+.page--overview .calendar-owner {
+  font-size: 8.5px;
+  min-width: 28px;
+  padding: 3px 5px;
+}
+
+.page--overview .topology-meta > span {
+  font-size: 13px;
+}
+
+.page--overview .topology-meta b {
+  font-size: clamp(34px, 3.2vw, 42px);
+}
+
+.page--overview .topology-meta small,
+.page--overview .topology-key {
+  font-size: 12px;
+  letter-spacing: .04em;
+}
+
+.page--overview .topology-legend > span > b {
+  font-size: 13px;
+}
+
+.page--overview .topology-legend > span > small {
+  font-size: 11px;
+}
+
+.page--overview .interaction-hint {
+  font-size: 13px;
+  min-height: 40px;
+  padding: 10px 14px;
+}
+
+.page--overview .node-tooltip small {
+  font-size: 11px;
+}
+
+.page--overview .node-tooltip strong {
+  font-size: 15px;
+}
+
+.page--overview .node-tooltip p {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.page--overview .node-tooltip dt,
+.page--overview .node-tooltip dd {
+  font-size: 12px;
+}
+
+.page--overview .node-tooltip > span {
+  font-size: 12px;
+}
+
+.page--overview .node-tooltip > span b {
+  font-size: 20px;
+}
+
+.page--overview .calendar-task-sheet > header > span,
+.page--overview .calendar-task-sheet form label > span:first-child,
+.page--overview .calendar-task-schedule label > span,
+.page--overview .calendar-task-owner legend,
+.page--overview .calendar-task-link label > span {
+  font-size: 11px;
+}
+
+.page--overview .calendar-task-sheet h2 {
+  font-size: 28px;
+}
+
+.page--overview .calendar-task-sheet > p,
+.page--overview .calendar-task-sheet footer button,
+.page--overview .calendar-task-link select,
+.page--overview .calendar-task-owner label > span > b {
+  font-size: 14px;
+}
+
+.page--overview .calendar-task-owner label > span > small,
+.page--overview .calendar-task-link label > span em {
+  font-size: 12px;
+}
+
+.page--overview .date-chip small {
+  font-size: 11px;
+  letter-spacing: .06em;
+}
+
+.page--overview .date-chip strong {
+  font-size: 18px;
+}
+
+.page--overview .calendar-toolbar .calendar-add-task {
+  font-size: 12px;
+}
+
+.page--overview .calendar-toolbar .today-button {
+  font-size: 12px;
+}
+
+.page--overview .calendar-timeline-time {
+  font-size: 10px;
+}
+
+.page--overview .focus-mode-panel header > span,
+.page--overview .focus-copy small {
+  font-size: 11px;
+  letter-spacing: .1em;
+}
+
+.page--overview .focus-copy strong {
+  font-size: 22px;
+}
+
+.page--overview .focus-copy p,
+.page--overview .focus-back,
+.page--overview .focus-actions button {
+  font-size: 14px;
+  line-height: 1.45;
+}

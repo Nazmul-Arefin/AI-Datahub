@@ -13,6 +13,7 @@ class AgentRunResponse(BaseModel):
     status: str = "queued"
     session_id: str | None = Field(default=None, alias="sessionId")
     events: list[dict] = Field(default_factory=list)
+    summary: str | None = None
     mode: str | None = None
 
     model_config = {"populate_by_name": True}
@@ -25,6 +26,7 @@ class AgentRunStatus(BaseModel):
     phase: int = 0
     progress: float = 0.0
     events: list[dict] = Field(default_factory=list)
+    summary: str | None = None
     mode: str | None = None
 
     model_config = {"populate_by_name": True}

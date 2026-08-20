@@ -13,10 +13,35 @@ async def test_list_goals_includes_seed_profiles(client):
 
 @pytest.mark.asyncio
 async def test_patch_goal_progress(client):
-    response = await client.patch("/api/v1/goals/beijing-trip", json={"progress": 40, "status": "On track"})
+    # Progress is derived from subgoal done/total, not a free-standing field.
+    response = await client.patch(
+        "/api/v1/goals/beijing-trip",
+        json={
+            "status": "On track",
+            "subgoals": [
+                {"name": "Flights", "done": 2, "total": 4, "state": "Active"},
+                {"name": "Hotel", "done": 1, "total": 2, "state": "Active"},
+            ],
+        },
+    )
     assert response.status_code == 200
-    assert response.json()["progress"] == 40
-    assert response.json()["status"] == "On track"
+    body = response.json()
+    assert body["progress"] == 50
+    assert body["status"] == "On track"
+    assert body["prediction"]["probability"] >= 8
+    assert body["prediction"]["probability"] <= 96
+
+
+@pytest.mark.asyncio
+async def test_goal_metrics_derived_from_subgoals(client):
+    response = await client.get("/api/v1/goals/beijing-trip")
+    assert response.status_code == 200
+    body = response.json()
+    done = sum(item["done"] for item in body["subgoals"])
+    total = sum(item["total"] for item in body["subgoals"])
+    assert body["progress"] == round(done / max(1, total) * 100)
+    assert "probability" in body["prediction"]
+    assert body["prediction"]["confidence"]
 
 
 @pytest.mark.asyncio

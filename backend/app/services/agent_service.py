@@ -11,6 +11,15 @@ from app.services.context_builder import context_builder
 logger = logging.getLogger(__name__)
 
 
+def _summary_from_result(result: dict) -> str | None:
+    if result.get("summary"):
+        return str(result["summary"])[:2000]
+    for item in reversed(list(result.get("events") or [])):
+        if isinstance(item, dict) and item.get("text"):
+            return str(item["text"])[:2000]
+    return None
+
+
 class AgentService:
     def __init__(
         self,
@@ -63,6 +72,15 @@ class AgentService:
         )
 
     async def run(self, mission: str, goal_id: str | None = None) -> dict:
+        from app.services.activity_service import activity_service
+
+        route = "goals" if goal_id else "use-data"
+        activity_service.record(
+            "Agent run started",
+            (mission or "Mission")[:120],
+            route=route,
+            related_goal_id=goal_id,
+        )
         context = await self._build_context(mission, goal_id)
         prompt = self._builder.format_prompt(mission, context)
         try:
@@ -72,7 +90,27 @@ class AgentService:
             result = await self._fallback.start_run(prompt, goal_id, context=context)
         result.setdefault("context", context)
         result.setdefault("events", [])
+        summary = _summary_from_result(result)
+        if summary:
+            result["summary"] = summary
         saved = self._store.save(strip_secrets(result))
+        status = str(saved.get("status") or "").lower()
+        if status in {"completed", "complete", "succeeded", "success"}:
+            activity_service.record(
+                "Agent run completed",
+                f"Run {saved.get('runId') or 'unknown'} finished",
+                route=route,
+                related_goal_id=goal_id,
+                related_run_id=saved.get("runId"),
+            )
+        elif status in {"failed", "error"}:
+            activity_service.record(
+                "Agent run failed",
+                f"Run {saved.get('runId') or 'unknown'} reported an error",
+                route=route,
+                related_goal_id=goal_id,
+                related_run_id=saved.get("runId"),
+            )
         return strip_secrets(saved)
 
     async def start_run(self, mission: str, goal_id: str | None = None) -> dict:
@@ -87,14 +125,25 @@ class AgentService:
             live = None
         if live:
             merged = {**(record or {}), **live, "runId": run_id}
+            summary = _summary_from_result(merged)
+            if summary:
+                merged["summary"] = summary
             return strip_secrets(self._store.save(merged))
         if record:
+            summary = _summary_from_result(record)
+            if summary and not record.get("summary"):
+                record = {**record, "summary": summary}
             return strip_secrets(record)
         try:
             fallback = await self._fallback.get_run(run_id)
         except Exception:
             fallback = None
-        return strip_secrets(fallback) if fallback else None
+        if not fallback:
+            return None
+        summary = _summary_from_result(fallback)
+        if summary:
+            fallback = {**fallback, "summary": summary}
+        return strip_secrets(fallback)
 
     async def list_allowed_tools(self) -> dict:
         """Tool names/ids only — never credential refs or tokens."""

@@ -36,6 +36,28 @@ async def test_memory_search_and_patch_http(client):
 
 
 @pytest.mark.asyncio
+async def test_memory_use_for_ai_patch(client):
+    created = await client.post(
+        "/api/v1/memories",
+        json={"title": "Travel preference", "content": "Prefer aisle seats", "source": "user"},
+    )
+    assert created.status_code == 200
+    memory_id = created.json()["id"]
+    assert created.json().get("useForAi", True) is True
+
+    patched = await client.patch(
+        f"/api/v1/memories/{memory_id}",
+        json={"useForAi": False},
+    )
+    assert patched.status_code == 200
+    assert patched.json()["useForAi"] is False
+
+    recalled = await client.get(f"/api/v1/memories/{memory_id}")
+    assert recalled.status_code == 200
+    assert recalled.json()["useForAi"] is False
+
+
+@pytest.mark.asyncio
 async def test_memory_service_live_mode_uses_http_adapter(monkeypatch):
     from app.adapters.memory_tencent.client import TencentMemoryClient
 

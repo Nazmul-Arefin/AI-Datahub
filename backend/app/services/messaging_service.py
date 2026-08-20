@@ -80,6 +80,13 @@ class MessagingService:
                 "mcpServerId": registered.get("serverId"),
             },
         }
+        from app.services.activity_service import activity_service
+
+        activity_service.record(
+            "Messaging connected",
+            f"{platform} messaging platform connected",
+            route="use-data",
+        )
         return strip_secrets(payload)
 
     async def list_sources(self) -> dict:
@@ -90,9 +97,16 @@ class MessagingService:
         if callable(send_live) and thread_id:
             live = await send_live(content, thread_id)
             if live:
+                from app.services.activity_service import activity_service
+
+                activity_service.record(
+                    "Message sent",
+                    content[:120],
+                    route="use-data",
+                )
                 return strip_secrets(live)
         tid = thread_id or "thread-stub-1"
-        return {
+        payload = {
             "threadId": tid,
             "message": {
                 "id": f"msg-{uuid4().hex[:8]}",
@@ -102,6 +116,14 @@ class MessagingService:
             },
             "mode": "mock",
         }
+        from app.services.activity_service import activity_service
+
+        activity_service.record(
+            "Message sent",
+            content[:120],
+            route="use-data",
+        )
+        return payload
 
     async def connect_platform(
         self,

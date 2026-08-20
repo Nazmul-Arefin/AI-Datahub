@@ -1,3 +1,5 @@
+from datetime import date, datetime, timezone
+
 from sqlalchemy.orm import Session
 
 from app.models.goal import Goal as GoalRow
@@ -7,15 +9,18 @@ from app.schemas.tasks import ExecutionTask
 from app.services.activity_service import activity_service
 from app.services.goal_service import goal_service
 from app.services.runtime_store import runtime_store
-from app.services.seed_data import OVERVIEW_CALENDAR
 from app.services.source_service import source_service
 from app.services.task_service import task_service
+
+
+def _today() -> date:
+    return datetime.now(timezone.utc).astimezone().date()
 
 
 def _time_from_due(due_at: str | None) -> str | None:
     if not due_at:
         return None
-    text = str(due_at)
+    text = str(due_at).strip()
     if "T" in text:
         return text.split("T", 1)[1][:5]
     if text.startswith("T") and len(text) >= 6:
@@ -25,30 +30,71 @@ def _time_from_due(due_at: str | None) -> str | None:
     return None
 
 
+def _day_offset_from_due(due_at: str | None) -> int:
+    """Map task due times onto calendar day offsets from local today.
+
+    Supported forms:
+    - `T14:00` / `14:00` → today (0)
+    - `+1T19:00` / `-1T09:00` → relative day + time
+    - `2026-08-21T14:00` / `2026-08-21` → absolute date
+    """
+    if not due_at:
+        return 0
+    text = str(due_at).strip()
+    if not text:
+        return 0
+
+    # Relative: +2T14:00 or -1T09:30
+    if len(text) > 1 and text[0] in "+-" and "T" in text:
+        sign = 1 if text[0] == "+" else -1
+        day_part, _time_part = text[1:].split("T", 1)
+        try:
+            return sign * int(day_part or "0")
+        except ValueError:
+            return 0
+
+    # Absolute ISO date (with or without time)
+    date_part = text[:10] if len(text) >= 10 and text[4] == "-" else None
+    if date_part:
+        try:
+            due_day = date.fromisoformat(date_part)
+            return (due_day - _today()).days
+        except ValueError:
+            return 0
+
+    return 0
+
+
 def _calendar_from_task(task: ExecutionTask) -> CalendarTask:
     owner = "ai" if task.owner == "ai" else "human"
     time = _time_from_due(task.due_at)
-    done = task.state.lower() in {"completed", "done", "ready"}
-    needs = "need" in task.state.lower() or "action" in task.state.lower()
+    day_offset = _day_offset_from_due(task.due_at)
+    state = (task.state or "").lower()
+    done = state in {"completed", "done", "ready", "confirmed"}
+    awaiting = any(token in state for token in ("need", "await", "confirm", "pending")) and not done
     if owner == "ai":
-        label = "AI COMPLETED" if done else "AI TASK"
-        item_type = "complete" if done else "planning"
-        status = "Ready" if done else "Queued"
-        icon = "check" if done else "spark"
-        detail = task.subgoal_name or "Weeple is handling this for you"
+        if done:
+            label, item_type, status, icon = "AI COMPLETED", "complete", "Ready", "check"
+            detail = task.subgoal_name or "Weeple finished this for you"
+        elif awaiting:
+            label, item_type, status, icon = "AI NEEDS CONFIRM", "planning", "Confirm", "alert"
+            detail = task.subgoal_name or "Confirm so Weeple can continue"
+        else:
+            label, item_type, status, icon = "AI TASK", "planning", "Queued", "spark"
+            detail = task.subgoal_name or "Weeple is handling this for you"
         title = task.name
     else:
-        label = "NEEDS YOUR ACTION" if needs else "YOUR TASK"
-        item_type = "action"
-        status = "Confirm" if needs else task.state
-        icon = "alert" if needs else "target"
+        if awaiting:
+            label, item_type, status, icon = "NEEDS YOUR ACTION", "action", "Confirm", "alert"
+        else:
+            label, item_type, status, icon = "YOUR TASK", "action", task.state or "To do", "target"
         detail = task.subgoal_name or "Added for you"
-        title = f"{task.name} · {time}" if needs and time and "·" not in task.name else task.name
+        title = f"{task.name} · {time}" if awaiting and time and "·" not in task.name else task.name
     return CalendarTask(
         id=f"task-{task.id}",
         title=title,
         time=time,
-        dayOffset=0,
+        dayOffset=day_offset,
         owner=owner,
         label=label,
         detail=detail,
@@ -80,7 +126,7 @@ def _calendar_from_goal(goal) -> CalendarTask | None:
 class OverviewService:
     def get_overview(self, db: Session | None = None) -> OverviewResponse:
         goals = goal_service.list_goals(db=db).goals
-        memory_count = sum(goal.memories for goal in goals) or 128
+        memory_count = sum(int(goal.memories or 0) for goal in goals)
         if db is not None:
             goal_count = db.query(GoalRow).count()
             source_count = db.query(DataSource).count()
@@ -94,7 +140,7 @@ class OverviewService:
             OverviewCluster(key="memory", title="Long-term Memory", count=memory_count),
         ]
 
-        by_id: dict[str, CalendarTask] = {item.id: item for item in OVERVIEW_CALENDAR}
+        by_id: dict[str, CalendarTask] = {}
 
         for goal in goals:
             mapped = _calendar_from_goal(goal)

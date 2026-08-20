@@ -38,6 +38,13 @@ async def create_memory(payload: MemoryCreateRequest, _user_id: CurrentUserId) -
         )
     except HTTPError as exc:
         raise _sidecar_error() from exc
+    from app.services.activity_service import activity_service
+
+    activity_service.record(
+        "Memory saved",
+        f"“{payload.title}” was added to long-term memory",
+        route="use-data",
+    )
     return MemoryRecord.model_validate(result)
 
 
@@ -77,6 +84,21 @@ async def patch_memory(
         raise _sidecar_error() from exc
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Memory not found")
+    from app.services.activity_service import activity_service
+
+    if "use_for_ai" in fields:
+        available = "available to AI" if fields["use_for_ai"] else "excluded from AI"
+        activity_service.record(
+            "Memory availability updated",
+            f"Memory is now {available}",
+            route="use-data",
+        )
+    else:
+        activity_service.record(
+            "Memory updated",
+            f"Memory “{result.get('title') or memory_id}” was corrected",
+            route="use-data",
+        )
     return MemoryRecord.model_validate(result)
 
 

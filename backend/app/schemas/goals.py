@@ -14,6 +14,10 @@ class GoalObservation(BaseModel):
     detail: str
     source: str | None = None
     time: str | None = None
+    influence: int | None = None
+    agent_generated: bool | None = Field(default=None, alias="agentGenerated")
+
+    model_config = {"populate_by_name": True}
 
 
 class GoalPrediction(BaseModel):
@@ -23,6 +27,9 @@ class GoalPrediction(BaseModel):
     impact: str | None = None
     window: str | None = None
     confidence: str | None = None
+    agent_generated: bool | None = Field(default=None, alias="agentGenerated")
+
+    model_config = {"populate_by_name": True}
 
 
 class GoalSuggestion(BaseModel):
@@ -32,6 +39,10 @@ class GoalSuggestion(BaseModel):
     action: str
     updates: int = 0
     options: list[str] = Field(default_factory=list)
+    agent_generated: bool | None = Field(default=None, alias="agentGenerated")
+    decision: str | None = None
+
+    model_config = {"populate_by_name": True}
 
 
 class Goal(BaseModel):
@@ -91,5 +102,8 @@ class GoalUpdateRequest(BaseModel):
     status: str | None = None
     monitoring_paused: bool | None = Field(default=None, alias="monitoringPaused")
     subgoals: list[Subgoal] | None = None
+    observations: list[GoalObservation] | None = None
+    prediction: GoalPrediction | None = None
+    suggestions: list[GoalSuggestion] | None = None
 
     model_config = {"populate_by_name": True}

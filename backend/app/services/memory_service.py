@@ -38,8 +38,11 @@ class MemoryService:
         items = self._records(await self._store.search(query))
         return {"items": items, "total": len(items), "mode": self._settings.memory_mode}
 
-    async def update(self, memory_id: str, **fields: str) -> dict | None:
-        return await self._store.update(memory_id, **fields)
+    async def update(self, memory_id: str, **fields: object) -> dict | None:
+        result = await self._store.update(memory_id, **fields)
+        if result is None:
+            return None
+        return normalize_memory_item(result, fallback_id=memory_id, mode=self._settings.memory_mode)
 
     async def delete(self, memory_id: str) -> dict:
         deleted = await self._store.delete(memory_id)

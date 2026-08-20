@@ -11,3 +11,4 @@ build/
 *.sqlite
 *.sqlite3
 data/*.jsonl
+data/settings/

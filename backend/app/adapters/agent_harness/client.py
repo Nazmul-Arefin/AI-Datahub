@@ -47,6 +47,51 @@ class HarnessClient:
         self.mode = mode or settings.harness_mode
         self.model = model or settings.llm_deepseek_model
         self._runs: dict[str, dict] = {}
+        self._poll_counts: dict[str, int] = {}
+
+    def _mock_assistant_text(self, mission: str) -> str:
+        text = str(mission or "").strip()
+        lowered = text.lower()
+        if ("observation" in lowered and "prediction" in lowered) or "goal intelligence" in lowered:
+            return (
+                '{"observations":['
+                '{"type":"context","title":"Plan pressure","detail":"Open work and timing are shaping the next decision.",'
+                '"source":"AI analysis","time":"Now","influence":78},'
+                '{"type":"calendar","title":"Execution window","detail":"Protect the next useful block before momentum fades.",'
+                '"source":"Goal schedule","time":"Live","influence":71}'
+                '],"prediction":{"probability":74,"risk":"ON TRACK",'
+                '"title":"Current signals support progress if the next confirmed move lands soon.",'
+                '"impact":"Next milestone","window":"This week","confidence":"Medium-high confidence"},'
+                '"suggestions":[{"label":"NEXT MOVE","title":"Advance the highest-leverage open work.",'
+                '"action":"Prepare next step","options":["Today","Tomorrow","Choose time"]}]}'
+            )
+        if "subgoal" in lowered and ("json" in lowered or "[" in text):
+            return (
+                '[{"name":"Clarify measurable success"},'
+                '{"name":"Complete the first useful milestone"}]'
+            )
+        if ("suggestion" in lowered or "next move" in lowered) and (
+            "json" in lowered or "[" in text
+        ):
+            return (
+                '[{"label":"NEXT MOVE","title":"Advance the highest-leverage open work.",'
+                '"action":"Prepare next step","options":["Today","Tomorrow","Choose time"]}]'
+            )
+        if "goal plan" in lowered and ("json" in lowered or "{" in text):
+            return (
+                '{"category":"Project","subgoals":['
+                '{"name":"Clarify measurable success","tasks":["Define the outcome"]},'
+                '{"name":"Ship the first milestone","tasks":["Draft the smallest useful step"]}'
+                '],"observations":[{"type":"context","title":"Fresh goal brief","detail":"Only the confirmed outcome is available so far.",'
+                '"source":"User input","time":"Now","influence":70}],'
+                '"prediction":{"probability":58,"risk":"EARLY INFERENCE",'
+                '"title":"First milestone confidence rises after the opening review.",'
+                '"impact":"First milestone","window":"After first review","confidence":"Low-medium confidence"},'
+                '"suggestions":[{"label":"FIRST MOVE","title":"Define one measurable result.",'
+                '"action":"Define Result","options":["This week","This month"]}]}'
+            )
+        preview = text[:180] if text else "goal work"
+        return f"Prepared output ready for review: {preview}"
 
     async def _rpc(self, method: str, payload: dict | None = None, timeout: float = 20.0) -> dict:
         rpc_id = str(uuid4())
@@ -145,11 +190,51 @@ class HarnessClient:
     async def get_run(self, run_id: str, session_id: str | None = None) -> dict | None:
         if self.mode != "live":
             record = self._runs.get(run_id)
-            return dict(record) if record else None
+            if not record:
+                return None
+            # Mock runs must progress so Goals/Use polling is honest (not stuck forever).
+            count = self._poll_counts.get(run_id, 0) + 1
+            self._poll_counts[run_id] = count
+            mission = str(record.get("mission") or "")
+            updated = dict(record)
+            if count <= 1:
+                updated.update(
+                    {
+                        "status": "running",
+                        "phase": 1,
+                        "progress": 0.45,
+                        "events": [
+                            {"type": "user/message", "seq": 0, "text": mission[:400]},
+                            {"type": "turn/start", "seq": 1, "text": "Working"},
+                        ],
+                        "summary": None,
+                    }
+                )
+            else:
+                assistant = self._mock_assistant_text(mission)
+                updated.update(
+                    {
+                        "status": "completed",
+                        "phase": 2,
+                        "progress": 1.0,
+                        "events": [
+                            {"type": "user/message", "seq": 0, "text": mission[:400]},
+                            {"type": "assistant/message", "seq": 1, "text": assistant[:800]},
+                        ],
+                        "summary": assistant[:2000],
+                    }
+                )
+            self._runs[run_id] = updated
+            return dict(updated)
         sid = session_id or run_id
         history = await self._rpc("session.history", {"sessionId": sid, "maxMessages": 40})
         events = compact_events(history.get("events") or [])
         status, phase, progress = status_from_events(events)
+        summary = None
+        for item in reversed(events):
+            if item.get("text"):
+                summary = str(item["text"])[:2000]
+                break
         record = {
             "runId": run_id,
             "sessionId": sid,
@@ -157,6 +242,7 @@ class HarnessClient:
             "phase": phase,
             "progress": progress,
             "events": events,
+            "summary": summary,
             "mode": "live",
         }
         self._runs[run_id] = {**self._runs.get(run_id, {}), **record}

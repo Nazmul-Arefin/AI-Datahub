@@ -9,8 +9,8 @@ class LLMService:
     def __init__(self, client=deepseek_client) -> None:
         self._client = client
 
-    async def chat(self, messages: list[dict]) -> dict:
-        return await self._client.chat(messages)
+    async def chat(self, messages: list[dict], *, max_tokens: int = 2048) -> dict:
+        return await self._client.chat(messages, max_tokens=max_tokens)
 
     async def stream(self, messages: list[dict]) -> AsyncIterator[dict]:
         async for chunk in self._client.stream(messages):

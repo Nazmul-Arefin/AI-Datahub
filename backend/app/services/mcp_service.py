@@ -44,7 +44,16 @@ class McpService:
         )
 
     async def invoke(self, tool: str, args: dict | None = None, server_id: str | None = None) -> dict:
-        return strip_secrets(await self._client.invoke(tool, args, server_id=server_id))
+        result = strip_secrets(await self._client.invoke(tool, args, server_id=server_id))
+        from app.services.activity_service import activity_service
+
+        ok = result.get("ok", True)
+        activity_service.record(
+            "MCP tool invoked" if ok else "MCP invoke failed",
+            f"{tool}" + (f" on {server_id}" if server_id else ""),
+            route="use-data",
+        )
+        return result
 
     async def list_audit(self) -> dict:
         events = await self._client.list_audit()

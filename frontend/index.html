@@ -64,19 +64,188 @@
     <div id="page-outlet" class="page-outlet" aria-live="polite"></div>
 
 <section class="command-panel" id="commandPanel" aria-label="AI command center">
-        <div class="command-icon">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.4-4.4m2.4-5.1a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z"/></svg>
+        <div class="command-panel-main">
+          <div class="command-icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.4-4.4m2.4-5.1a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z"/></svg>
+          </div>
+          <input id="commandInput" type="search" placeholder="Search goals, data, tasks, memory…" autocomplete="off" enterkeyhint="search">
+          <kbd>ESC</kbd>
         </div>
-        <input id="commandInput" type="text" placeholder="Ask Weeple anything…" autocomplete="off">
-        <kbd>ESC</kbd>
+        <div class="command-results" id="commandResults" hidden>
+          <div class="command-results-meta" id="commandResultsMeta"></div>
+          <div class="command-results-list" id="commandResultsList" role="listbox" aria-label="Search results"></div>
+        </div>
       </section>
 
 <aside class="notification-panel" id="notificationPanel" aria-label="Notifications">
-        <div class="panel-heading"><strong>Action center</strong><span>3 updates</span></div>
-        <button type="button" data-notification-action="Review today’s goal plan"><i class="priority-important"></i><span><em>Important</em><b>Morning brief is ready</b><small>3 goals prioritized for today</small></span><time>Now</time></button>
-        <button type="button" data-notification-action="Open meeting preparation"><i class="priority-progress"></i><span><em>In progress</em><b>Meeting preparation</b><small>AI is assembling the final context</small></span><time>2m</time></button>
-        <button type="button" data-notification-action="View synchronized sources"><i class="priority-completed"></i><span><em>Completed</em><b>Health data synced</b><small>Apple Fitness · 42 metrics</small></span><time>8m</time></button>
+        <div class="panel-heading"><strong>Action center</strong><span id="notificationCount">0 updates</span></div>
+        <div class="notification-list" id="notificationList"></div>
       </aside>
+
+<section class="settings-overlay" id="settingsOverlay" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="settingsTitle">
+    <button class="settings-backdrop" id="settingsBackdrop" type="button" aria-label="Close system settings"></button>
+    <div class="settings-sheet">
+      <header class="settings-sheet-header">
+        <div>
+          <span><i></i>SYSTEM</span>
+          <h2 id="settingsTitle">Settings</h2>
+          <p>Control how Weeple assists, what it can remember, and how this OS feels.</p>
+        </div>
+        <button class="settings-close" id="settingsClose" type="button" aria-label="Close settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg>
+        </button>
+      </header>
+
+      <div class="settings-scroll">
+        <section class="settings-section" aria-labelledby="settingsAutonomyHeading">
+          <header>
+            <h3 id="settingsAutonomyHeading">AI autonomy</h3>
+            <p>Weeple never takes irreversible external action without your chosen rule.</p>
+          </header>
+          <div class="settings-choice-grid" role="radiogroup" aria-label="AI autonomy level">
+            <label class="settings-choice">
+              <input type="radio" name="settingsAutonomy" value="monitor" data-setting="autonomy">
+              <span>
+                <b>Monitor only</b>
+                <small>Watch authorized context and alert you — no proposals executed.</small>
+              </span>
+            </label>
+            <label class="settings-choice">
+              <input type="radio" name="settingsAutonomy" value="prepare" data-setting="autonomy" checked>
+              <span>
+                <b>Prepare suggestions</b>
+                <small>Draft next moves and wait for your approval before acting.</small>
+              </span>
+            </label>
+            <label class="settings-choice">
+              <input type="radio" name="settingsAutonomy" value="assist" data-setting="autonomy">
+              <span>
+                <b>Assist after approval</b>
+                <small>Run approved tasks and report progress in AI Activity.</small>
+              </span>
+            </label>
+          </div>
+        </section>
+
+        <section class="settings-section" aria-labelledby="settingsPrivacyHeading">
+          <header>
+            <h3 id="settingsPrivacyHeading">Privacy &amp; memory</h3>
+            <p>Minimum access stays the default. Memory stays under your control.</p>
+          </header>
+          <div class="settings-toggle-list">
+            <label class="settings-toggle">
+              <span>
+                <b>Confirm before writing memory</b>
+                <small>Proposed facts stay pending until you accept them.</small>
+              </span>
+              <input type="checkbox" data-setting="confirmMemory" checked>
+            </label>
+            <label class="settings-toggle">
+              <span>
+                <b>Share only goal-relevant context</b>
+                <small>Limit synthesis to sources linked to active goals.</small>
+              </span>
+              <input type="checkbox" data-setting="goalScopedContext" checked>
+            </label>
+            <label class="settings-toggle">
+              <span>
+                <b>Pause live source monitoring</b>
+                <small>Stop pulling new signals until you turn this off.</small>
+              </span>
+              <input type="checkbox" data-setting="pauseMonitoring">
+            </label>
+          </div>
+        </section>
+
+        <section class="settings-section" aria-labelledby="settingsAlertsHeading">
+          <header>
+            <h3 id="settingsAlertsHeading">Alerts</h3>
+            <p>Choose what surfaces in Action center and the AI Activity dock.</p>
+          </header>
+          <div class="settings-toggle-list">
+            <label class="settings-toggle">
+              <span>
+                <b>Decision-ready notifications</b>
+                <small>When a suggestion needs your approval.</small>
+              </span>
+              <input type="checkbox" data-setting="notifyDecisions" checked>
+            </label>
+            <label class="settings-toggle">
+              <span>
+                <b>Show AI Activity dock</b>
+                <small>Live ledger along the bottom of Overview.</small>
+              </span>
+              <input type="checkbox" data-setting="showActivityDock" checked>
+            </label>
+            <label class="settings-toggle">
+              <span>
+                <b>Calendar task reminders</b>
+                <small>Highlight due You / AI tasks for today.</small>
+              </span>
+              <input type="checkbox" data-setting="calendarReminders" checked>
+            </label>
+          </div>
+        </section>
+
+        <section class="settings-section" aria-labelledby="settingsExperienceHeading">
+          <header>
+            <h3 id="settingsExperienceHeading">Experience</h3>
+            <p>Tune motion and first-run guidance for this device.</p>
+          </header>
+          <div class="settings-toggle-list">
+            <label class="settings-toggle">
+              <span>
+                <b>Reduce motion</b>
+                <small>Calm topology drift, pulses, and transitions.</small>
+              </span>
+              <input type="checkbox" data-setting="reduceMotion">
+            </label>
+            <label class="settings-toggle">
+              <span>
+                <b>Compact activity text</b>
+                <small>Slightly denser type in the activity dock.</small>
+              </span>
+              <input type="checkbox" data-setting="compactActivity">
+            </label>
+          </div>
+          <div class="settings-actions-row">
+            <button type="button" id="settingsResetHints">Reset interaction hints</button>
+            <button type="button" id="settingsOpenOnboarding">Open first-value setup</button>
+          </div>
+        </section>
+
+        <section class="settings-section settings-section--account" aria-labelledby="settingsAccountHeading">
+          <header>
+            <h3 id="settingsAccountHeading">Account &amp; system</h3>
+            <p>Local single-user OS · ai-bang.cn</p>
+          </header>
+          <div class="settings-meta-grid">
+            <div>
+              <small>Signed in</small>
+              <strong id="settingsAccountUser">admin</strong>
+            </div>
+            <div>
+              <small>API</small>
+              <strong id="settingsApiStatus">Checking…</strong>
+            </div>
+            <div>
+              <small>Product</small>
+              <strong>Weeple AI OS</strong>
+            </div>
+            <div>
+              <small>Host</small>
+              <strong>ai-bang.cn</strong>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <footer class="settings-sheet-footer">
+        <span id="settingsSaveStatus">Synced with Weeple server when online</span>
+        <button type="button" class="settings-done" id="settingsDone">Done</button>
+      </footer>
+    </div>
+  </section>
 
 <section class="activity-dock" aria-label="Live AI activity ledger">
       <div class="activity-identity">
@@ -84,30 +253,9 @@
           <i></i>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1m0-12.8-2.1 2.1m-8.6 8.6-2.1 2.1"/></svg>
         </span>
-        <span><small>EXAMPLE DATA</small><strong>AI Activity</strong><em>Continuously learning</em></span>
+        <span><small id="activityLiveLabel">LIVE</small><strong>AI Activity</strong><em id="activityLiveDetail">Waiting for updates</em></span>
       </div>
-      <div class="activity-feed">
-        <button class="activity-item priority status-progress" type="button" data-activity-action="Review plan" data-action-target="goals" aria-label="Goal plan recalibrated. In progress. Touch to reveal Review plan action.">
-          <span class="activity-dot"><i></i></span>
-          <span><strong id="liveActivityTitle">Goal plan recalibrated</strong><small id="liveActivityDetail">3 next actions prioritized for today</small><em class="activity-action">Review plan <b>→</b></em></span>
-          <span class="activity-meta"><time>Now</time><em>In progress</em></span>
-        </button>
-        <button class="activity-item status-important" type="button" data-activity-action="Open preparation" data-action-target="calendar" aria-label="Client Meeting at 14:00. Important. Touch to reveal Open preparation action.">
-          <span class="activity-dot amber"><i></i></span>
-          <span><strong>Client Meeting · 14:00</strong><small>Agenda, notes, and documents are ready</small><em class="activity-action">Open preparation <b>→</b></em></span>
-          <span class="activity-meta"><time>2h</time><em>Important</em></span>
-        </button>
-        <button class="activity-item status-completed" type="button" data-activity-action="View sources" data-action-target="data" aria-label="Personal data synchronized. Completed. Touch to reveal View sources action.">
-          <span class="activity-dot violet"><i></i></span>
-          <span><strong>Personal data synchronized</strong><small>42 new signals connected securely</small><em class="activity-action">View sources <b>→</b></em></span>
-          <span class="activity-meta"><time>8m</time><em>Completed</em></span>
-        </button>
-        <button class="activity-item status-progress" type="button" data-activity-action="View insight" data-action-target="memory" aria-label="Memory insight prepared. In progress. Touch to reveal View insight action.">
-          <span class="activity-dot coral"><i></i></span>
-          <span><strong>Memory insight prepared</strong><small>6 relevant notes linked to today’s goals</small><em class="activity-action">View insight <b>→</b></em></span>
-          <span class="activity-meta"><time>12m</time><em>In progress</em></span>
-        </button>
-      </div>
+      <div class="activity-feed" id="activityFeed"></div>
       <button class="activity-expand" id="activityExpand" type="button" aria-label="View all notifications">
         <span>View all</span>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg>
@@ -126,7 +274,11 @@
   </section>
 
   <div class="toast" id="toast" role="status"><i></i><span>Goals hub focused</span><button id="toastAction" type="button" hidden>Undo</button></div>
-  <script>window.__WEEple_API__ = 'http://127.0.0.1:8000/api/v1';</script>
+  <script>
+    window.__WEEple_API__ = 'http://127.0.0.1:8000/api/v1';
+    window.__WEEple_USER__ = window.__WEEple_USER__ || 'admin';
+    window.__WEEple_PASS__ = window.__WEEple_PASS__ || 'weeple';
+  </script>
   <script type="module" src="src/app/bootstrap.js"></script>
 </body>
 </html>

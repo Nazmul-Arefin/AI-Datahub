@@ -31,7 +31,7 @@ class DeepSeekClient:
             "model": self.model,
         }
 
-    async def chat(self, messages: list[dict]) -> dict:
+    async def chat(self, messages: list[dict], *, max_tokens: int = 2048) -> dict:
         if not self.api_key:
             return self._mock_reply(messages)
         url = f"{self.base_url}/chat/completions"
@@ -42,7 +42,7 @@ class DeepSeekClient:
         payload = {
             "model": self.model,
             "messages": messages,
-            "max_tokens": 64,
+            "max_tokens": max(64, int(max_tokens or 2048)),
             "thinking": {"type": "disabled"},
         }
         async with httpx.AsyncClient(timeout=20.0) as client:

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.core.deps import CurrentUserId, DbSession
-from app.schemas.tasks import ExecutionTask, TaskListResponse, TaskUpdateRequest
+from app.schemas.tasks import ExecutionTask, TaskCreateRequest, TaskListResponse, TaskUpdateRequest
 from app.services.task_service import task_service
 
 router = APIRouter()
@@ -14,6 +14,15 @@ async def list_tasks(
     goal_id: str | None = Query(default=None, alias="goalId"),
 ) -> TaskListResponse:
     return task_service.list_tasks(goal_id=goal_id, db=db)
+
+
+@router.post("", response_model=ExecutionTask, status_code=status.HTTP_201_CREATED)
+async def create_task(
+    payload: TaskCreateRequest,
+    _user_id: CurrentUserId,
+    db: DbSession,
+) -> ExecutionTask:
+    return task_service.create_task(payload, db=db)
 
 
 @router.patch("/{task_id}", response_model=ExecutionTask)
