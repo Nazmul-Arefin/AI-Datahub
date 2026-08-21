@@ -8,10 +8,93 @@
   <link rel="stylesheet" href="src/shared/styles/tokens.css">
   <link rel="stylesheet" href="src/shared/styles/base.css">
   <link rel="stylesheet" href="src/shared/styles/shell.css">
+  <link rel="stylesheet" href="src/shared/styles/auth.css">
 </head>
-<body>
+<body class="auth-pending">
   <div class="ambient ambient-one"></div>
   <div class="ambient ambient-two"></div>
+
+  <section class="auth-gate" id="authGate" aria-hidden="false" aria-labelledby="authBrand">
+    <div class="auth-gate-mesh" aria-hidden="true">
+      <i class="auth-orb auth-orb-a"></i>
+      <i class="auth-orb auth-orb-b"></i>
+      <i class="auth-orb auth-orb-c"></i>
+      <canvas class="auth-topology" id="authTopology" width="1200" height="800"></canvas>
+      <span class="auth-grain"></span>
+      <span class="auth-scan"></span>
+    </div>
+
+    <div class="auth-gate-stage">
+      <header class="auth-hero">
+        <p class="auth-eyebrow auth-reveal" style="--auth-delay: 0.05s">PERSONAL AI OS</p>
+        <p class="auth-brand auth-reveal" id="authBrand" style="--auth-delay: 0.12s">Weeple</p>
+        <h1 class="auth-headline auth-reveal" id="authHeadline" style="--auth-delay: 0.22s">Your personal AI OS</h1>
+        <p class="auth-support auth-reveal" id="authSupport" style="--auth-delay: 0.32s">Sign in to continue, or create an account to start with a clean personal space.</p>
+        <p class="auth-status auth-reveal" id="authStatus" style="--auth-delay: 0.4s" aria-live="polite">
+          <i class="auth-status-dot" aria-hidden="true"></i>
+          <span id="authStatusText">Waiting for identity</span>
+        </p>
+        <div class="auth-boot-ticks auth-reveal" style="--auth-delay: 0.48s" aria-hidden="true">
+          <i></i><i></i><i></i><i></i><i></i>
+        </div>
+      </header>
+
+      <div class="auth-panel auth-reveal" style="--auth-delay: 0.55s" role="tablist" aria-label="Authentication">
+        <span class="auth-instrument" aria-hidden="true">
+          <i class="auth-tick auth-tick-tl"></i>
+          <i class="auth-tick auth-tick-tr"></i>
+          <i class="auth-tick auth-tick-bl"></i>
+          <i class="auth-tick auth-tick-br"></i>
+        </span>
+
+        <div class="auth-tabs">
+          <span class="auth-tab-pill" id="authTabPill" aria-hidden="true"></span>
+          <button type="button" class="auth-tab is-active" id="authTabSignIn" role="tab" aria-selected="true" aria-controls="authFormSignIn" data-auth-mode="signin">Sign in</button>
+          <button type="button" class="auth-tab" id="authTabCreate" role="tab" aria-selected="false" aria-controls="authFormCreate" data-auth-mode="create">Create account</button>
+        </div>
+
+        <form class="auth-form is-active" id="authFormSignIn" role="tabpanel" aria-labelledby="authTabSignIn" autocomplete="on">
+          <label class="auth-field">
+            <span>Username</span>
+            <input id="authSignInUsername" name="username" type="text" autocomplete="username" required minlength="3" maxlength="64" spellcheck="false">
+          </label>
+          <label class="auth-field">
+            <span>Password</span>
+            <input id="authSignInPassword" name="password" type="password" autocomplete="current-password" required minlength="6">
+          </label>
+          <p class="auth-error" id="authSignInError" role="alert" hidden></p>
+          <button class="auth-submit" type="submit" id="authSignInSubmit">
+            <span class="auth-submit-label">Sign in</span>
+            <span class="auth-submit-busy" aria-hidden="true">Routing…</span>
+          </button>
+        </form>
+
+        <form class="auth-form" id="authFormCreate" role="tabpanel" aria-labelledby="authTabCreate" hidden autocomplete="on">
+          <label class="auth-field">
+            <span>Username</span>
+            <input id="authCreateUsername" name="username" type="text" autocomplete="username" required minlength="3" maxlength="64" spellcheck="false">
+          </label>
+          <label class="auth-field">
+            <span>Display name <em>(optional)</em></span>
+            <input id="authCreateDisplayName" name="displayName" type="text" autocomplete="nickname" maxlength="120">
+          </label>
+          <label class="auth-field">
+            <span>Password</span>
+            <input id="authCreatePassword" name="password" type="password" autocomplete="new-password" required minlength="6">
+          </label>
+          <label class="auth-field">
+            <span>Confirm password</span>
+            <input id="authCreateConfirm" name="confirmPassword" type="password" autocomplete="new-password" required minlength="6">
+          </label>
+          <p class="auth-error" id="authCreateError" role="alert" hidden></p>
+          <button class="auth-submit" type="submit" id="authCreateSubmit">
+            <span class="auth-submit-label">Create account</span>
+            <span class="auth-submit-busy" aria-hidden="true">Provisioning…</span>
+          </button>
+        </form>
+      </div>
+    </div>
+  </section>
 
   <main class="os-shell">
 <header class="topbar">
@@ -222,7 +305,7 @@
           <div class="settings-meta-grid">
             <div>
               <small>Signed in</small>
-              <strong id="settingsAccountUser">admin</strong>
+              <strong id="settingsAccountUser">—</strong>
             </div>
             <div>
               <small>API</small>
@@ -236,6 +319,9 @@
               <small>Host</small>
               <strong>ai-bang.cn</strong>
             </div>
+          </div>
+          <div class="settings-actions-row">
+            <button type="button" id="settingsSignOut">Sign out</button>
           </div>
         </section>
       </div>
@@ -276,8 +362,6 @@
   <div class="toast" id="toast" role="status"><i></i><span>Goals hub focused</span><button id="toastAction" type="button" hidden>Undo</button></div>
   <script>
     window.__WEEple_API__ = 'http://127.0.0.1:8000/api/v1';
-    window.__WEEple_USER__ = window.__WEEple_USER__ || 'admin';
-    window.__WEEple_PASS__ = window.__WEEple_PASS__ || 'weeple';
   </script>
   <script type="module" src="src/app/bootstrap.js"></script>
 </body>

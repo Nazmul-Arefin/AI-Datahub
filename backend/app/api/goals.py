@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 
 from app.core.deps import CurrentUserId, DbSession
 from app.schemas.goals import Goal, GoalCreateRequest, GoalListResponse, GoalUpdateRequest
+from app.services.goal_artwork_job import run_goal_artwork_job
 from app.services.goal_service import goal_service
 
 router = APIRouter()
@@ -17,8 +18,12 @@ async def create_goal(
     payload: GoalCreateRequest,
     _user_id: CurrentUserId,
     db: DbSession,
+    background_tasks: BackgroundTasks,
 ) -> Goal:
-    return goal_service.create_goal(payload, db=db)
+    goal = goal_service.create_goal(payload, db=db)
+    if goal.image_status == "generating":
+        background_tasks.add_task(run_goal_artwork_job, goal.id)
+    return goal
 
 
 @router.get("/{goal_id}", response_model=Goal)

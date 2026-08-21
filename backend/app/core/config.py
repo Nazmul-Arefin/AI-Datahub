@@ -55,9 +55,23 @@ class Settings(BaseSettings):
     mcp_gateway_mode: SidecarMode = "mock"
     sidecar_health_timeout_seconds: float = 3.0
 
+    # Coze image workflow (goal cover art). Token only via env — never commit.
+    coze_api_token: str = ""
+    coze_workflow_id: str = "7676050213220040713"
+    coze_api_base: str = "https://api.coze.cn"
+    coze_workflow_input_key: str = "input"
+    coze_mode: SidecarMode = "mock"
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def coze_enabled(self) -> bool:
+        """Live Coze artwork when a token is present and mode is not explicitly mock."""
+        if not self.coze_api_token.strip() or not self.coze_workflow_id.strip():
+            return False
+        return self.coze_mode == "live"
 
 
 @lru_cache

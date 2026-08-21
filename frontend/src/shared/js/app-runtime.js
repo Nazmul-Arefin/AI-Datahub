@@ -3,7 +3,7 @@
  * Expects overview/goals/import-data/use-data page roots to exist under #page-outlet.
  */
 import { isApiEnabled } from './api/client.js';
-import { loadGoalsFromApi, updateGoalOnApi, createGoalOnApi, deleteGoalOnApi } from './repositories/goalsRepository.js';
+import { loadGoalsFromApi, updateGoalOnApi, createGoalOnApi, deleteGoalOnApi, fetchGoalFromApi } from './repositories/goalsRepository.js';
 import {
   loadSourcesFromApi,
   disconnectSourceOnApi,
@@ -21,7 +21,7 @@ import {
   deleteMemoryOnApi,
 } from './repositories/memoriesRepository.js';
 import { startAgentRunOnApi, getAgentRunOnApi, loadAllowedAgentToolsFromApi } from './repositories/agentsRepository.js';
-import { ensureAuthenticated } from './repositories/authRepository.js';
+import { ensureAuthenticated, logout } from './repositories/authRepository.js';
 import { loadTasksFromApi, updateTaskOnApi, createTaskOnApi } from './repositories/tasksRepository.js';
 import { loadMcpServersFromApi, loadMcpToolsFromApi, invokeMcpToolOnApi, loadMcpAuditFromApi } from './repositories/mcpRepository.js';
 import {
@@ -2513,6 +2513,11 @@ function __install() {
     const customs = goalProfiles.filter((goal) => goal.custom && !remoteGoals.some((remote) => remote.id === goal.id || remote.title === goal.title));
     goalProfiles.splice(0, goalProfiles.length, ...remoteGoals, ...customs);
     goalsApiReady = true;
+    goalProfiles.forEach((goal) => {
+      if (goal.imageUrl == null && goal.image_url != null) goal.imageUrl = goal.image_url;
+      if (goal.imageStatus == null && goal.image_status != null) goal.imageStatus = goal.image_status;
+      if ((goal.imageStatus || goal.image_status) === 'generating') pollGoalArtwork(goal);
+    });
     applyApiTasksToGoals();
     try { renderGoalCollection(); } catch (_error) { /* collection may not be ready */ }
     try { rebuildUseDashboardGoals({ preserveSelection: true }); } catch (_error) { /* use-data may not be ready */ }
@@ -2838,6 +2843,17 @@ function __install() {
   }
 
   function resolveGoalArtwork(goal) {
+    const imageUrl = goal?.imageUrl || goal?.image_url || null;
+    const imageStatus = goal?.imageStatus || goal?.image_status || 'idle';
+    if (imageStatus === 'ready' && imageUrl) {
+      return {
+        url: imageUrl,
+        alt: `${goal?.title || 'Goal'} cover art`,
+        key: 'generated',
+        generating: false,
+        generated: true,
+      };
+    }
     const key = ['Travel', 'Wellbeing', 'Learning', 'Finance', 'Relationships', 'Project'].includes(goal?.category) ? goal.category.toLowerCase() : 'project';
     const descriptions = {
       travel: 'A prepared traveler approaching a modern airport at blue hour.',
@@ -2847,7 +2863,74 @@ function __install() {
       relationships: 'A family sharing meaningful time in warm evening light.',
       project: 'A focused creator reviewing a tangible project prototype.'
     };
-    return { url: `assets/goals/${key}.png`, alt: descriptions[key], key };
+    return {
+      url: `assets/goals/${key}.png`,
+      alt: descriptions[key],
+      key,
+      generating: imageStatus === 'generating',
+      generated: false,
+    };
+  }
+
+  const goalArtworkPollers = new Map();
+
+  function stopGoalArtworkPoll(goalId) {
+    const handle = goalArtworkPollers.get(goalId);
+    if (handle) {
+      window.clearInterval(handle);
+      goalArtworkPollers.delete(goalId);
+    }
+  }
+
+  function applyRemoteGoalArtwork(localGoal, remote) {
+    if (!localGoal || !remote) return false;
+    const nextUrl = remote.imageUrl || remote.image_url || null;
+    const nextStatus = remote.imageStatus || remote.image_status || 'idle';
+    const changed =
+      localGoal.imageUrl !== nextUrl
+      || localGoal.image_url !== nextUrl
+      || localGoal.imageStatus !== nextStatus
+      || localGoal.image_status !== nextStatus;
+    localGoal.imageUrl = nextUrl;
+    localGoal.image_url = nextUrl;
+    localGoal.imageStatus = nextStatus;
+    localGoal.image_status = nextStatus;
+    return changed;
+  }
+
+  function pollGoalArtwork(goalProfile) {
+    const goalId = goalProfile?.id;
+    if (!goalId) return;
+    const status = goalProfile.imageStatus || goalProfile.image_status;
+    if (status !== 'generating') return;
+    stopGoalArtworkPoll(goalId);
+    let attempts = 0;
+    const timer = window.setInterval(async () => {
+      attempts += 1;
+      try {
+        const remote = await fetchGoalFromApi(goalId);
+        if (remote) {
+          const changed = applyRemoteGoalArtwork(goalProfile, remote);
+          const nextStatus = goalProfile.imageStatus || goalProfile.image_status;
+          if (changed) {
+            persistCustomGoals();
+            try {
+              const idx = goalProfiles.findIndex((item) => item.id === goalId);
+              if (idx >= 0 && idx === state.currentGoalIndex) {
+                renderGoalGameBoard(goalProfiles[idx]);
+              }
+              renderGoalCollection();
+            } catch (_error) { /* render optional during poll */ }
+          }
+          if (nextStatus === 'ready' || nextStatus === 'failed' || nextStatus === 'idle') {
+            stopGoalArtworkPoll(goalId);
+            if (nextStatus === 'ready') __showToast('Goal cover ready');
+          }
+        }
+      } catch (_error) { /* keep polling */ }
+      if (attempts >= 30) stopGoalArtworkPoll(goalId);
+    }, 2000);
+    goalArtworkPollers.set(goalId, timer);
   }
 
   function goalPlanTasks(goal, owner) {
@@ -3879,9 +3962,10 @@ function __install() {
     goalGameContent.innerHTML = `<div class="goal-plan-shell${goalPlanTaskDrawerOpen ? ' task-open' : ''}${goalPlanListOpen ? ' goal-list-open' : ''}" style="--observation-count:${scoredObservations.length};--suggestion-count:${Math.min(3, suggestions.length)}">
       ${goalSwitcherMarkup}
       <main class="goal-plan-stage">
-        <section class="goal-plan-visual${goalPlanTransitionDirection < 0 ? ' goal-switch-previous' : goalPlanTransitionDirection > 0 ? ' goal-switch-next' : ''}" data-goal-transition="${goalVisualTransitionState()}" aria-label="Goal visualization">
+        <section class="goal-plan-visual${goalPlanTransitionDirection < 0 ? ' goal-switch-previous' : goalPlanTransitionDirection > 0 ? ' goal-switch-next' : ''}${artwork.generating ? ' is-generating-cover' : ''}" data-goal-transition="${goalVisualTransitionState()}" aria-label="Goal visualization">
           <img src="${artwork.url}" alt="${artwork.alt}">
           <div class="goal-plan-image-shade"></div>
+          ${artwork.generating ? '<div class="goal-plan-cover-status" role="status"><i></i><span>Generating cover…</span></div>' : ''}
           <div class="goal-plan-image-title"><small>${escapeGoalText(goal.category)} GOAL</small><h1 title="${escapeGoalText(goal.title)}">${escapeGoalText(goal.title)}</h1></div>
           <span class="goal-plan-live"><i></i>${goal.monitoringPaused ? 'PAUSED' : 'GOAL ACTIVE'}</span>
           <div class="goal-plan-image-actions">
@@ -8614,7 +8698,16 @@ closeDataWorkspace();
       }).then((remote) => {
         if (!remote?.id) return;
         adaptiveProfile.id = remote.id;
+        adaptiveProfile.imageUrl = remote.imageUrl || remote.image_url || null;
+        adaptiveProfile.image_url = adaptiveProfile.imageUrl;
+        adaptiveProfile.imageStatus = remote.imageStatus || remote.image_status || 'idle';
+        adaptiveProfile.image_status = adaptiveProfile.imageStatus;
         persistCustomGoals();
+        pollGoalArtwork(adaptiveProfile);
+        try {
+          const idx = goalProfiles.findIndex((item) => item.id === adaptiveProfile.id);
+          if (idx >= 0) renderGoalGameBoard(goalProfiles[idx]);
+        } catch (_error) { /* game optional */ }
         void refreshGoalIntelFromAgent(adaptiveProfile, { force: !adaptiveProfile.agentPlanned });
       });
       if (scheduledDate) renderCalendar('left', false);
@@ -9901,7 +9994,13 @@ closeDataWorkspace();
     osShell?.classList.toggle('settings-hide-activity', systemSettings.showActivityDock === false);
     osShell?.classList.toggle('settings-compact-activity', Boolean(systemSettings.compactActivity));
     const accountUser = document.getElementById('settingsAccountUser');
-    if (accountUser) accountUser.textContent = window.__WEEple_USER__ || currentUserProfile?.username || 'admin';
+    if (accountUser) {
+      accountUser.textContent =
+        currentUserProfile?.displayName
+        || currentUserProfile?.display_name
+        || currentUserProfile?.username
+        || '—';
+    }
     // Re-kick topology when motion is re-enabled (settings hydrate / toggle).
     if (previousReduceMotion && !reduceMotion) {
       try {
@@ -10035,6 +10134,13 @@ closeDataWorkspace();
   document.getElementById('settingsOpenOnboarding')?.addEventListener('click', () => {
     toggleSettings(false);
     openOnboarding();
+  });
+  document.getElementById('settingsSignOut')?.addEventListener('click', async () => {
+    toggleSettings(false);
+    __showToast('Signed out');
+    await logout();
+    currentUserProfile = await ensureAuthenticated();
+    void hydratePlatformFromApi();
   });
 
   searchButton.addEventListener('click', () => toggleCommand());

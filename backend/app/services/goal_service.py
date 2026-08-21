@@ -2,6 +2,7 @@ from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.models.goal import Goal as GoalRow
 from app.schemas.goals import Goal, GoalCreateRequest, GoalListResponse, GoalPrediction, GoalUpdateRequest
 from app.services.activity_service import activity_service
@@ -120,6 +121,8 @@ def _goal_from_row(row: GoalRow) -> Goal:
             "suggestions": row.suggestions or [],
             "monitoringPaused": row.monitoring_paused,
             "custom": row.custom,
+            "imageUrl": getattr(row, "image_url", None),
+            "imageStatus": getattr(row, "image_status", None) or "idle",
         }
     )
     return _hydrate_goal_metrics(goal)
@@ -150,6 +153,8 @@ def _apply_goal_row(row: GoalRow, goal: Goal) -> None:
     row.suggestions = [item.model_dump() for item in goal.suggestions]
     row.monitoring_paused = goal.monitoring_paused
     row.custom = goal.custom
+    row.image_url = goal.image_url
+    row.image_status = goal.image_status or "idle"
 
 
 class GoalService:
@@ -170,6 +175,13 @@ class GoalService:
 
     def create_goal(self, payload: GoalCreateRequest, db: Session | None = None) -> Goal:
         goal_id = f"goal-{uuid4().hex[:8]}"
+        image_status = "generating" if settings.coze_enabled else "idle"
+        if image_status == "idle":
+            import logging
+
+            logging.getLogger(__name__).info(
+                "Goal artwork skipped (set COZE_API_TOKEN and COZE_MODE=live in backend/.env)"
+            )
         goal = Goal(
             id=goal_id,
             title=payload.title,
@@ -184,6 +196,8 @@ class GoalService:
             subgoals=payload.subgoals,
             taskLabels=payload.task_labels,
             custom=payload.custom,
+            imageUrl=None,
+            imageStatus=image_status,
         )
         _hydrate_goal_metrics(goal)
         if db is not None:
@@ -199,6 +213,28 @@ class GoalService:
             related_goal_id=goal_id,
             db=db,
         )
+        return goal
+
+    def set_goal_artwork(
+        self,
+        goal_id: str,
+        image_url: str | None,
+        image_status: str,
+        db: Session | None = None,
+    ) -> Goal | None:
+        goal = self.get_goal(goal_id, db=db)
+        if not goal:
+            return None
+        goal.image_url = image_url
+        goal.image_status = image_status
+        if db is not None:
+            row = db.get(GoalRow, goal_id)
+            if not row:
+                return None
+            row.image_url = image_url
+            row.image_status = image_status
+        else:
+            runtime_store.goals[goal_id] = goal
         return goal
 
     def update_goal(self, goal_id: str, payload: GoalUpdateRequest, db: Session | None = None) -> Goal | None:

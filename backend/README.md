@@ -78,6 +78,9 @@ $env:USE_DATABASE = "true"
 .\.venv\Scripts\python.exe scripts\seed_db.py
 ```
 
+## Coze goal artwork
+
+When `COZE_MODE=live` and `COZE_API_TOKEN` is set, creating a goal kicks off the Coze CN image workflow in the background. The goal returns immediately with `imageStatus=generating`, then updates to `imageUrl` + `ready` when the stream yields an image URL. See `.env.example` for `COZE_*` vars.
 Point Alembic at a different database without editing `.env`:
 
 ```powershell

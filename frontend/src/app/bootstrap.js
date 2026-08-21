@@ -1,8 +1,13 @@
+import { initAuthGateUi } from '../shared/js/auth-gate.js';
+import { ensureAuthenticated } from '../shared/js/repositories/authRepository.js';
 import { createRouter } from './router.js';
 import { createStore } from '../shared/js/store.js';
 import { createToastController } from '../shared/js/ui.js';
 import { initShell } from '../shared/js/shell.js';
 import * as runtime from '../shared/js/app-runtime.js';
+
+// Wire the visible gate before the heavy runtime module finishes work.
+initAuthGateUi();
 
 const store = createStore();
 const { showToast } = createToastController();
@@ -29,7 +34,14 @@ const router = createRouter({
 
 navigate = router.navigate;
 
-void router.start().catch((error) => {
-  console.error('Failed to start Weeple app', error);
-  showToast('App failed to load');
-});
+async function startApp() {
+  try {
+    await ensureAuthenticated();
+    await router.start();
+  } catch (error) {
+    console.error('Failed to start Weeple app', error);
+    showToast('App failed to load');
+  }
+}
+
+void startApp();

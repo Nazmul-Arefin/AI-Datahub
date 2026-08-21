@@ -8,6 +8,7 @@ from app.models.base import utcnow
 from app.models.goal import ExecutionTask, Goal
 from app.models.source import DataSource, IntegrationCatalog, IntegrationConnection
 from app.models.user import User
+from app.services.auth_service import hash_password
 from app.services.seed_data import (
     ADMIN_USER_ID,
     INTEGRATION_CATALOG,
@@ -25,7 +26,7 @@ def seed_database(db: Session) -> None:
             User(
                 id=ADMIN_USER_ID,
                 username=settings.admin_username,
-                password_hash=settings.admin_password,
+                password_hash=hash_password(settings.admin_password),
                 display_name="Dev User",
             )
         )

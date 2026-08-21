@@ -34,6 +34,7 @@ class RuntimeStore:
         self.connections: dict[str, dict] = self._seed_connections()
         self.oauth_states: dict[str, dict] = {}
         self.settings: dict[str, object] = {}
+        self.users: dict[str, dict] = {}
 
     def _seed_connections(self) -> dict[str, dict]:
         """Mirror the connection rows `seed_db` creates, so both modes agree."""

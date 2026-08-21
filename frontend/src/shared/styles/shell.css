@@ -14385,3 +14385,44 @@ button.carousel-agenda-status.is-confirm:disabled {
   width: 100%;
   height: 100%;
 }
+
+/* Goal cover generation (Coze) */
+.goal-plan-visual.is-generating-cover > img {
+  filter: saturate(0.92) brightness(0.96);
+}
+.goal-plan-cover-status {
+  position: absolute;
+  z-index: 6;
+  left: 50%;
+  bottom: 88px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(17, 24, 39, 0.42);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  backdrop-filter: blur(10px);
+  pointer-events: none;
+}
+.goal-plan-cover-status > i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff5e00;
+  box-shadow: 0 0 0 0 rgba(255, 94, 0, 0.45);
+  animation: goal-cover-pulse 1.6s ease-out infinite;
+}
+@keyframes goal-cover-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(255, 94, 0, 0.45); }
+  70% { box-shadow: 0 0 0 9px rgba(255, 94, 0, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 94, 0, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .goal-plan-cover-status > i { animation: none; }
+}

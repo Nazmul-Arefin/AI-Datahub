@@ -71,8 +71,10 @@ class Goal(BaseModel):
     custom: bool = False
     category: str | None = None
     updated: str | None = None
+    image_url: str | None = Field(default=None, alias="imageUrl")
+    image_status: str = Field(default="idle", alias="imageStatus")
 
-    model_config = {"populate_by_name": True}
+    model_config = {"populate_by_name": True, "ser_json_by_alias": True}
 
 
 class GoalListResponse(BaseModel):
@@ -105,5 +107,7 @@ class GoalUpdateRequest(BaseModel):
     observations: list[GoalObservation] | None = None
     prediction: GoalPrediction | None = None
     suggestions: list[GoalSuggestion] | None = None
+    image_url: str | None = Field(default=None, alias="imageUrl")
+    image_status: str | None = Field(default=None, alias="imageStatus")
 
     model_config = {"populate_by_name": True}

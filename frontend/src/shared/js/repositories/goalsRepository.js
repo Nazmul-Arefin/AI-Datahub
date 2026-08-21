@@ -1,5 +1,5 @@
 import { ApiError, isApiEnabled } from '../api/client.js';
-import { fetchGoals, patchGoal, createGoal as createGoalApi, deleteGoal as deleteGoalApi } from '../api/goals.js';
+import { fetchGoals, fetchGoal, patchGoal, createGoal as createGoalApi, deleteGoal as deleteGoalApi } from '../api/goals.js';
 
 /**
  * Goals data access — uses API when configured, otherwise returns null
@@ -32,6 +32,17 @@ export async function createGoalOnApi(payload) {
     return await createGoalApi(payload);
   } catch (error) {
     console.warn('[goalsRepository] POST failed', error);
+    return null;
+  }
+}
+
+export async function fetchGoalFromApi(goalId) {
+  if (!isApiEnabled() || !goalId) return null;
+  try {
+    return await fetchGoal(goalId);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 0) return null;
+    console.warn('[goalsRepository] GET goal failed', error);
     return null;
   }
 }

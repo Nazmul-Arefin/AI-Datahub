@@ -29,11 +29,28 @@ export async function apiFetch(path, options = {}) {
   const token = typeof window !== 'undefined' ? window.__WEEple_TOKEN__ : null;
   if (token) headers.Authorization = `Bearer ${token}`;
 
+  const timeoutMs = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : 12000;
+  const controller = new AbortController();
+  const externalSignal = options.signal;
+  const onExternalAbort = () => controller.abort();
+  if (externalSignal) {
+    if (externalSignal.aborted) controller.abort();
+    else externalSignal.addEventListener('abort', onExternalAbort, { once: true });
+  }
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+
   let response;
   try {
-    response = await fetch(url, { ...options, headers });
+    const { timeoutMs: _t, signal: _s, ...fetchOptions } = options;
+    response = await fetch(url, { ...fetchOptions, headers, signal: controller.signal });
   } catch (error) {
-    throw new ApiError(error.message || 'Network error', { status: 0 });
+    const aborted = error?.name === 'AbortError';
+    throw new ApiError(aborted ? 'Request timed out' : (error.message || 'Network error'), {
+      status: 0,
+    });
+  } finally {
+    window.clearTimeout(timer);
+    if (externalSignal) externalSignal.removeEventListener('abort', onExternalAbort);
   }
 
   const text = await response.text();

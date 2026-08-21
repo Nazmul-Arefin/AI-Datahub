@@ -32,6 +32,8 @@ class Goal(TimestampMixin, Base):
     suggestions: Mapped[list] = mapped_column(JSON, default=list)
     monitoring_paused: Mapped[bool] = mapped_column(Boolean, default=False)
     custom: Mapped[bool] = mapped_column(Boolean, default=False)
+    image_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    image_status: Mapped[str] = mapped_column(String(32), default="idle")
 
 
 class ExecutionTask(TimestampMixin, Base):
