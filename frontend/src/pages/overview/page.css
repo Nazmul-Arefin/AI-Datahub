@@ -3,9 +3,9 @@
 
 .universe { position: absolute; inset: 0; overflow: hidden; }
 
-#topologyCanvas { position: absolute; z-index: 9; inset: 0; width: 100%; height: 100%; pointer-events: none; touch-action: none; }
+#topologyCanvas { position: absolute; z-index: 5; inset: 0; width: 100%; height: 100%; pointer-events: none; touch-action: none; }
 
-.topology-hit-layer { position: absolute; z-index: 7; inset: 0; cursor: grab; touch-action: none; }
+.topology-hit-layer { position: absolute; z-index: 6; inset: 0; cursor: grab; touch-action: none; }
 
 .topology-hit-layer:active { cursor: grabbing; }
 
@@ -13,7 +13,8 @@
 
 .calendar-panel {
   position: absolute;
-  z-index: 8;
+  z-index: 20;
+  pointer-events: auto;
   left: clamp(30px, 6vw, 96px);
   top: clamp(102px, 15vh, 142px);
   width: clamp(350px, 29vw, 420px);
@@ -127,7 +128,7 @@
 
 .month-popover footer button { min-height: 44px; padding: 8px 14px; border: 0; border-radius: 12px; color: var(--orange); background: rgba(255,94,0,.07); font-size: 9px; font-weight: 760; cursor: pointer; }
 
-.calendar-stage { position: relative; z-index: 2; width: 100%; height: 396px; perspective: 1100px; touch-action: pan-y; user-select: none; cursor: grab; transition: transform .34s cubic-bezier(.22,1,.36,1); }
+.calendar-stage { position: relative; z-index: 2; width: 100%; height: 396px; perspective: 1100px; touch-action: none; user-select: none; -webkit-user-drag: none; cursor: grab; transition: transform .34s cubic-bezier(.22,1,.36,1); }
 
 .calendar-stage.is-dragging { transition: none; }
 
@@ -186,6 +187,7 @@
   overflow-y: auto;
   align-content: start;
   padding-right: 2px;
+  touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   scrollbar-color: rgba(var(--card-rgb), .35) transparent;

@@ -634,12 +634,14 @@ function __install() {
 
     const selectedGoal = goalProfiles[state.currentGoalIndex] || goalProfiles[0];
     state.currentGoalProgress = selectedGoal.progress || 0;
+    const coreX = 34;
+    const coreY = 0;
     const intelligenceCore = makeTopologyNode({
       id: 'goals-core', cluster: 'goals', core: true, role: 'hub', visualKind: 'ai-core', title: 'AI Synthesis',
       detail: `${goalProfiles.length} goals are continuously coordinated here.`,
       source: 'Weeple AI OS',
       reason: 'Authorized live data and confirmed memory are synthesized into support for each goal.',
-      x: 34, y: 0, z: 0, radius: 11.8, strength: 100, showLabel: true
+      x: coreX, y: coreY, z: 0, radius: 11.8, strength: 100, showLabel: true
     });
     nodes.push(intelligenceCore);
 
@@ -647,18 +649,7 @@ function __install() {
     const goalNodes = goalProfiles.map((goal, goalIndex) => {
       const selected = goalIndex === state.currentGoalIndex;
       const relativeIndex = (goalIndex - state.currentGoalIndex + goalCount) % goalCount;
-      const goalPositions = [
-        { x: -62, y: 0, z: 8 },
-        { x: -2, y: -65, z: -10 },
-        { x: 102, y: -38, z: 8 },
-        { x: 104, y: 50, z: -7 },
-        { x: 0, y: 68, z: 11 }
-      ];
-      const position = goalPositions[relativeIndex] || {
-        x: 34 + Math.cos(relativeIndex / goalCount * Math.PI * 2) * 92,
-        y: Math.sin(relativeIndex / goalCount * Math.PI * 2) * 68,
-        z: Math.sin(relativeIndex * 1.7) * 10
-      };
+      const position = goalRingPosition(coreX, coreY, relativeIndex, goalCount);
       const node = makeTopologyNode({
         id: `goal-${goalIndex}`, cluster: 'goals', role: 'goal', goalRole: 'goal', goalIndex,
         goalId: goal.id || null,
@@ -672,7 +663,7 @@ function __install() {
       nodes.push(node);
       connectNeurons(node, intelligenceCore, {
         primary: true, goalStructure: true, support: selected, reasoningPath: true, selectedPath: selected,
-        curve: (relativeIndex - 2) * .045, speed: selected ? .52 : .18 + goalIndex * .012
+        curve: (relativeIndex - (goalCount - 1) / 2) * .04, speed: selected ? .52 : .18 + goalIndex * .012
       });
       return node;
     });
@@ -685,10 +676,11 @@ function __install() {
         ...allEvidence.filter(item => item.kind === 'data').slice(0, 2),
         ...allEvidence.filter(item => item.kind === 'memory').slice(0, 1)
       ];
+      const slotCount = Math.max(1, visibleEvidence.length);
       visibleEvidence.forEach((item, evidenceIndex) => {
-        const offset = (evidenceIndex - (visibleEvidence.length - 1) / 2) * .43;
-        const evidenceAngle = outwardAngle + offset;
-        const distance = goalNode.isSelectedGoal ? 48 + (evidenceIndex % 2) * 8 : 38 + (evidenceIndex % 2) * 6;
+        const fan = (evidenceIndex - (slotCount - 1) / 2) * (goalNode.isSelectedGoal ? 0.58 : 0.5);
+        const evidenceAngle = outwardAngle + fan;
+        const distance = (goalNode.isSelectedGoal ? 58 : 46) + evidenceIndex * 5;
         const node = makeTopologyNode({
           id: `${item.kind}-goal-${goalNode.goalIndex}-${evidenceIndex}`, cluster: item.kind,
           role: 'evidence', evidenceType: item.kind, goalIndex: goalNode.goalIndex,
@@ -699,7 +691,7 @@ function __install() {
             ? `Tap to open “${item.title}” in Import Data.`
             : `Connected to “${goal.title}” because ${item.reason}`,
           x: goalNode.baseX + Math.cos(evidenceAngle) * distance,
-          y: goalNode.baseY + Math.sin(evidenceAngle) * distance * .78,
+          y: goalNode.baseY + Math.sin(evidenceAngle) * distance * .82,
           z: goalNode.baseZ + (evidenceIndex - 1) * 9,
           isSelectedEvidence: goalNode.isSelectedGoal,
           radius: item.kind === 'memory' ? 6.4 : 5.9,
@@ -715,6 +707,8 @@ function __install() {
       });
     });
 
+    separateTopologyNodes(nodes);
+
     for (let index = 0; index < 120; index += 1) {
       dust.push({
         x: -260 + random() * 570, y: -155 + random() * 310, z: -125 + random() * 250,
@@ -725,6 +719,71 @@ function __install() {
     if (topologyConnectionCount) topologyConnectionCount.textContent = String(edges.length).padStart(2, '0');
   }
 
+  function syncTopologyBase(node) {
+    node.baseX = node.x;
+    node.baseY = node.y;
+    node.baseZ = node.z;
+  }
+
+  function goalRingPosition(coreX, coreY, relativeIndex, goalCount) {
+    if (goalCount <= 1) {
+      return { x: coreX - 82, y: coreY, z: 8 };
+    }
+    // Even ellipse around the synthesis core. Radius grows with goal count so
+    // nodes and their evidence satellites stay readable on the overview canvas.
+    const ringX = Math.max(96, 70 + goalCount * 8);
+    const ringY = Math.max(70, 54 + goalCount * 5.5);
+    // Selected goal (relativeIndex 0) sits left of center; others fan clockwise.
+    const angle = Math.PI + (relativeIndex / goalCount) * Math.PI * 2;
+    return {
+      x: coreX + Math.cos(angle) * ringX,
+      y: coreY + Math.sin(angle) * ringY,
+      z: Math.sin(relativeIndex * 1.35) * 12
+    };
+  }
+
+  function separateTopologyNodes(allNodes, { iterations = 20, padding = 12 } = {}) {
+    const core = allNodes.find((node) => node.core);
+    const movable = allNodes.filter((node) => !node.core);
+    for (let iter = 0; iter < iterations; iter += 1) {
+      if (core) {
+        movable.forEach((node) => {
+          let dx = node.x - core.x;
+          let dy = node.y - core.y;
+          let dist = Math.hypot(dx, dy) || 0.01;
+          const minDist = (node.radius || 4) + (core.radius || 8) + padding + (node.role === 'goal' ? 8 : 4);
+          if (dist >= minDist) return;
+          const push = minDist - dist;
+          node.x += (dx / dist) * push;
+          node.y += (dy / dist) * push;
+        });
+      }
+      for (let i = 0; i < movable.length; i += 1) {
+        for (let j = i + 1; j < movable.length; j += 1) {
+          const a = movable[i];
+          const b = movable[j];
+          let dx = b.x - a.x;
+          let dy = b.y - a.y;
+          let dist = Math.hypot(dx, dy) || 0.01;
+          const labelPad = (a.showLabel ? 6 : 0) + (b.showLabel ? 6 : 0);
+          const minDist = (a.radius || 4) + (b.radius || 4) + padding + labelPad;
+          if (dist >= minDist) continue;
+          const push = (minDist - dist) / 2;
+          const nx = dx / dist;
+          const ny = dy / dist;
+          const aWeight = a.role === 'goal' ? 0.4 : 1;
+          const bWeight = b.role === 'goal' ? 0.4 : 1;
+          const total = aWeight + bWeight;
+          a.x -= nx * push * (2 * aWeight / total);
+          a.y -= ny * push * (2 * aWeight / total);
+          b.x += nx * push * (2 * bWeight / total);
+          b.y += ny * push * (2 * bWeight / total);
+        }
+      }
+    }
+    allNodes.forEach(syncTopologyBase);
+  }
+
   function makeTopologyNode(options) {
     const node = {
       core: false, showLabel: false, strength: 80, radius: 3, role: 'signal',
@@ -733,7 +792,7 @@ function __install() {
       fireRate: .22 + random() * .24, screen: { x: 0, y: 0, r: 0, z: 0 },
       ...options
     };
-    node.baseX = node.x; node.baseY = node.y; node.baseZ = node.z;
+    syncTopologyBase(node);
     return node;
   }
 
@@ -9468,6 +9527,7 @@ closeDataWorkspace();
   let selectedCalendarDate = new Date(calendarReferenceDate);
   let monthPickerCursor = new Date(calendarReferenceDate.getFullYear(), calendarReferenceDate.getMonth(), 1, 12);
   let calendarPointerStart = null;
+  let calendarPointerAxis = null;
   let calendarSuppressClick = false;
   let calendarTransitioning = false;
   let calendarUserTasks = [];
@@ -9900,6 +9960,7 @@ closeDataWorkspace();
       });
       card.querySelectorAll('[data-calendar-goal]').forEach((goalRow) => {
         goalRow.addEventListener('click', (event) => {
+          if (calendarSuppressClick) return;
           if (event.target.closest('[data-calendar-confirm]')) return;
           event.stopPropagation();
           const goalIndex = Number(goalRow.dataset.calendarGoal);
@@ -10032,35 +10093,88 @@ closeDataWorkspace();
     toggleMonthPicker(false);
     renderCalendar(direction);
   });
-  calendarStage?.addEventListener('pointerdown', (event) => {
-    if (event.target.closest('.expanded-agenda')) return;
-    calendarPointerStart = event.clientX;
-    calendarStage.classList.add('is-dragging');
-    calendarStage.setPointerCapture(event.pointerId);
+  function resetCalendarPointer() {
+    calendarPointerStart = null;
+    calendarPointerAxis = null;
+    calendarStage?.classList.remove('is-dragging');
+    if (calendarStage) calendarStage.style.transform = '';
+  }
+
+  // Document-level drag tracking (no setPointerCapture): capture conflicts with the
+  // scrollable agenda and was aborting mouse swipes via lostpointercapture.
+  const calendarPanelEl = document.querySelector('.page--overview .calendar-panel') || document.querySelector('.calendar-panel');
+  calendarPanelEl?.addEventListener('pointerdown', (event) => {
+    if (!calendarStage) return;
+    if (event.button !== undefined && event.button !== 0) return;
+    if (event.target.closest('.calendar-toolbar, .month-popover, .calendar-task-modal, button, a, input, select, textarea, label')) return;
+    if (!calendarStage.contains(event.target) && event.target !== calendarStage) return;
+
+    const pointerId = event.pointerId;
+    calendarPointerStart = { x: event.clientX, y: event.clientY, pointerId };
+    calendarPointerAxis = null;
+    let settled = false;
     if (event.pointerType !== 'mouse') haptic();
+
+    const onMove = (moveEvent) => {
+      if (settled || !calendarPointerStart || moveEvent.pointerId !== pointerId) return;
+      if (moveEvent.pointerType === 'mouse' && moveEvent.buttons === 0) {
+        teardown(moveEvent);
+        return;
+      }
+      const dx = moveEvent.clientX - calendarPointerStart.x;
+      const dy = moveEvent.clientY - calendarPointerStart.y;
+      if (!calendarPointerAxis) {
+        if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+        // Prefer horizontal when close — mouse drags are rarely perfectly flat.
+        calendarPointerAxis = Math.abs(dx) >= Math.abs(dy) * 0.85 ? 'x' : 'y';
+        if (calendarPointerAxis === 'y') {
+          teardown();
+          return;
+        }
+        calendarStage.classList.add('is-dragging');
+      }
+      if (calendarPointerAxis !== 'x') return;
+      if (moveEvent.cancelable) moveEvent.preventDefault();
+      const movement = Math.max(-80, Math.min(80, dx));
+      calendarStage.style.transform = `translateX(${movement * .16}px)`;
+    };
+
+    const teardown = (upEvent) => {
+      if (settled) return;
+      settled = true;
+      document.removeEventListener('pointermove', onMove, true);
+      document.removeEventListener('pointerup', teardown, true);
+      document.removeEventListener('pointercancel', teardown, true);
+      const start = calendarPointerStart;
+      const axis = calendarPointerAxis;
+      const movement = start && upEvent && typeof upEvent.clientX === 'number'
+        ? upEvent.clientX - start.x
+        : 0;
+      const didSwipe = Boolean(start && axis === 'x' && Math.abs(movement) > 40);
+      resetCalendarPointer();
+      if (didSwipe) {
+        calendarSuppressClick = true;
+        moveCalendar(movement < 0 ? 1 : -1);
+        window.setTimeout(() => { calendarSuppressClick = false; }, 260);
+      }
+    };
+
+    document.addEventListener('pointermove', onMove, true);
+    document.addEventListener('pointerup', teardown, true);
+    document.addEventListener('pointercancel', teardown, true);
   });
-  calendarStage?.addEventListener('pointermove', (event) => {
-    if (calendarPointerStart === null) return;
-    const movement = Math.max(-80, Math.min(80, event.clientX - calendarPointerStart));
-    calendarStage.style.transform = `translateX(${movement * .16}px)`;
-  });
-  calendarStage?.addEventListener('pointerup', (event) => {
-    if (calendarPointerStart === null) return;
-    const movement = event.clientX - calendarPointerStart;
-    calendarPointerStart = null;
-    calendarStage.classList.remove('is-dragging');
-    calendarStage.style.transform = '';
-    if (Math.abs(movement) > 35) {
-      calendarSuppressClick = true;
-      moveCalendar(movement < 0 ? 1 : -1);
-      window.setTimeout(() => { calendarSuppressClick = false; }, 260);
-    }
-  });
-  calendarStage?.addEventListener('pointercancel', () => {
-    calendarPointerStart = null;
-    calendarStage.classList.remove('is-dragging');
-    calendarStage.style.transform = '';
-  });
+
+  // Trackpad / mouse-wheel horizontal swipe fallback
+  let calendarWheelLockUntil = 0;
+  calendarStage?.addEventListener('wheel', (event) => {
+    if (!calendarStage) return;
+    if (Math.abs(event.deltaX) < 24 || Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
+    event.preventDefault();
+    const now = performance.now();
+    if (now < calendarWheelLockUntil || calendarTransitioning) return;
+    calendarWheelLockUntil = now + 520;
+    moveCalendar(event.deltaX > 0 ? 1 : -1);
+  }, { passive: false });
   document.addEventListener('pointerdown', (event) => {
     if (!monthPopover?.contains(event.target) && !calendarMonthButton?.contains(event.target)) toggleMonthPicker(false);
   });

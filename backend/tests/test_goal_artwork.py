@@ -14,9 +14,17 @@ def test_build_goal_image_prompt_includes_subject_and_style():
         category="Wellbeing",
         description="Morning training in the park",
     )
+    lower = prompt.lower()
     assert "Run a half marathon" in prompt
-    assert "no text" in prompt.lower()
-    assert len(prompt) <= 480
+    assert "ai os" in lower
+    assert "modern professional" in lower
+    assert "avoid text" in lower or "no text" in lower
+    assert "purple" in lower
+    assert "Morning training in the park" in prompt
+    assert len(prompt) <= 720
+    # Brand constraints must not be truncated away.
+    assert "cartoon mascots" in lower
+    assert "coral-orange" in lower or "coral" in lower
 
 
 def test_extract_image_url_from_markdown_and_raw():

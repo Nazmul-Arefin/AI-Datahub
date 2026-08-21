@@ -21,12 +21,12 @@ _MARKDOWN_IMAGE_RE = re.compile(r"!\[[^\]]*\]\((https?://[^)\s]+)\)", re.IGNOREC
 _ANY_HTTPS_RE = re.compile(r"https?://[^\s\"'<>\)]+", re.IGNORECASE)
 
 _CATEGORY_MOOD = {
-    "Travel": "travel destination atmosphere, journey and arrival",
-    "Wellbeing": "calm wellness and healthy daily rhythm",
-    "Learning": "focused study and skill practice",
-    "Finance": "thoughtful personal finance and planning",
-    "Relationships": "warm human connection and shared moments",
-    "Project": "making and shipping a tangible project",
+    "Travel": "aspirational travel and arrival — refined, grounded, never tourist cliché",
+    "Wellbeing": "calm discipline and healthy rhythm — premium lifestyle, not clinical",
+    "Learning": "focused study and mastery — quiet modern deep-work energy",
+    "Finance": "thoughtful long-term planning — clean, trustworthy, never flashy",
+    "Relationships": "warm human connection — contemporary and tasteful",
+    "Project": "building and shipping work — craft, progress, modern maker energy",
 }
 
 
@@ -37,23 +37,39 @@ def build_goal_image_prompt(
     description: str | None = None,
     short: str | None = None,
 ) -> str:
+    """Build a Coze image prompt for a Weeple goal cover.
+
+    Covers should feel modern, professional, goal-specific, and aligned with a
+    personal AI OS product — not generic stock art or neon AI tropes.
+    """
     cat = (category or "Project").strip() or "Project"
     mood = _CATEGORY_MOOD.get(cat, _CATEGORY_MOOD["Project"])
     detail = (description or short or "").strip()
     subject = title.strip() or "personal goal"
+
+    # Keep style + avoid rules near the front so a hard char budget cannot
+    # truncate the brand constraints.
     parts = [
-        f"Editorial photograph for a personal AI OS goal cover about: {subject}.",
-        f"Category mood: {mood}.",
+        (
+            "Modern professional hero cover for a personal AI OS goal. "
+            "Premium product-editorial photography or refined contemporary illustration; "
+            "clean composition, generous negative space, soft daylight, muted neutrals "
+            "with a subtle warm coral-orange accent; shallow depth of field; "
+            "wide cinematic 16:9; minimal high-end product energy."
+        ),
+        (
+            "Avoid text, typography, logos, watermarks, UI screenshots, robots, "
+            "neon purple glow, cyberpunk, cluttered collage, cartoon mascots, "
+            "and low-quality stock cliches."
+        ),
+        f"Goal subject (must be visually clear): {subject}.",
+        f"Category ({cat}): {mood}.",
     ]
     if detail:
-        parts.append(f"Context: {detail[:180]}.")
-    parts.append(
-        "Soft natural light, cream and warm orange accents, shallow depth of field, "
-        "wide cinematic hero composition, realistic photography, no text, no logos, "
-        "no watermarks, no purple neon AI aesthetic."
-    )
+        parts.append(f"Context: {detail[:120]}.")
+
     prompt = " ".join(parts)
-    return prompt[:480]
+    return prompt[:720]
 
 
 def extract_image_url(text: str | None) -> str | None:
