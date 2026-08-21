@@ -123,5 +123,43 @@ class ConnectStartRequest(BaseModel):
 class ConnectStartResponse(BaseModel):
     authorization_url: str = Field(alias="authorizationUrl")
     state: str
+    setup_required: bool = Field(default=False, alias="setupRequired")
+    setup_url: str | None = Field(default=None, alias="setupUrl")
+    hint: str | None = None
+    mode: str | None = None
+    platform: str | None = None
+
+    model_config = {"populate_by_name": True}
+
+
+class SourceSyncItem(BaseModel):
+    id: str
+    external_id: str = Field(alias="externalId")
+    object_type: str = Field(default="page", alias="objectType")
+    title: str = "Untitled"
+    url: str | None = None
+    last_edited_at: str | None = Field(default=None, alias="lastEditedAt")
+    synced_at: datetime | str | None = Field(default=None, alias="syncedAt")
+
+    model_config = {"populate_by_name": True}
+
+
+class SourceSyncResponse(BaseModel):
+    source: Source
+    provider: str
+    fetched: int = 0
+    created: int = 0
+    updated: int = 0
+    storage: str = "Postgres table synced_assets"
+    items: list[SourceSyncItem] = Field(default_factory=list)
+
+    model_config = {"populate_by_name": True}
+
+
+class SourceSyncedListResponse(BaseModel):
+    source_id: str = Field(alias="sourceId")
+    total: int = 0
+    storage: str = "Postgres table synced_assets"
+    items: list[SourceSyncItem] = Field(default_factory=list)
 
     model_config = {"populate_by_name": True}

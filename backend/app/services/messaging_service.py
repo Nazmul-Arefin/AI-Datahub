@@ -3,7 +3,7 @@
 from uuid import uuid4
 
 from app.adapters.astrbot import astrbot_client
-from app.adapters.astrbot.client import TELEGRAM_TOOLS
+from app.adapters.astrbot.client import MESSAGING_TOOLS, PLATFORM_SPECS
 from app.adapters.mcp_gateway.registry import strip_secrets
 from app.core.config import Settings, get_settings, settings
 from app.schemas.sources import ConnectStartResponse
@@ -46,8 +46,14 @@ class MessagingService:
 
     async def connect(self, platform: str) -> dict:
         result = strip_secrets(await self._client.connect(platform))
+        status = result.get("status", "connected")
+        if status == "setup_required":
+            return strip_secrets(result)
+        if status == "unsupported":
+            return strip_secrets(result)
+
         source_id = f"src-{platform}-{uuid4().hex[:8]}"
-        tools = list(TELEGRAM_TOOLS) if platform.lower() == "telegram" else None
+        tools = list(MESSAGING_TOOLS)
         registered = await self._mcp_service().register(
             connection_id=result.get("credentialRef") or source_id,
             name=f"astrbot-{platform}",
@@ -58,24 +64,25 @@ class MessagingService:
             "id": source_id,
             "platform": platform,
             "kind": "messaging",
-            "status": result.get("status", "connected"),
+            "status": status,
             "mcpServerId": registered.get("serverId"),
             "credentialRef": result.get("credentialRef"),
             "mode": result.get("mode", "mock"),
         }
         self._sources[source_id] = source
         mode = result.get("mode", "mock")
-        card_title = "Telegram connected (mock)" if platform.lower() == "telegram" else f"{platform} connected ({mode})"
-        if platform.lower() == "telegram" and mode == "live":
-            card_title = "Telegram connected (live)"
+        title = f"{platform} connected ({mode})"
+        spec = PLATFORM_SPECS.get(platform.lower().replace("_", "-"))
+        if spec:
+            title = f"{spec['name']} connected ({mode})"
         payload = {
             **result,
             "sourceId": source_id,
             "mcpServerId": registered.get("serverId"),
             "card": {
-                "title": card_title,
+                "title": title,
                 "platform": platform,
-                "status": result.get("status", "connected"),
+                "status": status,
                 "sourceId": source_id,
                 "mcpServerId": registered.get("serverId"),
             },
@@ -85,9 +92,29 @@ class MessagingService:
     async def list_sources(self) -> dict:
         return {"sources": [strip_secrets(dict(item)) for item in self._sources.values()]}
 
-    async def send(self, content: str, thread_id: str | None = None) -> dict:
+    async def send(self, content: str, thread_id: str | None = None, platform: str | None = None) -> dict:
+        key = (platform or "").lower().replace("_", "-")
+        if key in {"feishu", "lark"} and thread_id:
+            from app.adapters.feishu.client import feishu_client
+
+            creds = await feishu_client.resolve_credentials(self._client)
+            if not creds:
+                raise RuntimeError("Feishu credentials unavailable — enable lark adapter or set FEISHU_APP_*")
+            sent = await feishu_client.send_text(creds, thread_id, content)
+            return {
+                "threadId": thread_id,
+                "message": {
+                    "id": str(sent.get("message_id") or f"fs-{uuid4().hex[:8]}"),
+                    "role": "assistant",
+                    "content": content[:120],
+                    "createdAt": "now",
+                },
+                "mode": "live",
+                "platform": "feishu",
+            }
+
         send_live = getattr(self._client, "send_telegram", None)
-        if callable(send_live) and thread_id:
+        if callable(send_live) and thread_id and key in {"", "telegram"}:
             live = await send_live(content, thread_id)
             if live:
                 return strip_secrets(live)
@@ -110,12 +137,39 @@ class MessagingService:
         user_id: str,
         state: str,
     ) -> ConnectStartResponse:
-        await self.connect(platform)
+        result = await self.connect(platform)
+        if result.get("status") == "setup_required":
+            setup_url = result.get("setupUrl") or f"{settings.astrbot_public_url.rstrip('/')}/#/platforms"
+            return ConnectStartResponse(
+                authorizationUrl=setup_url,
+                state=state,
+                setupRequired=True,
+                setupUrl=setup_url,
+                hint=result.get("hint"),
+                mode=result.get("mode"),
+                platform=platform,
+            )
+        if result.get("status") == "unsupported":
+            return ConnectStartResponse(
+                authorizationUrl=redirect_uri or "/",
+                state=state,
+                setupRequired=True,
+                setupUrl=f"{settings.astrbot_public_url.rstrip('/')}/#/platforms",
+                hint=f"{platform} is not supported by this AstrBot build yet.",
+                mode=result.get("mode"),
+                platform=platform,
+            )
         callback = (
             f"{settings.api_public_url.rstrip('/')}/integrations/callback"
             f"?code=astrbot-ok&state={state}"
         )
-        return ConnectStartResponse(authorizationUrl=callback, state=state)
+        return ConnectStartResponse(
+            authorizationUrl=callback,
+            state=state,
+            setupRequired=False,
+            mode=result.get("mode"),
+            platform=platform,
+        )
 
 
 messaging_service = MessagingService()

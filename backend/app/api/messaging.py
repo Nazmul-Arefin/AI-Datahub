@@ -34,7 +34,7 @@ async def connect_platform(platform: str, _user_id: CurrentUserId) -> MessagingC
 
 @router.post("/messages", response_model=SendMessageResponse)
 async def send_message(payload: SendMessageRequest, _user_id: CurrentUserId) -> SendMessageResponse:
-    result = await messaging_service.send(payload.content, payload.thread_id)
+    result = await messaging_service.send(payload.content, payload.thread_id, platform=payload.platform)
     msg = result["message"]
     return SendMessageResponse(
         thread_id=result["threadId"],

@@ -12,6 +12,7 @@ docker compose --env-file backend/.env up -d --build
 |-------|----------------|-----------|----------|
 | FastAPI | `./backend` | 8000 | Compose + `api.deepseek.com` |
 | PostgreSQL (app) | `postgres:16-alpine` | 5432 | None |
+| **Adminer** (DB web UI) | `adminer:4` | 8088 | None |
 | **Nango** | `nangohq/nango-server:hosted` + nango-db + redis | 3003, 3009 | Local Nango only |
 | **TencentDB Agent Memory** | `agentmemory/memory-core` + `memory-hub` | 8420, 8125, 8424 | Uses DeepSeek API for embed/summarize |
 | **DeepSeek Harness** | build `backend/sidecars/harness` (`npx @deepseek-ai/dsh web`) | 3080 | `api.deepseek.com` |

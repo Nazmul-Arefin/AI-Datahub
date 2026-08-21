@@ -41,11 +41,18 @@ class AuthConnector:
         return await self._client.finish_connect(code, state)
 
     async def exchange_code(self, code: str, state: str, user_id: str | None = None) -> dict:
+        # AstrBot catalog connect finishes with a synthetic code (no Nango session).
+        if (code or "").strip() == "astrbot-ok":
+            return {
+                "provider": "astrbot",
+                "externalConnectionId": f"ext-astrbot-{state[:12]}",
+            }
         result = await self.callback(code, state)
         return {
             "provider": result.get("provider", "nango"),
-            "externalConnectionId": result.get("credentialRef")
-            or result.get("externalConnectionId")
+            # Prefer the full Nango connectionId from Connect UI (stored as code).
+            "externalConnectionId": result.get("externalConnectionId")
+            or result.get("credentialRef")
             or f"ext-{state[:12]}",
         }
 

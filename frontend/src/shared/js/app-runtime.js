@@ -10,8 +10,12 @@ import {
   startConnectOnApi,
   loadCatalogFromApi,
   toggleSourceOnApi,
+  syncSourceOnApi,
+  loadSyncedAssetsFromApi,
 } from './repositories/sourcesRepository.js';
 import { loadOverviewFromApi } from './repositories/overviewRepository.js';
+import { launchAuthorization } from './nangoConnect.js';
+import { openAstrBotSetup } from './astrbotSetup.js';
 
 let __navigate = (id) => { window.location.hash = '#/' + id; };
 let __showToastExternal = null;
@@ -340,6 +344,9 @@ function __install() {
     currentGoalProgress: 72,
     selectedSourceId: 'iphone',
     sourceFilter: 'all',
+    regionFilter: 'all',
+    readyFilter: 'all',
+    sourceSearch: '',
     onboardingStep: 0,
     onboardingScenario: 'goal',
     goalProposalReady: false,
@@ -4004,7 +4011,7 @@ function __install() {
     { id: 'dashcam', name: 'Dash Cam', category: 'device', type: 'Storage device', method: 'USB connection', status: 'Needs attention', statusType: 'attention', lastSync: 'Failed 1h ago', assets: '0 new assets', scopes: ['Selected recordings'], purposes: ['Travel archive'], usedBy: 'No AI task used this source' },
     { id: 'documents', name: 'Personal Documents', category: 'files', type: 'Files & folders', method: 'Explicit local selection', status: 'Connected', statusType: 'connected', lastSync: '12m ago', assets: '124 files', scopes: ['Selected documents'], purposes: ['Local semantic search'], usedBy: 'Research summary · Today' },
     { id: 'research', name: 'Product Research', category: 'files', type: 'Knowledge materials', method: 'Watched local folder', status: 'Processing', statusType: 'processing', lastSync: 'Processing now', assets: '38 notes', scopes: ['Research folder'], purposes: ['Product goal'], usedBy: 'Prototype recommendation · Now' },
-    { id: 'calendar', name: 'Calendar', category: 'productivity', type: 'Calendar & productivity', method: 'Official API', status: 'Connected', statusType: 'connected', lastSync: 'Live', assets: '18 upcoming events', scopes: ['Event title', 'Time & availability'], purposes: ['Planning', 'Reminders'], usedBy: 'Today plan · Now', connectionId: 'conn-google-calendar', connection: { id: 'conn-google-calendar', status: 'connected', authProvider: 'nango', externalConnectionId: null, errorMessage: null, connectedAt: null } },
+    { id: 'calendar', name: 'Google Calendar', category: 'productivity', type: 'Calendar & productivity', method: 'Live', status: 'Ready to connect', statusType: 'idle', lastSync: 'Not connected', assets: '0 events', scopes: ['Event title', 'Time & availability'], purposes: ['Planning', 'Reminders'], usedBy: 'Connect from Import Data catalog', connectionId: null, connection: null },
     { id: 'notion', name: 'Notion Workspace', category: 'productivity', type: 'Productivity service', method: 'MCP extension', status: 'Connected', statusType: 'connected', lastSync: '14m ago', assets: '62 pages', scopes: ['Selected workspace'], purposes: ['Project context'], usedBy: 'Weekly review · Yesterday', connectionId: 'conn-notion', connection: { id: 'conn-notion', status: 'connected', authProvider: 'nango', externalConnectionId: null, errorMessage: null, connectedAt: null } },
     { id: 'fitness', name: 'Apple Fitness', category: 'health', type: 'Health & lifestyle', method: 'Account authorization', status: 'Connected', statusType: 'connected', lastSync: '8m ago', assets: '42 metrics', scopes: ['Activity', 'Sleep summary'], purposes: ['Health goal'], usedBy: 'Recovery insight · 08:40' },
     { id: 'identity', name: 'Digital Identity', category: 'identity', type: 'Public identity candidates', method: 'Maigret discovery', status: 'Review required', statusType: 'attention', lastSync: 'Yesterday', assets: '4 candidates', scopes: ['Public usernames only'], purposes: ['Identity review'], usedBy: 'Not available to AI until confirmed' },
@@ -4027,7 +4034,60 @@ function __install() {
     if (remote?.sources?.length) applyRemoteSources(remote.sources);
   }
 
+  let catalogBrowseItems = [];
+
+  function catalogAvailability(item) {
+    const method = String(item?.method || '');
+    if (/^live$/i.test(method)) return 'live';
+    if (/coming soon/i.test(method)) return 'coming_soon';
+    if (/mcp/i.test(method) || item?.authType === 'mcp_url') return 'mcp_url';
+    if (/astrbot/i.test(method) || item?.authType === 'astrbot') return 'astrbot';
+    if (/api key/i.test(method) || item?.authType === 'api_key') return 'api_key';
+    return 'coming_soon';
+  }
+
+  function catalogCardFromItem(item) {
+    const availability = catalogAvailability(item);
+    const statusMap = {
+      live: { status: 'Ready to connect', statusType: 'connected' },
+      api_key: { status: 'API key', statusType: 'idle' },
+      mcp_url: { status: 'MCP URL', statusType: 'idle' },
+      astrbot: { status: 'AstrBot', statusType: 'idle' },
+      coming_soon: { status: 'Coming soon', statusType: 'attention' },
+    };
+    const mapped = statusMap[availability] || statusMap.coming_soon;
+    const isChina = String(item.description || '').startsWith('[中国]');
+    return {
+      id: `catalog:${item.id}`,
+      catalogId: item.id,
+      name: item.name,
+      category: item.category,
+      type: item.method || 'Connector',
+      method: item.method || 'Coming soon',
+      status: mapped.status,
+      statusType: mapped.statusType,
+      lastSync: availability === 'coming_soon' ? 'Not enabled yet' : 'Not connected',
+      assets: isChina ? '中国应用' : 'Catalog',
+      scopes: item.scopes || [],
+      purposes: ['Import Data'],
+      usedBy: item.description || 'Available in catalog',
+      aiEnabled: true,
+      connectionId: null,
+      connection: null,
+      isCatalogOnly: true,
+      authType: item.authType,
+      availability,
+    };
+  }
+
+  async function hydrateCatalogBrowseFromApi() {
+    const remote = await loadCatalogFromApi();
+    catalogBrowseItems = remote?.items?.length ? remote.items : [];
+    try { renderSourceGrid(); } catch (_error) { /* grid may not be ready */ }
+  }
+
   void hydrateSourcesFromApi();
+  void hydrateCatalogBrowseFromApi();
 
   function sourceStatusLabel(source) {
     if (source.aiEnabled === false && source.statusType !== 'revoked') return '<span class="source-status paused"><i></i>Paused</span>';
@@ -4109,23 +4169,87 @@ function __install() {
       // again rather than simply switched back on.
       if (remote?.reauthorizationRequired && /^https?:/i.test(remote.authorizationUrl || '')) {
         __showToast(`${source.name} needs authorization again`);
-        window.location.href = remote.authorizationUrl;
+        launchAuthorization(remote.authorizationUrl, remote.state, {
+          onClose: () => __showToast('Reauthorization cancelled'),
+          onError: () => __showToast('Reauthorization failed'),
+        });
         return;
       }
       finish(remote);
     }).catch(() => finish());
   }
 
+  function matchesSourceFilters(source) {
+    if (state.sourceFilter !== 'all' && source.category !== state.sourceFilter) return false;
+
+    const query = String(state.sourceSearch || '').trim().toLowerCase();
+    if (query) {
+      const hay = [
+        source.name,
+        source.type,
+        source.method,
+        source.usedBy,
+        source.assets,
+        ...(source.scopes || []),
+      ].join(' ').toLowerCase();
+      if (!hay.includes(query)) return false;
+    }
+
+    const isChina = String(source.usedBy || '').includes('[中国]')
+      || String(source.assets || '').includes('中国')
+      || /微信|钉钉|飞书|抖音|百度|阿里|腾讯|网易|京东|淘宝|支付宝|美团|滴滴|高德|企微|知乎|小红书|哔哩/.test(String(source.name || ''));
+    if (state.regionFilter === 'cn' && !isChina) return false;
+    if (state.regionFilter === 'global' && isChina) return false;
+
+    const availability = source.availability
+      || catalogAvailability({ method: source.method, authType: source.authType });
+    const ready = source.isCatalogOnly
+      ? (availability === 'coming_soon' ? 'coming_soon' : 'ready')
+      : 'ready';
+    if (state.readyFilter === 'ready' && ready !== 'ready') return false;
+    if (state.readyFilter === 'coming_soon' && ready !== 'coming_soon') return false;
+    return true;
+  }
+
+  // Catalog id → Import Data source id (matches backend CATALOG_SOURCE_IDS).
+  const CATALOG_SOURCE_IDS = {
+    'google-calendar': 'calendar',
+    notion: 'notion',
+    feishu: 'feishu',
+    dingtalk: 'dingtalk',
+    wecom: 'wecom',
+    'wecom-ai': 'wecom-ai',
+    qq: 'qq',
+    telegram: 'telegram',
+    discord: 'discord',
+  };
+
   function renderSourceGrid() {
-    const visibleSources = state.sourceFilter === 'all' ? dataSources : dataSources.filter(source => source.category === state.sourceFilter);
-    sourceCount.textContent = `${visibleSources.length} source${visibleSources.length === 1 ? '' : 's'}`;
+    const connectedIds = new Set(dataSources.map((source) => source.id));
+    const authorizedSourceIds = new Set(
+      dataSources
+        .filter((source) => source.statusType === 'connected' && source.connection?.externalConnectionId)
+        .map((source) => source.id)
+    );
+    const catalogCards = catalogBrowseItems
+      .filter((item) => {
+        if (connectedIds.has(item.id)) return false;
+        const mappedSourceId = CATALOG_SOURCE_IDS[item.id];
+        // Hide catalog Connect once the mapped source has a real provider connection.
+        if (mappedSourceId && authorizedSourceIds.has(mappedSourceId)) return false;
+        return true;
+      })
+      .map(catalogCardFromItem);
+    const combined = [...dataSources, ...catalogCards];
+    const visibleSources = combined.filter(matchesSourceFilters);
+    sourceCount.textContent = `${visibleSources.length} connector${visibleSources.length === 1 ? '' : 's'}`;
     sourceGrid.innerHTML = visibleSources.map((source, index) => `
-      <article class="source-card${source.aiEnabled === false ? ' is-paused' : ''}" data-source-id="${source.id}" style="--card-order:${index}">
+      <article class="source-card${source.aiEnabled === false ? ' is-paused' : ''}${source.isCatalogOnly ? ' is-catalog' : ''}" data-source-id="${source.id}" style="--card-order:${index}">
         <span class="source-mini-icon ${source.category}">${sourceAdapterIcon(source)}</span>
-        <span class="source-card-copy"><strong>${source.name}</strong>${sourceStatusLabel(source)}${sourceConnectionLabel(source)}</span>
+        <span class="source-card-copy"><strong>${source.name}</strong>${sourceStatusLabel(source)}${source.isCatalogOnly ? '' : sourceConnectionLabel(source)}</span>
         <footer>
-          <span><small>Last sync</small><b>${source.lastSync}</b></span>
-          <button class="manage" type="button" data-source-manage="${source.id}" aria-haspopup="dialog"><span>Manage</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7.5 5 5 5-5 5"/></svg></button>
+          <span><small>${source.isCatalogOnly ? 'Catalog' : 'Last sync'}</small><b>${source.lastSync}</b></span>
+          <button class="manage" type="button" data-source-manage="${source.id}" aria-haspopup="dialog"><span>${source.isCatalogOnly ? (source.availability === 'coming_soon' ? 'Notify' : 'Connect') : 'Manage'}</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7.5 5 5 5-5 5"/></svg></button>
         </footer>
       </article>
     `).join('');
@@ -4145,7 +4269,49 @@ function __install() {
         card.style.removeProperty('--tilt-y');
       });
     });
-    sourceGrid.querySelectorAll('[data-source-manage]').forEach(button => button.addEventListener('click', () => selectSource(button.dataset.sourceManage, button)));
+    sourceGrid.querySelectorAll('[data-source-manage]').forEach(button => button.addEventListener('click', () => {
+      const id = button.dataset.sourceManage;
+      const catalogCard = combined.find((item) => item.id === id && item.isCatalogOnly);
+      if (catalogCard) {
+        connectCatalogCard(catalogCard);
+        return;
+      }
+      selectSource(id, button);
+    }));
+  }
+
+  function connectCatalogCard(card) {
+    if (card.availability === 'coming_soon') {
+      __showToast(`${card.name} is listed for China/global launch — OAuth enablement comes next`);
+      return;
+    }
+    const redirectUri = `${window.location.origin}${window.location.pathname}#/import-data`;
+    __showToast(`Connecting ${card.name}…`);
+    startConnectOnApi(card.catalogId, redirectUri).then((result) => {
+      if (result?.setupRequired) {
+        openAstrBotSetup({
+          name: card.name,
+          setupUrl: result.setupUrl || result.authorizationUrl,
+          hint: result.hint,
+          onCancel: () => __showToast('Connection cancelled'),
+          onRetry: () => connectCatalogCard(card),
+        });
+        return;
+      }
+      if (result?.authorizationUrl && /^https?:/i.test(result.authorizationUrl)) {
+        launchAuthorization(result.authorizationUrl, result.state, {
+          onClose: () => __showToast('Connection cancelled'),
+          onError: () => __showToast('Connection failed'),
+        });
+        return;
+      }
+      __showToast(`${card.name} connected`);
+      void hydrateSourcesFromApi();
+      void hydrateCatalogBrowseFromApi();
+      void hydrateOverviewFromApi();
+    }).catch(() => {
+      __showToast(`Could not connect ${card.name}`);
+    });
   }
 
   function formatConnectedAt(value) {
@@ -4173,7 +4339,45 @@ function __install() {
       </section>`;
   }
 
-  function renderSourceInspector(source) {
+  function renderSyncedAssetsBlock(source, assetsPayload) {
+    const items = assetsPayload?.items || [];
+    const storage = assetsPayload?.storage
+      || 'Postgres table synced_assets · JSON snapshot under backend/data/synced/';
+    const isAstrbot = (source.connection?.authProvider || '').toLowerCase() === 'astrbot'
+      || /astrbot/i.test(source.method || '');
+    if (!items.length) {
+      const isCalendar = source.id === 'calendar' || /google calendar/i.test(source.name || '');
+      const emptyHint = isAstrbot
+        ? (/feishu|lark/i.test(source.name || '') || source.id === 'feishu'
+          ? 'Click <b>Sync now</b> to pull Feishu chats and recent messages the bot can access into local storage.'
+          : 'Click <b>Sync now</b> to verify the messaging adapter. Inbound chat is handled by the bot runtime.')
+        : isCalendar
+          ? 'Click <b>Sync now</b> to pull upcoming Google Calendar events into local storage.'
+          : 'Click <b>Sync now</b> to pull pages from this source into local storage.';
+      return `
+        <section class="source-synced-assets" data-synced-for="${source.id}">
+          <header><strong>Synced data</strong><span>Not fetched yet</span></header>
+          <p class="synced-empty">${emptyHint}</p>
+          <small class="synced-storage">${escapeGoalText(storage)}</small>
+        </section>`;
+    }
+    const rows = items.slice(0, 40).map((item) => `
+      <li>
+        <div>
+          <strong>${escapeGoalText(item.title || 'Untitled')}</strong>
+          <small>${escapeGoalText(item.objectType || 'page')}${item.lastEditedAt ? ` · edited ${escapeGoalText(String(item.lastEditedAt).slice(0, 19).replace('T', ' '))}` : ''}</small>
+        </div>
+        ${item.url ? `<a href="${escapeGoalText(item.url)}" target="_blank" rel="noopener noreferrer">Open</a>` : ''}
+      </li>`).join('');
+    return `
+      <section class="source-synced-assets" data-synced-for="${source.id}">
+        <header><strong>Synced data</strong><span>${items.length} item${items.length === 1 ? '' : 's'} stored locally</span></header>
+        <ul class="synced-asset-list">${rows}</ul>
+        <small class="synced-storage">${escapeGoalText(storage)}</small>
+      </section>`;
+  }
+
+  function renderSourceInspector(source, syncedPayload = null) {
     const revoked = source.statusType === 'revoked';
     sourceInspectorContent.innerHTML = `
       <header class="source-detail-header"><span><i></i>AUTHORIZATION DETAIL</span>${sourceStatusLabel(source)}<h2 id="sourceInspectorTitle">${source.name}</h2><p>${source.type} · ${source.method}</p></header>
@@ -4182,7 +4386,8 @@ function __install() {
       <section class="source-detail-block"><header><strong>Authorized scope</strong><span>Minimum access</span></header>${source.scopes.map((scope, index) => `<button class="scope-toggle${revoked ? '' : ' on'}" type="button" data-scope-index="${index}" aria-pressed="${String(!revoked)}"><span><i></i>${scope}</span><em></em></button>`).join('')}</section>
       <section class="source-detail-block"><header><strong>Allowed purposes</strong><span>You control this</span></header><div class="purpose-chips">${source.purposes.map(purpose => `<span>${purpose}</span>`).join('')}</div></section>
       <section class="source-use-log"><small>RECENT AI USE</small><strong>${source.usedBy}</strong><span>Last synchronization: ${source.lastSync}</span></section>
-      <section class="source-processing"><span><i></i><b>Processing location</b><small>${source.category === 'identity' ? 'Public discovery with review gate' : 'Encrypted local processing where available'}</small></span><em>${source.assets}</em></section>
+      <section class="source-processing"><span><i></i><b>Processing location</b><small>${source.category === 'identity' ? 'Public discovery with review gate' : 'Local Postgres (synced_assets) + optional JSON snapshot'}</small></span><em>${source.assets}</em></section>
+      ${revoked ? '' : renderSyncedAssetsBlock(source, syncedPayload)}
       <div class="source-detail-actions">${revoked ? '<button class="source-sync source-reconnect" type="button">Reconnect source</button>' : '<button class="source-sync" type="button">Sync now</button>'}${revoked ? '' : `<button class="source-pause" type="button">${source.aiEnabled === false ? 'Resume AI use' : 'Pause AI use'}</button>`}<button class="source-revoke" type="button" ${revoked ? 'disabled' : ''}>Revoke access</button></div>
     `;
     sourceInspectorContent.querySelectorAll('.scope-toggle').forEach(button => button.addEventListener('click', () => {
@@ -4196,8 +4401,33 @@ function __install() {
       if (syncButton.classList.contains('source-reconnect')) { reconnectSource(source, syncButton); return; }
       if (syncButton.disabled || syncButton.classList.contains('is-loading')) return;
       syncButton.classList.add('is-loading');
+      syncButton.disabled = true;
       syncButton.textContent = 'Synchronizing…';
-      window.setTimeout(() => { syncButton.classList.remove('is-loading'); syncButton.textContent = 'Sync now'; __showToast(`${source.name} synchronized securely`); }, 760);
+      void syncSourceOnApi(source.id).then((result) => {
+        if (!result?.source) {
+          __showToast('Sync failed — API unavailable');
+          return;
+        }
+        Object.assign(source, result.source);
+        renderSourceGrid();
+        renderSourceInspector(source, {
+          items: result.items || [],
+          storage: result.storage,
+          total: result.fetched,
+        });
+        void hydrateOverviewFromApi();
+        __showToast(
+          (source.connection?.authProvider || '').toLowerCase() === 'astrbot'
+            ? `${source.name}: synced ${result.fetched} item${result.fetched === 1 ? '' : 's'} (${result.created} new)`
+            : `${source.name}: fetched ${result.fetched} item${result.fetched === 1 ? '' : 's'} (${result.created} new)`
+        );
+      }).catch((error) => {
+        const detail = error?.body?.detail || error?.message || 'Sync failed';
+        __showToast(typeof detail === 'string' ? detail : 'Sync failed');
+        syncButton.classList.remove('is-loading');
+        syncButton.disabled = false;
+        syncButton.textContent = 'Sync now';
+      });
     });
     // Pausing is reversible and keeps the grant: it only stops future AI use.
     // Revoking is the destructive one and tears the authorization down.
@@ -4208,7 +4438,7 @@ function __install() {
       const aiEnabled = source.aiEnabled === false;
       source.aiEnabled = aiEnabled;
       renderSourceGrid();
-      renderSourceInspector(source);
+      renderSourceInspector(source, syncedPayload);
       __showToast(aiEnabled
         ? `${source.name} is available to AI again`
         : `${source.name} is paused for future AI tasks`);
@@ -4216,7 +4446,7 @@ function __install() {
         if (!remote) return;
         Object.assign(source, remote);
         renderSourceGrid();
-        if (state.selectedSourceId === source.id) renderSourceInspector(source);
+        if (state.selectedSourceId === source.id) renderSourceInspector(source, syncedPayload);
       }).catch(() => {});
     });
     const revokeButton = sourceInspectorContent.querySelector('.source-revoke');
@@ -4233,6 +4463,18 @@ function __install() {
       void disconnectSourceOnApi(source.id).then((remote) => { if (remote) Object.assign(source, remote); renderSourceGrid(); renderSourceInspector(source); void hydrateOverviewFromApi(); });
       renderSourceGrid(); renderSourceInspector(source); __showToast(`${source.name} access revoked`);
     });
+
+    if (!revoked && syncedPayload == null) {
+      void loadSyncedAssetsFromApi(source.id).then((remote) => {
+        if (!remote || state.selectedSourceId !== source.id) return;
+        // Re-render only the synced block if the inspector is still on this source.
+        const block = sourceInspectorContent.querySelector(`[data-synced-for="${source.id}"]`);
+        if (!block) return;
+        const temp = document.createElement('div');
+        temp.innerHTML = renderSyncedAssetsBlock(source, remote);
+        block.replaceWith(temp.firstElementChild);
+      });
+    }
   }
 
   let sourceInspectorTriggerId = '';
@@ -4263,10 +4505,11 @@ function __install() {
   const wizardCatalogFilters = {
     Device: (item) => item.category === 'device',
     Files: (item) => item.category === 'files',
-    Account: (item) => ['productivity', 'health'].includes(item.category) && item.authType === 'nango',
+    Account: (item) => ['productivity', 'health', 'communication'].includes(item.category)
+      && ['nango', 'api_key'].includes(item.authType),
     Identity: (item) => item.category === 'identity',
     Extension: (item) => item.authType === 'mcp_url' || /mcp/i.test(item.method || ''),
-    Relay: (item) => item.category === 'communication',
+    Relay: (item) => item.authType === 'astrbot' || (item.category === 'communication' && item.authType === 'api_key'),
   };
 
   let wizardCatalogItems = null;
@@ -4302,7 +4545,7 @@ function __install() {
     wizardCatalog.innerHTML = items.map((item) => `
       <button type="button" data-wizard-integration="${item.id}">
         <b>${escapeGoalText(item.name)}</b>
-        <small>${escapeGoalText(item.description || item.method || '')}</small>
+        <small>${escapeGoalText(item.method || item.authType || 'connector')}${String(item.description || '').startsWith('[中国]') ? ' · 中国' : ''}</small>
       </button>
     `).join('');
     wizardCatalog.querySelectorAll('[data-wizard-integration]').forEach((button) => {
@@ -7159,6 +7402,21 @@ closeDataWorkspace();
     document.querySelectorAll('[data-source-filter]').forEach(item => item.classList.toggle('active', item === button));
     renderSourceGrid();
   }));
+  const sourceSearchInput = document.getElementById('sourceSearchInput');
+  sourceSearchInput?.addEventListener('input', () => {
+    state.sourceSearch = sourceSearchInput.value || '';
+    renderSourceGrid();
+  });
+  document.querySelectorAll('[data-region-filter]').forEach((button) => button.addEventListener('click', () => {
+    state.regionFilter = button.dataset.regionFilter || 'all';
+    document.querySelectorAll('[data-region-filter]').forEach((item) => item.classList.toggle('active', item === button));
+    renderSourceGrid();
+  }));
+  document.querySelectorAll('[data-ready-filter]').forEach((button) => button.addEventListener('click', () => {
+    state.readyFilter = button.dataset.readyFilter || 'all';
+    document.querySelectorAll('[data-ready-filter]').forEach((item) => item.classList.toggle('active', item === button));
+    renderSourceGrid();
+  }));
   addSourceButton?.addEventListener('click', openConnectionWizard);
   addAdapterButton?.addEventListener('click', openConnectionWizard);
   sourceInspectorClose?.addEventListener('click', () => closeSourceInspector());
@@ -7200,14 +7458,53 @@ closeDataWorkspace();
       __showToast('Permission review opened — nothing connected yet');
       return;
     }
+    const catalogItem = (wizardCatalogItems || []).find((item) => item.id === integrationId);
+    if (catalogItem && /coming soon/i.test(catalogItem.method || '')) {
+      __showToast(`${catalogItem.name} is listed for launch — OAuth enablement comes next`);
+      return;
+    }
     const redirectUri = `${window.location.origin}${window.location.pathname}#/import-data`;
     startConnectOnApi(integrationId, redirectUri).then((result) => {
+      if (result?.setupRequired) {
+        openAstrBotSetup({
+          name: catalogItem?.name || wizardType || integrationId,
+          setupUrl: result.setupUrl || result.authorizationUrl,
+          hint: result.hint,
+          onCancel: () => __showToast('Connection cancelled'),
+          onRetry: () => {
+            startConnectOnApi(integrationId, redirectUri).then((retry) => {
+              if (retry?.setupRequired) {
+                __showToast('AstrBot bot still missing — finish Create Bot, then try again');
+                return;
+              }
+              if (retry?.authorizationUrl && /^https?:/i.test(retry.authorizationUrl)) {
+                launchAuthorization(retry.authorizationUrl, retry.state, {
+                  onClose: () => __showToast('Connection cancelled'),
+                  onError: () => __showToast('Connection failed'),
+                });
+                return;
+              }
+              __showToast(`${wizardType} connected`);
+              void hydrateSourcesFromApi();
+              void hydrateCatalogBrowseFromApi();
+              void hydrateOverviewFromApi();
+            }).catch(() => __showToast('Could not finish AstrBot connect'));
+          },
+        });
+        return;
+      }
       if (result?.authorizationUrl && /^https?:/i.test(result.authorizationUrl)) {
-        window.location.href = result.authorizationUrl;
+        // Embed Nango Connect UI so success returns here → Import Data
+        // (full-page :3009 leaves users on "close this tab").
+        launchAuthorization(result.authorizationUrl, result.state, {
+          onClose: () => __showToast('Connection cancelled'),
+          onError: () => __showToast('Connection failed'),
+        });
         return;
       }
       __showToast(`${wizardType} connect started`);
       void hydrateSourcesFromApi();
+      void hydrateCatalogBrowseFromApi();
       // Connecting records an activity event, so refresh the Overview feed too.
       void hydrateOverviewFromApi();
     }).catch(() => {

@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     api_public_url: str = "http://127.0.0.1:8000/api/v1"
 
     nango_url: str = "http://localhost:3003"
+    # Browser-facing Nango API (Connect UI must not use docker hostname nango:3003).
+    nango_public_url: str = "http://localhost:3003"
     mcp_gateway_url: str = "http://localhost:8080"
     memory_service_url: str = "http://localhost:8420"
     agent_harness_url: str = "http://localhost:3080"
@@ -47,6 +49,21 @@ class Settings(BaseSettings):
 
     telegram_bot_token: str = ""
     astrbot_dashboard_token: str = ""
+
+    # Optional China AstrBot platform credentials (admin configures once).
+    feishu_app_id: str = ""
+    feishu_app_secret: str = ""
+    feishu_domain: str = "https://open.feishu.cn"
+    dingtalk_client_id: str = ""
+    dingtalk_client_secret: str = ""
+    wecom_corpid: str = ""
+    wecom_secret: str = ""
+    wecom_token: str = ""
+    wecom_encoding_aes_key: str = ""
+    wecom_ai_token: str = ""
+    wecom_ai_encoding_aes_key: str = ""
+    qq_appid: str = ""
+    qq_secret: str = ""
 
     harness_mode: SidecarMode = "live"
     astrbot_mode: SidecarMode = "live"

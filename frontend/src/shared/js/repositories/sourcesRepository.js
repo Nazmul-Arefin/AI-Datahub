@@ -6,6 +6,8 @@ import {
   reconnectSource,
   fetchIntegrationCatalog,
   startIntegrationConnect,
+  syncSource,
+  fetchSyncedAssets,
 } from '../api/sources.js';
 
 export async function loadSourcesFromApi(category = 'all') {
@@ -48,4 +50,20 @@ export async function loadCatalogFromApi(q = '', category = '') {
 export async function startConnectOnApi(integrationId, redirectUri) {
   if (!isApiEnabled()) return null;
   return startIntegrationConnect(integrationId, redirectUri);
+}
+
+export async function syncSourceOnApi(sourceId) {
+  if (!isApiEnabled()) return null;
+  return syncSource(sourceId);
+}
+
+export async function loadSyncedAssetsFromApi(sourceId) {
+  if (!isApiEnabled()) return null;
+  try {
+    return await fetchSyncedAssets(sourceId);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 0) return null;
+    console.warn('[sourcesRepository] synced assets unavailable', error);
+    return null;
+  }
 }

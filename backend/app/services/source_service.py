@@ -479,7 +479,11 @@ class SourceService:
                 authorizationUrl=payload.redirect_uri or "/",
                 state=state,
             )
-        return await auth_connector.start_authorization(item.id, payload.redirect_uri, user_id, state)
+        # Nango Connect sessions must use the provider config key (e.g. google-calendar).
+        integration_key = item.nango_provider_key or item.id
+        return await auth_connector.start_authorization(
+            integration_key, payload.redirect_uri, user_id, state
+        )
 
     async def complete_connection(
         self,

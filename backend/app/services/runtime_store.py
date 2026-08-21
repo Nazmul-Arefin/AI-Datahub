@@ -31,6 +31,7 @@ class RuntimeStore:
         self.activity = [item.model_copy(deep=True) for item in SEED_ACTIVITY]
         self.connections: dict[str, dict] = self._seed_connections()
         self.oauth_states: dict[str, dict] = {}
+        self.synced_assets: dict[str, dict[str, dict]] = {}
 
     def _seed_connections(self) -> dict[str, dict]:
         """Mirror the connection rows `seed_db` creates, so both modes agree."""

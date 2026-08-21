@@ -23,7 +23,21 @@
               <button type="button" data-source-filter="identity"><span>Identity</span></button>
               <button type="button" data-source-filter="communication"><span>Social</span></button>
             </nav>
-            <span class="adapter-count" id="sourceCount">12 sources</span>
+            <div class="data-gallery-tools">
+              <label class="data-search" for="sourceSearchInput">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.4-4.4m2.4-5.1a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z"/></svg>
+                <input id="sourceSearchInput" type="search" placeholder="Search WeChat, 飞书, Notion…" autocomplete="off" enterkeyhint="search">
+              </label>
+              <div class="data-filter-chips" aria-label="Market and readiness filters">
+                <button type="button" class="active" data-region-filter="all">All markets</button>
+                <button type="button" data-region-filter="cn">中国 China</button>
+                <button type="button" data-region-filter="global">Global</button>
+                <button type="button" data-ready-filter="all" class="active">All status</button>
+                <button type="button" data-ready-filter="ready">Ready now</button>
+                <button type="button" data-ready-filter="coming_soon">Coming soon</button>
+              </div>
+              <span class="adapter-count" id="sourceCount">12 sources</span>
+            </div>
           </header>
           <section class="source-grid" id="sourceGrid" aria-live="polite"></section>
         </main>

@@ -13,6 +13,7 @@ class ChatMessage(BaseModel):
 class SendMessageRequest(BaseModel):
     content: str
     thread_id: str | None = Field(default=None, alias="threadId")
+    platform: str | None = None
 
     model_config = {"populate_by_name": True}
 

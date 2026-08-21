@@ -89,14 +89,27 @@ def _stamp_alembic_head(url: str) -> None:
     command.stamp(config, "head")
 
 
+def _upgrade_alembic(url: str) -> None:
+    from alembic import command
+    from alembic.config import Config
+
+    backend_root = Path(__file__).resolve().parents[2]
+    config = Config(str(backend_root / "alembic.ini"))
+    config.set_main_option("script_location", str(backend_root / "alembic"))
+    config.set_main_option("sqlalchemy.url", url)
+    command.upgrade(config, "head")
+
+
 def init_database() -> None:
     """Bootstrap a fresh dev database. Alembic owns already-migrated schemas."""
     if engine is None:
         return
     from app import models as _models  # noqa: F401  — register metadata
 
+    url = engine.url.render_as_string(hide_password=False)
     if "alembic_version" in inspect(engine).get_table_names():
-        # Alembic is managing this database; create_all would mask pending migrations.
+        # Apply pending revisions (e.g. synced_assets) on API boot.
+        _upgrade_alembic(url)
         return
     Base.metadata.create_all(bind=engine)
-    _stamp_alembic_head(engine.url.render_as_string(hide_password=False))
+    _stamp_alembic_head(url)

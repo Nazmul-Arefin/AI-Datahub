@@ -86,8 +86,27 @@ async def test_connect_goes_through_auth_connector(client, monkeypatch):
 async def test_astrbot_catalog_connect_returns_url(client):
     start = await client.post("/api/v1/integrations/telegram/connect")
     assert start.status_code == 200
-    assert start.json()["authorizationUrl"]
-    assert start.json()["state"]
+    body = start.json()
+    assert body["authorizationUrl"]
+    assert body["state"]
+    assert body.get("setupRequired") is False
+
+
+@pytest.mark.asyncio
+async def test_china_astrbot_catalog_rows_are_ready(client):
+    catalog = await client.get("/api/v1/integrations/catalog")
+    assert catalog.status_code == 200
+    by_id = {item["id"]: item for item in catalog.json()["items"]}
+    for key in ("feishu", "dingtalk", "wecom", "qq", "wecom-ai"):
+        assert key in by_id, key
+        assert by_id[key]["authType"] == "astrbot", key
+        assert by_id[key]["method"] == "AstrBot", key
+
+    start = await client.post("/api/v1/integrations/feishu/connect")
+    assert start.status_code == 200
+    body = start.json()
+    assert body["state"]
+    assert body.get("authorizationUrl") or body.get("setupUrl")
 
 
 @pytest.mark.asyncio
