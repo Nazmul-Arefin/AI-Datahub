@@ -43,10 +43,11 @@ async def test_catalog_can_fill_every_connect_wizard_tile(client):
     so the two non-obvious groupings are asserted here."""
     items = (await client.get("/api/v1/integrations/catalog")).json()["items"]
 
-    # "Account or API" offers OAuth services across productivity and health.
+    # "Account or API" offers OAuth/API services across work and health.
     assert [
         item for item in items
-        if item["category"] in {"productivity", "health"} and item["authType"] == "nango"
+        if item["category"] in {"productivity", "health", "communication"}
+        and item["authType"] in {"nango", "api_key"}
     ]
     # "Plugin or MCP" offers raw MCP endpoints and MCP-method connectors.
     assert [
@@ -72,11 +73,25 @@ async def test_catalog_lists_seed_entries(client):
     response = await client.get("/api/v1/integrations/catalog")
     assert response.status_code == 200
     data = response.json()
-    assert data["total"] >= 12
+    assert data["total"] >= 100
     keys = {item["id"] for item in data["items"]}
     assert "google-calendar" in keys
     assert "telegram" in keys
     assert "discord" in keys
+    assert "notion" in keys
+    # China domestic priority set
+    assert "wechat" in keys
+    assert "dingtalk" in keys
+    assert "feishu" in keys
+    assert "douyin" in keys
+    assert "baidu-netdisk" in keys
+    china_ids = {
+        "wechat", "wecom", "dingtalk", "feishu", "qq", "weibo", "douyin", "bilibili",
+        "xiaohongshu", "zhihu", "baidu-netdisk", "aliyun-drive", "tencent-docs", "yuque",
+        "wps", "meituan", "didi", "amap", "alipay", "taobao", "jd", "ctrip", "keep",
+        "huawei-health", "coze", "dify", "kimi", "tongyi",
+    }
+    assert len(china_ids & keys) >= 20
 
 
 @pytest.mark.asyncio

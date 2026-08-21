@@ -1,0 +1,1481 @@
+{
+  "version": 1,
+  "market_priority": "cn",
+  "notes": "Catalog cards only. availability=live|api_key|mcp_url|astrbot|coming_soon. Enable OAuth later without new routers.",
+  "connectors": [
+    {
+      "id": "local-device-bridge",
+      "name": "Local device bridge",
+      "category": "device",
+      "description": "Connect a phone, laptop, or USB device through an encrypted local bridge.",
+      "scopes": [
+        "Selected device categories"
+      ],
+      "auth_type": "api_key",
+      "availability": "api_key",
+      "region": "global"
+    },
+    {
+      "id": "local-folder",
+      "name": "Local folder",
+      "category": "files",
+      "description": "Import only the files and folders you choose.",
+      "scopes": [
+        "Selected documents"
+      ],
+      "auth_type": "api_key",
+      "availability": "api_key",
+      "region": "global"
+    },
+    {
+      "id": "notion",
+      "name": "Notion",
+      "category": "productivity",
+      "description": "Import selected workspace pages.",
+      "scopes": [
+        "Selected workspace"
+      ],
+      "auth_type": "nango",
+      "availability": "live",
+      "region": "global",
+      "nango_provider_key": "notion",
+      "method": "Live"
+    },
+    {
+      "id": "telegram",
+      "name": "Telegram",
+      "category": "communication",
+      "description": "Connect Telegram as a messaging source (AstrBot).",
+      "scopes": [
+        "Authorized chats"
+      ],
+      "auth_type": "astrbot",
+      "availability": "astrbot",
+      "region": "global",
+      "method": "AstrBot"
+    },
+    {
+      "id": "discord",
+      "name": "Discord",
+      "category": "communication",
+      "description": "Connect Discord as a messaging source (AstrBot).",
+      "scopes": [
+        "Authorized servers"
+      ],
+      "auth_type": "astrbot",
+      "availability": "astrbot",
+      "region": "global",
+      "method": "AstrBot"
+    },
+    {
+      "id": "google-calendar",
+      "name": "Google Calendar",
+      "category": "productivity",
+      "description": "Sync events and availability for planning.",
+      "scopes": [
+        "Event title",
+        "Time & availability"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "google-calendar"
+    },
+    {
+      "id": "google-drive",
+      "name": "Google Drive",
+      "category": "files",
+      "description": "Sync selected folders for document retrieval.",
+      "scopes": [
+        "Selected folders"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "google-drive"
+    },
+    {
+      "id": "gmail",
+      "name": "Gmail",
+      "category": "productivity",
+      "description": "Read selected mail for scheduling and follow-up.",
+      "scopes": [
+        "Selected labels"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "google-mail"
+    },
+    {
+      "id": "github",
+      "name": "GitHub",
+      "category": "productivity",
+      "description": "Read selected repositories for project context.",
+      "scopes": [
+        "Selected repositories"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "github"
+    },
+    {
+      "id": "linear",
+      "name": "Linear",
+      "category": "productivity",
+      "description": "Track issues and project status.",
+      "scopes": [
+        "Issue titles",
+        "Status"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "linear"
+    },
+    {
+      "id": "slack",
+      "name": "Slack",
+      "category": "productivity",
+      "description": "Connect selected channels for work context.",
+      "scopes": [
+        "Selected channels"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "slack"
+    },
+    {
+      "id": "apple-fitness",
+      "name": "Apple Fitness",
+      "category": "health",
+      "description": "Import activity and sleep summaries.",
+      "scopes": [
+        "Activity",
+        "Sleep summary"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "apple-health"
+    },
+    {
+      "id": "deepsearch",
+      "name": "DeepSearch",
+      "category": "identity",
+      "description": "Public research queries that never run automatically.",
+      "scopes": [
+        "Per-task query only"
+      ],
+      "auth_type": "mcp_url",
+      "availability": "mcp_url",
+      "region": "global",
+      "method": "MCP URL"
+    },
+    {
+      "id": "wechat",
+      "name": "微信 WeChat",
+      "category": "communication",
+      "description": "Import chosen chats for relationship context.",
+      "scopes": [
+        "Chosen chats only"
+      ],
+      "auth_type": "api_key",
+      "availability": "api_key",
+      "region": "cn"
+    },
+    {
+      "id": "wecom",
+      "name": "企业微信 WeCom",
+      "category": "communication",
+      "description": "Work chats and org directory for China workplaces.",
+      "scopes": [
+        "Selected chats",
+        "Org contacts"
+      ],
+      "auth_type": "api_key",
+      "availability": "api_key",
+      "region": "cn"
+    },
+    {
+      "id": "dingtalk",
+      "name": "钉钉 DingTalk",
+      "category": "communication",
+      "description": "Alibaba workplace messaging, calendar, and approval context.",
+      "scopes": [
+        "Selected chats",
+        "Calendar"
+      ],
+      "auth_type": "api_key",
+      "availability": "api_key",
+      "region": "cn"
+    },
+    {
+      "id": "feishu",
+      "name": "飞书 Feishu / Lark",
+      "category": "productivity",
+      "description": "Docs, calendar, and chat from ByteDance workplace suite.",
+      "scopes": [
+        "Selected docs",
+        "Calendar",
+        "Chats"
+      ],
+      "auth_type": "api_key",
+      "availability": "api_key",
+      "region": "cn"
+    },
+    {
+      "id": "qq",
+      "name": "QQ",
+      "category": "communication",
+      "description": "Personal QQ chats for relationship and schedule context.",
+      "scopes": [
+        "Chosen chats"
+      ],
+      "auth_type": "api_key",
+      "availability": "api_key",
+      "region": "cn"
+    },
+    {
+      "id": "weibo",
+      "name": "微博 Weibo",
+      "category": "communication",
+      "description": "Public and followed posts for social context.",
+      "scopes": [
+        "Followed feeds"
+      ],
+      "auth_type": "api_key",
+      "availability": "api_key",
+      "region": "cn"
+    },
+    {
+      "id": "douyin",
+      "name": "抖音 Douyin",
+      "category": "communication",
+      "description": "Short-video and creator activity signals (authorized scope).",
+      "scopes": [
+        "Selected profiles"
+      ],
+      "auth_type": "api_key",
+      "availability": "api_key",
+      "region": "cn"
+    },
+    {
+      "id": "bilibili",
+      "name": "哔哩哔哩 Bilibili",
+      "category": "communication",
+      "description": "Watch history and favorites for interest context.",
+      "scopes": [
+        "Favorites",
+        "History"
+      ],
+      "auth_type": "api_key",
+      "availability": "api_key",
+      "region": "cn"
+    },
+    {
+      "id": "xiaohongshu",
+      "name": "小红书 Xiaohongshu",
+      "category": "communication",
+      "description": "Saved notes and lifestyle boards.",
+      "scopes": [
+        "Saved notes"
+      ],
+      "auth_type": "api_key",
+      "availability": "api_key",
+      "region": "cn"
+    },
+    {
+      "id": "zhihu",
+      "name": "知乎 Zhihu",
+      "category": "identity",
+      "description": "Followed topics and answered questions for knowledge context.",
+      "scopes": [
+        "Followed topics"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "baidu-netdisk",
+      "name": "百度网盘",
+      "category": "files",
+      "description": "Selected folders from Baidu Netdisk.",
+      "scopes": [
+        "Selected folders"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "aliyun-drive",
+      "name": "阿里云盘",
+      "category": "files",
+      "description": "Selected folders from Aliyun Drive.",
+      "scopes": [
+        "Selected folders"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "tencent-docs",
+      "name": "腾讯文档",
+      "category": "files",
+      "description": "Shared Tencent Docs for project context.",
+      "scopes": [
+        "Selected documents"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "yuque",
+      "name": "语雀 Yuque",
+      "category": "files",
+      "description": "Knowledge base articles from Yuque.",
+      "scopes": [
+        "Selected books"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "wps",
+      "name": "WPS 办公",
+      "category": "files",
+      "description": "WPS cloud documents you explicitly select.",
+      "scopes": [
+        "Selected documents"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "netease-mail",
+      "name": "网易邮箱",
+      "category": "productivity",
+      "description": "Selected mailbox labels for follow-ups.",
+      "scopes": [
+        "Selected labels"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "qq-mail",
+      "name": "QQ邮箱",
+      "category": "productivity",
+      "description": "Selected QQ Mail labels for follow-ups.",
+      "scopes": [
+        "Selected labels"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "tencent-meeting",
+      "name": "腾讯会议",
+      "category": "productivity",
+      "description": "Upcoming meetings and notes metadata.",
+      "scopes": [
+        "Meeting titles",
+        "Time"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "netease-music",
+      "name": "网易云音乐",
+      "category": "health",
+      "description": "Listening habits as lifestyle signal (opt-in).",
+      "scopes": [
+        "Recent plays"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "qq-music",
+      "name": "QQ音乐",
+      "category": "health",
+      "description": "Listening habits as lifestyle signal (opt-in).",
+      "scopes": [
+        "Recent plays"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "keep",
+      "name": "Keep",
+      "category": "health",
+      "description": "Workouts and activity summaries.",
+      "scopes": [
+        "Workouts",
+        "Activity"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "huawei-health",
+      "name": "华为运动健康",
+      "category": "health",
+      "description": "Steps, sleep, and workout summaries.",
+      "scopes": [
+        "Activity",
+        "Sleep"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "meituan",
+      "name": "美团",
+      "category": "productivity",
+      "description": "Orders and local life schedule cues.",
+      "scopes": [
+        "Recent orders"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "dianping",
+      "name": "大众点评",
+      "category": "productivity",
+      "description": "Saved places and dining preferences.",
+      "scopes": [
+        "Saved places"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "didi",
+      "name": "滴滴出行",
+      "category": "productivity",
+      "description": "Trip history for commute planning.",
+      "scopes": [
+        "Recent trips"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "amap",
+      "name": "高德地图",
+      "category": "productivity",
+      "description": "Saved places and commute routes.",
+      "scopes": [
+        "Saved places",
+        "Routes"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "baidu-maps",
+      "name": "百度地图",
+      "category": "productivity",
+      "description": "Saved places and commute routes.",
+      "scopes": [
+        "Saved places"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "alipay",
+      "name": "支付宝",
+      "category": "productivity",
+      "description": "Bill and subscription summaries (user-authorized).",
+      "scopes": [
+        "Bill summaries"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "taobao",
+      "name": "淘宝",
+      "category": "productivity",
+      "description": "Order history for purchase context.",
+      "scopes": [
+        "Recent orders"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "jd",
+      "name": "京东",
+      "category": "productivity",
+      "description": "Order history for purchase context.",
+      "scopes": [
+        "Recent orders"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "pinduoduo",
+      "name": "拼多多",
+      "category": "productivity",
+      "description": "Order history for purchase context.",
+      "scopes": [
+        "Recent orders"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "ctrip",
+      "name": "携程 Ctrip",
+      "category": "productivity",
+      "description": "Trips and hotel bookings for travel goals.",
+      "scopes": [
+        "Upcoming trips"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "rail-12306",
+      "name": "铁路12306",
+      "category": "productivity",
+      "description": "Train bookings for travel planning.",
+      "scopes": [
+        "Upcoming tickets"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "ximalaya",
+      "name": "喜马拉雅",
+      "category": "health",
+      "description": "Listening / learning content preferences.",
+      "scopes": [
+        "Subscriptions"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "weread",
+      "name": "微信读书",
+      "category": "files",
+      "description": "Reading progress and shelf for learning goals.",
+      "scopes": [
+        "Shelf",
+        "Progress"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "kuaishou",
+      "name": "快手 Kuaishou",
+      "category": "communication",
+      "description": "Creator and watch signals (authorized).",
+      "scopes": [
+        "Selected profiles"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "toutiao",
+      "name": "今日头条",
+      "category": "identity",
+      "description": "Followed channels for news context.",
+      "scopes": [
+        "Followed channels"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "tencent-video",
+      "name": "腾讯视频",
+      "category": "communication",
+      "description": "Watchlist preferences.",
+      "scopes": [
+        "Watchlist"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "iqiyi",
+      "name": "爱奇艺",
+      "category": "communication",
+      "description": "Watchlist preferences.",
+      "scopes": [
+        "Watchlist"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "youku",
+      "name": "优酷",
+      "category": "communication",
+      "description": "Watchlist preferences.",
+      "scopes": [
+        "Watchlist"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "eleme",
+      "name": "饿了么",
+      "category": "productivity",
+      "description": "Food order timing for daily planning.",
+      "scopes": [
+        "Recent orders"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "hellobike",
+      "name": "哈啰出行",
+      "category": "productivity",
+      "description": "Mobility trips for commute context.",
+      "scopes": [
+        "Recent trips"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "boss-zhipin",
+      "name": "BOSS直聘",
+      "category": "productivity",
+      "description": "Job search activity (user-authorized).",
+      "scopes": [
+        "Applications"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "lagou",
+      "name": "拉勾",
+      "category": "productivity",
+      "description": "Job search activity (user-authorized).",
+      "scopes": [
+        "Applications"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "maimai",
+      "name": "脉脉",
+      "category": "identity",
+      "description": "Professional network signals.",
+      "scopes": [
+        "Profile"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "tencent-cloud",
+      "name": "腾讯云",
+      "category": "files",
+      "description": "Selected cloud objects via API key.",
+      "scopes": [
+        "Selected buckets"
+      ],
+      "auth_type": "api_key",
+      "availability": "api_key",
+      "region": "cn"
+    },
+    {
+      "id": "aliyun-oss",
+      "name": "阿里云 OSS",
+      "category": "files",
+      "description": "Selected object storage via API key.",
+      "scopes": [
+        "Selected buckets"
+      ],
+      "auth_type": "api_key",
+      "availability": "api_key",
+      "region": "cn"
+    },
+    {
+      "id": "coze",
+      "name": "扣子 Coze",
+      "category": "productivity",
+      "description": "Bot and workflow metadata via MCP URL.",
+      "scopes": [
+        "Selected bots"
+      ],
+      "auth_type": "mcp_url",
+      "availability": "mcp_url",
+      "region": "cn"
+    },
+    {
+      "id": "dify",
+      "name": "Dify",
+      "category": "productivity",
+      "description": "Knowledge apps via MCP / API key.",
+      "scopes": [
+        "Selected apps"
+      ],
+      "auth_type": "mcp_url",
+      "availability": "mcp_url",
+      "region": "cn"
+    },
+    {
+      "id": "fastgpt",
+      "name": "FastGPT",
+      "category": "productivity",
+      "description": "Knowledge base via API key.",
+      "scopes": [
+        "Selected bases"
+      ],
+      "auth_type": "api_key",
+      "availability": "api_key",
+      "region": "cn"
+    },
+    {
+      "id": "tongyi",
+      "name": "通义 Tongyi",
+      "category": "productivity",
+      "description": "Assistant history export (authorized).",
+      "scopes": [
+        "Selected chats"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "kimi",
+      "name": "Kimi 月之暗面",
+      "category": "productivity",
+      "description": "Assistant history export (authorized).",
+      "scopes": [
+        "Selected chats"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "doubao",
+      "name": "豆包",
+      "category": "productivity",
+      "description": "Assistant history export (authorized).",
+      "scopes": [
+        "Selected chats"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "wenxin",
+      "name": "文心一言",
+      "category": "productivity",
+      "description": "Assistant history export (authorized).",
+      "scopes": [
+        "Selected chats"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "spark",
+      "name": "讯飞星火",
+      "category": "productivity",
+      "description": "Assistant history export (authorized).",
+      "scopes": [
+        "Selected chats"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "tiangong",
+      "name": "天工",
+      "category": "productivity",
+      "description": "Assistant history export (authorized).",
+      "scopes": [
+        "Selected chats"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "cn"
+    },
+    {
+      "id": "dropbox",
+      "name": "Dropbox",
+      "category": "files",
+      "description": "Selected folders from Dropbox.",
+      "scopes": [
+        "Selected folders"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "dropbox"
+    },
+    {
+      "id": "onedrive",
+      "name": "OneDrive",
+      "category": "files",
+      "description": "Selected folders from OneDrive.",
+      "scopes": [
+        "Selected folders"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "one-drive"
+    },
+    {
+      "id": "box",
+      "name": "Box",
+      "category": "files",
+      "description": "Selected enterprise folders.",
+      "scopes": [
+        "Selected folders"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "box"
+    },
+    {
+      "id": "evernote",
+      "name": "Evernote",
+      "category": "files",
+      "description": "Selected notebooks.",
+      "scopes": [
+        "Notebooks"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "global"
+    },
+    {
+      "id": "obsidian-sync",
+      "name": "Obsidian (vault MCP)",
+      "category": "files",
+      "description": "Local/remote vault via MCP URL.",
+      "scopes": [
+        "Vault notes"
+      ],
+      "auth_type": "mcp_url",
+      "availability": "mcp_url",
+      "region": "global"
+    },
+    {
+      "id": "jira",
+      "name": "Jira",
+      "category": "productivity",
+      "description": "Selected projects and issues.",
+      "scopes": [
+        "Issues",
+        "Projects"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "jira"
+    },
+    {
+      "id": "asana",
+      "name": "Asana",
+      "category": "productivity",
+      "description": "Selected projects and tasks.",
+      "scopes": [
+        "Tasks"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "asana"
+    },
+    {
+      "id": "trello",
+      "name": "Trello",
+      "category": "productivity",
+      "description": "Selected boards.",
+      "scopes": [
+        "Boards"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "trello"
+    },
+    {
+      "id": "monday",
+      "name": "monday.com",
+      "category": "productivity",
+      "description": "Selected boards.",
+      "scopes": [
+        "Boards"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "monday"
+    },
+    {
+      "id": "clickup",
+      "name": "ClickUp",
+      "category": "productivity",
+      "description": "Selected spaces and tasks.",
+      "scopes": [
+        "Tasks"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "clickup"
+    },
+    {
+      "id": "todoist",
+      "name": "Todoist",
+      "category": "productivity",
+      "description": "Task lists for daily planning.",
+      "scopes": [
+        "Tasks"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "todoist"
+    },
+    {
+      "id": "microsoft-todo",
+      "name": "Microsoft To Do",
+      "category": "productivity",
+      "description": "Task lists for daily planning.",
+      "scopes": [
+        "Tasks"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "global"
+    },
+    {
+      "id": "outlook",
+      "name": "Outlook Mail",
+      "category": "productivity",
+      "description": "Selected mailbox folders.",
+      "scopes": [
+        "Selected folders"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "outlook"
+    },
+    {
+      "id": "microsoft-teams",
+      "name": "Microsoft Teams",
+      "category": "communication",
+      "description": "Selected channels and chats.",
+      "scopes": [
+        "Channels"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "microsoft-teams"
+    },
+    {
+      "id": "zoom",
+      "name": "Zoom",
+      "category": "productivity",
+      "description": "Upcoming meetings metadata.",
+      "scopes": [
+        "Meetings"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "zoom"
+    },
+    {
+      "id": "linkedin",
+      "name": "LinkedIn",
+      "category": "identity",
+      "description": "Profile and posts you authorize.",
+      "scopes": [
+        "Profile"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "linkedin"
+    },
+    {
+      "id": "twitter",
+      "name": "X (Twitter)",
+      "category": "communication",
+      "description": "Followed feeds you authorize.",
+      "scopes": [
+        "Feeds"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "twitter"
+    },
+    {
+      "id": "facebook",
+      "name": "Facebook",
+      "category": "communication",
+      "description": "Pages and groups you authorize.",
+      "scopes": [
+        "Pages"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "facebook"
+    },
+    {
+      "id": "instagram",
+      "name": "Instagram",
+      "category": "communication",
+      "description": "Business account insights you authorize.",
+      "scopes": [
+        "Insights"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "instagram"
+    },
+    {
+      "id": "whatsapp",
+      "name": "WhatsApp Business",
+      "category": "communication",
+      "description": "Business messaging via relay/API.",
+      "scopes": [
+        "Business chats"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "global"
+    },
+    {
+      "id": "spotify",
+      "name": "Spotify",
+      "category": "health",
+      "description": "Listening habits (opt-in).",
+      "scopes": [
+        "Recent plays"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "spotify"
+    },
+    {
+      "id": "fitbit",
+      "name": "Fitbit",
+      "category": "health",
+      "description": "Activity and sleep summaries.",
+      "scopes": [
+        "Activity",
+        "Sleep"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "fitbit"
+    },
+    {
+      "id": "strava",
+      "name": "Strava",
+      "category": "health",
+      "description": "Workouts and rides.",
+      "scopes": [
+        "Activities"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "strava"
+    },
+    {
+      "id": "garmin",
+      "name": "Garmin Connect",
+      "category": "health",
+      "description": "Activity and sleep summaries.",
+      "scopes": [
+        "Activity",
+        "Sleep"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "global"
+    },
+    {
+      "id": "reddit",
+      "name": "Reddit",
+      "category": "identity",
+      "description": "Subscribed communities.",
+      "scopes": [
+        "Subscriptions"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "reddit"
+    },
+    {
+      "id": "youtube",
+      "name": "YouTube",
+      "category": "communication",
+      "description": "Subscriptions and playlists.",
+      "scopes": [
+        "Subscriptions"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "google"
+    },
+    {
+      "id": "notion-mcp",
+      "name": "Notion MCP (remote)",
+      "category": "productivity",
+      "description": "Bring your own Notion MCP server URL.",
+      "scopes": [
+        "Server tools"
+      ],
+      "auth_type": "mcp_url",
+      "availability": "mcp_url",
+      "region": "global"
+    },
+    {
+      "id": "github-mcp",
+      "name": "GitHub MCP (remote)",
+      "category": "productivity",
+      "description": "Bring your own GitHub MCP server URL.",
+      "scopes": [
+        "Server tools"
+      ],
+      "auth_type": "mcp_url",
+      "availability": "mcp_url",
+      "region": "global"
+    },
+    {
+      "id": "filesystem-mcp",
+      "name": "Filesystem MCP",
+      "category": "files",
+      "description": "Local filesystem tools via MCP URL.",
+      "scopes": [
+        "Selected paths"
+      ],
+      "auth_type": "mcp_url",
+      "availability": "mcp_url",
+      "region": "global"
+    },
+    {
+      "id": "browser-mcp",
+      "name": "Browser MCP",
+      "category": "identity",
+      "description": "On-demand browser tools via MCP URL.",
+      "scopes": [
+        "Per-task only"
+      ],
+      "auth_type": "mcp_url",
+      "availability": "mcp_url",
+      "region": "global"
+    },
+    {
+      "id": "postgres-mcp",
+      "name": "Postgres MCP",
+      "category": "files",
+      "description": "Read-only DB tools via MCP URL.",
+      "scopes": [
+        "Selected schemas"
+      ],
+      "auth_type": "mcp_url",
+      "availability": "mcp_url",
+      "region": "global"
+    },
+    {
+      "id": "figma",
+      "name": "Figma",
+      "category": "productivity",
+      "description": "Selected files for design context.",
+      "scopes": [
+        "Selected files"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "figma"
+    },
+    {
+      "id": "airtable",
+      "name": "Airtable",
+      "category": "productivity",
+      "description": "Selected bases.",
+      "scopes": [
+        "Bases"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "airtable"
+    },
+    {
+      "id": "hubspot",
+      "name": "HubSpot",
+      "category": "productivity",
+      "description": "CRM records you authorize.",
+      "scopes": [
+        "Contacts"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "hubspot"
+    },
+    {
+      "id": "salesforce",
+      "name": "Salesforce",
+      "category": "productivity",
+      "description": "CRM records you authorize.",
+      "scopes": [
+        "Objects"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "salesforce"
+    },
+    {
+      "id": "intercom",
+      "name": "Intercom",
+      "category": "communication",
+      "description": "Support conversations you authorize.",
+      "scopes": [
+        "Conversations"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "intercom"
+    },
+    {
+      "id": "zendesk",
+      "name": "Zendesk",
+      "category": "communication",
+      "description": "Tickets you authorize.",
+      "scopes": [
+        "Tickets"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "zendesk"
+    },
+    {
+      "id": "confluence",
+      "name": "Confluence",
+      "category": "files",
+      "description": "Selected spaces.",
+      "scopes": [
+        "Spaces"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "confluence"
+    },
+    {
+      "id": "gitlab",
+      "name": "GitLab",
+      "category": "productivity",
+      "description": "Selected projects.",
+      "scopes": [
+        "Projects"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "gitlab"
+    },
+    {
+      "id": "bitbucket",
+      "name": "Bitbucket",
+      "category": "productivity",
+      "description": "Selected repositories.",
+      "scopes": [
+        "Repositories"
+      ],
+      "auth_type": "nango",
+      "availability": "coming_soon",
+      "region": "global",
+      "nango_provider_key": "bitbucket"
+    },
+    {
+      "id": "icloud",
+      "name": "iCloud Drive",
+      "category": "files",
+      "description": "Selected folders (adapter).",
+      "scopes": [
+        "Selected folders"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "global"
+    },
+    {
+      "id": "amazon",
+      "name": "Amazon Orders",
+      "category": "productivity",
+      "description": "Order history for purchase context.",
+      "scopes": [
+        "Recent orders"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "global"
+    },
+    {
+      "id": "uber",
+      "name": "Uber",
+      "category": "productivity",
+      "description": "Trip history for commute planning.",
+      "scopes": [
+        "Recent trips"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "global"
+    },
+    {
+      "id": "google-maps",
+      "name": "Google Maps",
+      "category": "productivity",
+      "description": "Saved places.",
+      "scopes": [
+        "Saved places"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "global"
+    },
+    {
+      "id": "apple-calendar",
+      "name": "Apple Calendar",
+      "category": "productivity",
+      "description": "Selected calendars via device bridge.",
+      "scopes": [
+        "Calendars"
+      ],
+      "auth_type": "api_key",
+      "availability": "api_key",
+      "region": "global"
+    },
+    {
+      "id": "apple-mail",
+      "name": "Apple Mail",
+      "category": "productivity",
+      "description": "Selected mailboxes via device bridge.",
+      "scopes": [
+        "Mailboxes"
+      ],
+      "auth_type": "api_key",
+      "availability": "api_key",
+      "region": "global"
+    },
+    {
+      "id": "samsung-health",
+      "name": "Samsung Health",
+      "category": "health",
+      "description": "Activity summaries via adapter.",
+      "scopes": [
+        "Activity"
+      ],
+      "auth_type": "api_key",
+      "availability": "coming_soon",
+      "region": "global"
+    },
+    {
+      "id": "openai-mcp",
+      "name": "OpenAI MCP",
+      "category": "productivity",
+      "description": "Bring your own OpenAI MCP / tools URL.",
+      "scopes": [
+        "Tools"
+      ],
+      "auth_type": "mcp_url",
+      "availability": "mcp_url",
+      "region": "global"
+    },
+    {
+      "id": "anthropic-mcp",
+      "name": "Anthropic MCP",
+      "category": "productivity",
+      "description": "Bring your own Anthropic tools URL.",
+      "scopes": [
+        "Tools"
+      ],
+      "auth_type": "mcp_url",
+      "availability": "mcp_url",
+      "region": "global"
+    }
+  ]
+}

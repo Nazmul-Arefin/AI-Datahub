@@ -40,7 +40,7 @@ async def test_messaging_service_lists_platforms_and_connects():
     service = MessagingService()
     listed = await service.list_platforms()
     ids = {item["id"] for item in listed["platforms"]}
-    assert {"telegram", "discord"} <= ids
+    assert {"telegram", "discord", "feishu", "dingtalk", "wecom", "qq"} <= ids
 
     connected = await service.connect("telegram")
     assert connected["status"] == "connected"
@@ -48,6 +48,11 @@ async def test_messaging_service_lists_platforms_and_connects():
     assert connected["credentialRef"].startswith("cred_")
     assert connected.get("mode") == "mock"
     _assert_no_secrets(connected)
+
+    feishu = await service.connect("feishu")
+    assert feishu["status"] == "connected"
+    assert feishu["platform"] == "feishu"
+    _assert_no_secrets(feishu)
 
 
 @pytest.mark.asyncio

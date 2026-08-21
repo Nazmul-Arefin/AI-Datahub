@@ -34,3 +34,12 @@ export async function fetchIntegrationCatalog(q = '', category = '') {
 export async function startIntegrationConnect(integrationId, redirectUri) {
   return api.post('/integrations/connect', { integrationId, redirectUri });
 }
+
+export async function syncSource(sourceId) {
+  return api.post(`/sources/${encodeURIComponent(sourceId)}/sync`, {});
+}
+
+export async function fetchSyncedAssets(sourceId, limit = 100) {
+  const query = limit ? `?limit=${encodeURIComponent(limit)}` : '';
+  return api.get(`/sources/${encodeURIComponent(sourceId)}/synced-assets${query}`);
+}

@@ -112,6 +112,13 @@ restored by writing `connected` back into the column — the client must follow
 `authorizationUrl`. Re-authorization creates a new connection row and leaves the
 revoked one as history.
 
+`POST /sources/{id}/sync` — pulls remote objects through Nango proxy (Notion:
+`POST /v1/search`) and upserts into local Postgres `synced_assets`. Also writes
+`backend/data/synced/{provider}-{sourceId}-latest.json`. Returns
+`{ source, provider, fetched, created, updated, storage, items[] }`.
+
+`GET /sources/{id}/synced-assets` → `{ sourceId, total, storage, items[] }`
+
 ## Integrations
 
 `GET /integrations/catalog?q=&category=` → `{ items, total }`

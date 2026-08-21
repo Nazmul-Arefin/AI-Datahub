@@ -1,0 +1,3 @@
+# Local Memory Hub / Core admin keys — never commit
+.admin-key
+*.admin-key
