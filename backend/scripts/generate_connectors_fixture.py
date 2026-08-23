@@ -45,7 +45,7 @@ def main() -> None:
         c("discord", "Discord", "communication", "Connect Discord as a messaging source (AstrBot).", ["Authorized servers"], "astrbot", "astrbot", method="AstrBot"),
         c("google-calendar", "Google Calendar", "productivity", "Sync events and availability for planning.", ["Event title", "Time & availability"], "nango", "live", "global", "google-calendar", "Live"),
         c("google-drive", "Google Drive", "files", "Sync selected folders for document retrieval.", ["Selected folders"], "nango", "coming_soon", "global", "google-drive"),
-        c("gmail", "Gmail", "productivity", "Read selected mail for scheduling and follow-up.", ["Selected labels"], "nango", "coming_soon", "global", "google-mail"),
+        c("gmail", "Gmail", "productivity", "Read selected mail for scheduling and follow-up.", ["Selected labels"], "nango", "live", "global", "google-mail", "Live"),
         c("github", "GitHub", "productivity", "Read selected repositories for project context.", ["Selected repositories"], "nango", "coming_soon", "global", "github"),
         c("linear", "Linear", "productivity", "Track issues and project status.", ["Issue titles", "Status"], "nango", "coming_soon", "global", "linear"),
         c("slack", "Slack", "productivity", "Connect selected channels for work context.", ["Selected channels"], "nango", "coming_soon", "global", "slack"),

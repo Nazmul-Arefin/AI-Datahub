@@ -16,6 +16,7 @@ import {
 import { loadOverviewFromApi } from './repositories/overviewRepository.js';
 import { launchAuthorization } from './nangoConnect.js';
 import { openAstrBotSetup } from './astrbotSetup.js';
+import { createUseMissionHarness } from './use-data-harness.js';
 
 let __navigate = (id) => { window.location.hash = '#/' + id; };
 let __showToastExternal = null;
@@ -214,6 +215,12 @@ function __install() {
   const wizardContinue = document.getElementById('wizardContinue');
   const wizardPermissionPreview = document.getElementById('wizardPermissionPreview');
   const wizardCatalog = document.getElementById('wizardCatalog');
+  const catalogPicker = document.getElementById('catalogPicker');
+  const catalogPickerBackdrop = document.getElementById('catalogPickerBackdrop');
+  const catalogPickerClose = document.getElementById('catalogPickerClose');
+  const catalogPickerGrid = document.getElementById('catalogPickerGrid');
+  const catalogPickerSearchInput = document.getElementById('catalogPickerSearchInput');
+  const catalogPickerCount = document.getElementById('catalogPickerCount');
   const useWorkspace = document.getElementById('useWorkspace');
   const useMissionStage = document.getElementById('useMissionStage');
   const missionProgress = document.getElementById('missionProgress');
@@ -333,13 +340,23 @@ function __install() {
     useWorkspaceActive: false,
     useMissionState: 'idle',
     useMissionListening: false,
-    useMissionRequest: 'Find investors for my startup who are interested in AI education platforms and can invest between $100K to $500K.',
+    useMissionRequest: '',
     useMissionDraft: '',
     useMissionElapsed: 0,
     useMissionAutoAdvance: true,
     useMissionGoalIndex: 0,
     useMissionGoalStringHidden: false,
     useMissionExecutionPhase: 0,
+    useMissionStatusText: '',
+    useMissionToolsUsed: [],
+    useMissionSummary: '',
+    useMissionWorkPlan: [],
+    useMissionGuidelinePlan: [],
+    useMissionFindings: [],
+    useMissionSourcesUsed: [],
+    useMissionHeadline: '',
+    useMissionRecommendation: '',
+    useMissionReportHtml: '',
     currentGoalIndex: 0,
     currentGoalProgress: 72,
     selectedSourceId: 'iphone',
@@ -357,6 +374,28 @@ function __install() {
   };
 
   try { state.useMissionGoalStringHidden = localStorage.getItem('weeple-use-goal-string-hidden') === '1'; } catch (error) { /* storage is optional */ }
+
+  const DEFAULT_IMPORT_PINNED_CATALOG_IDS = ['notion', 'google-calendar', 'gmail', 'feishu', 'wechat'];
+  const IMPORT_PINNED_STORAGE_KEY = 'weeple-import-pinned-connectors';
+  let importPinnedCatalogIds = [];
+  let catalogPickerSearch = '';
+
+  function loadImportPinnedCatalogIds() {
+    try {
+      const raw = localStorage.getItem(IMPORT_PINNED_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length) return parsed.map(String);
+      }
+    } catch (_error) { /* storage is optional */ }
+    return [...DEFAULT_IMPORT_PINNED_CATALOG_IDS];
+  }
+
+  function saveImportPinnedCatalogIds() {
+    try { localStorage.setItem(IMPORT_PINNED_STORAGE_KEY, JSON.stringify(importPinnedCatalogIds)); } catch (_error) { /* storage is optional */ }
+  }
+
+  importPinnedCatalogIds = loadImportPinnedCatalogIds();
 
   let topologyAnimationFrame = 0;
   let topologyDirty = false;
@@ -4214,6 +4253,7 @@ function __install() {
   // Catalog id → Import Data source id (matches backend CATALOG_SOURCE_IDS).
   const CATALOG_SOURCE_IDS = {
     'google-calendar': 'calendar',
+    gmail: 'gmail',
     notion: 'notion',
     feishu: 'feishu',
     dingtalk: 'dingtalk',
@@ -4222,29 +4262,68 @@ function __install() {
     qq: 'qq',
     telegram: 'telegram',
     discord: 'discord',
+    wechat: 'wechat',
   };
 
+  function catalogIdForSource(source) {
+    if (source?.catalogId) return source.catalogId;
+    for (const [catalogId, sourceId] of Object.entries(CATALOG_SOURCE_IDS)) {
+      if (sourceId === source?.id) return catalogId;
+    }
+    if (String(source?.id || '').startsWith('catalog:')) return String(source.id).slice('catalog:'.length);
+    return null;
+  }
+
+  function buildPinnedSourceCards() {
+    const cards = [];
+    const seen = new Set();
+    for (const catalogId of importPinnedCatalogIds) {
+      const mappedSourceId = CATALOG_SOURCE_IDS[catalogId];
+      if (mappedSourceId) {
+        const source = dataSources.find((item) => item.id === mappedSourceId);
+        if (source && !seen.has(source.id)) {
+          cards.push({ ...source, catalogId, pinnedCatalogId: catalogId });
+          seen.add(source.id);
+          continue;
+        }
+      }
+      const item = catalogBrowseItems.find((entry) => entry.id === catalogId);
+      if (item) {
+        const card = catalogCardFromItem(item);
+        card.pinnedCatalogId = catalogId;
+        if (!seen.has(card.id)) {
+          cards.push(card);
+          seen.add(card.id);
+        }
+      }
+    }
+    return cards;
+  }
+
+  function pinCatalogConnector(catalogId) {
+    if (!catalogId || importPinnedCatalogIds.includes(catalogId)) return;
+    importPinnedCatalogIds.push(catalogId);
+    saveImportPinnedCatalogIds();
+    renderSourceGrid();
+    renderCatalogPicker();
+  }
+
+  function unpinCatalogConnector(catalogId) {
+    importPinnedCatalogIds = importPinnedCatalogIds.filter((id) => id !== catalogId);
+    saveImportPinnedCatalogIds();
+    renderSourceGrid();
+    renderCatalogPicker();
+  }
+
   function renderSourceGrid() {
-    const connectedIds = new Set(dataSources.map((source) => source.id));
-    const authorizedSourceIds = new Set(
-      dataSources
-        .filter((source) => source.statusType === 'connected' && source.connection?.externalConnectionId)
-        .map((source) => source.id)
-    );
-    const catalogCards = catalogBrowseItems
-      .filter((item) => {
-        if (connectedIds.has(item.id)) return false;
-        const mappedSourceId = CATALOG_SOURCE_IDS[item.id];
-        // Hide catalog Connect once the mapped source has a real provider connection.
-        if (mappedSourceId && authorizedSourceIds.has(mappedSourceId)) return false;
-        return true;
-      })
-      .map(catalogCardFromItem);
-    const combined = [...dataSources, ...catalogCards];
-    const visibleSources = combined.filter(matchesSourceFilters);
+    const pinnedCards = buildPinnedSourceCards();
+    const visibleSources = pinnedCards.filter(matchesSourceFilters);
     sourceCount.textContent = `${visibleSources.length} connector${visibleSources.length === 1 ? '' : 's'}`;
-    sourceGrid.innerHTML = visibleSources.map((source, index) => `
-      <article class="source-card${source.aiEnabled === false ? ' is-paused' : ''}${source.isCatalogOnly ? ' is-catalog' : ''}" data-source-id="${source.id}" style="--card-order:${index}">
+    sourceGrid.innerHTML = visibleSources.length ? visibleSources.map((source, index) => {
+      const catalogId = source.pinnedCatalogId || catalogIdForSource(source) || '';
+      return `
+      <article class="source-card${source.aiEnabled === false ? ' is-paused' : ''}${source.isCatalogOnly ? ' is-catalog' : ''}" data-source-id="${source.id}" data-catalog-id="${catalogId}" style="--card-order:${index}">
+        <button class="source-card-remove" type="button" data-remove-catalog="${catalogId}" aria-label="Remove ${escapeGoalText(source.name)} from Import Data">&times;</button>
         <span class="source-mini-icon ${source.category}">${sourceAdapterIcon(source)}</span>
         <span class="source-card-copy"><strong>${source.name}</strong>${sourceStatusLabel(source)}${source.isCatalogOnly ? '' : sourceConnectionLabel(source)}</span>
         <footer>
@@ -4252,7 +4331,14 @@ function __install() {
           <button class="manage" type="button" data-source-manage="${source.id}" aria-haspopup="dialog"><span>${source.isCatalogOnly ? (source.availability === 'coming_soon' ? 'Notify' : 'Connect') : 'Manage'}</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7.5 5 5 5-5 5"/></svg></button>
         </footer>
       </article>
-    `).join('');
+    `;
+    }).join('') : `
+      <div class="source-grid-empty">
+        <strong>No connectors pinned yet</strong>
+        <p>Add MCP cards from the Weeple catalog to build your Import Data workspace.</p>
+        <button type="button" data-open-catalog-picker>Add MCP</button>
+      </div>
+    `;
     sourceGrid.querySelectorAll('.source-card').forEach(card => {
       card.addEventListener('pointermove', event => {
         if (event.pointerType === 'touch') return;
@@ -4269,15 +4355,88 @@ function __install() {
         card.style.removeProperty('--tilt-y');
       });
     });
+    sourceGrid.querySelectorAll('[data-remove-catalog]').forEach((button) => button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const catalogId = button.dataset.removeCatalog;
+      if (!catalogId) return;
+      unpinCatalogConnector(catalogId);
+      __showToast('Removed from Import Data');
+    }));
+    sourceGrid.querySelector('[data-open-catalog-picker]')?.addEventListener('click', openCatalogPicker);
     sourceGrid.querySelectorAll('[data-source-manage]').forEach(button => button.addEventListener('click', () => {
       const id = button.dataset.sourceManage;
-      const catalogCard = combined.find((item) => item.id === id && item.isCatalogOnly);
+      const catalogCard = pinnedCards.find((item) => item.id === id && item.isCatalogOnly);
       if (catalogCard) {
         connectCatalogCard(catalogCard);
         return;
       }
       selectSource(id, button);
     }));
+  }
+
+  function catalogPickerMethodLabel(item) {
+    const availability = catalogAvailability(item);
+    if (availability === 'coming_soon') return 'Coming soon';
+    if (availability === 'mcp_url') return 'MCP URL';
+    if (availability === 'astrbot') return 'AstrBot';
+    if (availability === 'api_key') return 'API key';
+    return item.method || 'Connector';
+  }
+
+  function renderCatalogPicker() {
+    if (!catalogPickerGrid) return;
+    const query = String(catalogPickerSearch || '').trim().toLowerCase();
+    const pinnedSet = new Set(importPinnedCatalogIds);
+    let items = [...catalogBrowseItems];
+    if (query) {
+      items = items.filter((item) => {
+        const hay = [item.name, item.category, item.method, item.description, item.authType].join(' ').toLowerCase();
+        return hay.includes(query);
+      });
+    }
+    items.sort((left, right) => {
+      const leftSoon = catalogAvailability(left) === 'coming_soon' ? 1 : 0;
+      const rightSoon = catalogAvailability(right) === 'coming_soon' ? 1 : 0;
+      if (leftSoon !== rightSoon) return leftSoon - rightSoon;
+      return String(left.name || '').localeCompare(String(right.name || ''));
+    });
+    if (catalogPickerCount) {
+      catalogPickerCount.textContent = `${items.length} connector${items.length === 1 ? '' : 's'}`;
+    }
+    catalogPickerGrid.innerHTML = items.length ? items.map((item) => {
+      const pinned = pinnedSet.has(item.id);
+      const description = String(item.description || '').replace(/^\[中国\]\s*/, '');
+      return `
+        <article class="catalog-picker-card${pinned ? ' is-added' : ''}">
+          <div class="catalog-picker-card-copy">
+            <strong>${escapeGoalText(item.name)}</strong>
+            <span>${escapeGoalText(catalogPickerMethodLabel(item))}</span>
+            <small>${escapeGoalText(description || item.category || 'Connector')}</small>
+          </div>
+          <button type="button" class="catalog-picker-add" data-add-catalog="${item.id}" ${pinned ? 'disabled' : ''}>${pinned ? 'Added' : 'Add'}</button>
+        </article>
+      `;
+    }).join('') : '<div class="source-grid-empty"><strong>No matches</strong><p>Try another search term from the Weeple catalog.</p></div>';
+    catalogPickerGrid.querySelectorAll('[data-add-catalog]').forEach((button) => button.addEventListener('click', () => {
+      pinCatalogConnector(button.dataset.addCatalog);
+      __showToast('Added to Import Data');
+    }));
+  }
+
+  function openCatalogPicker() {
+    catalogPickerSearch = '';
+    if (catalogPickerSearchInput) catalogPickerSearchInput.value = '';
+    renderCatalogPicker();
+    catalogPicker?.classList.add('visible');
+    catalogPicker?.setAttribute('aria-hidden', 'false');
+    dataWorkspace?.classList.add('catalog-picker-open');
+    window.requestAnimationFrame(() => catalogPickerSearchInput?.focus());
+  }
+
+  function closeCatalogPicker() {
+    catalogPicker?.classList.remove('visible');
+    catalogPicker?.setAttribute('aria-hidden', 'true');
+    dataWorkspace?.classList.remove('catalog-picker-open');
   }
 
   function connectCatalogCard(card) {
@@ -5252,54 +5411,128 @@ function __install() {
     else avatarImage.addEventListener('load', applyAlignment, { once: true });
   }
 
+  function renderUseSkeletonRows(count = 4, kind = 'row') {
+    return Array.from({ length: count }, (_, index) => {
+      if (kind === 'chip') {
+        return `<span class="use-skeleton-chip" style="--delay:${index * 90}ms" aria-hidden="true"><i></i><em></em></span>`;
+      }
+      if (kind === 'metric') {
+        return `<span class="use-skeleton-metric" style="--delay:${index * 80}ms" aria-hidden="true"><b></b><small></small></span>`;
+      }
+      return `<article class="use-skeleton-row" style="--delay:${index * 70}ms" aria-hidden="true"><i></i><span><b></b><small></small></span><em></em></article>`;
+    }).join('');
+  }
+
+  const {
+    startUseMissionFromPrompt,
+    liveUseWorkSteps,
+    liveUseSources,
+    buildUseResultReport,
+  } = createUseMissionHarness({
+    getState: () => state,
+    getDataSources: () => dataSources,
+    showToast: (message) => __showToast(message),
+    getUseDashboardGoal,
+    setUseMissionState,
+    refreshUseSidePanels,
+    syncUsePersistentDashboard,
+    hydrateOverviewFromApi,
+  });
+
   function renderSourcePanel(goal) {
-    const connectedSourceCount = goal.sources.filter(source => source[2] !== 'Not connected').length;
-    return `<section class="use-panel use-sources" data-od-id="use-data-sources-panel"><header><span><small>DATA SOURCES</small><b>MCP connections</b></span><em>${connectedSourceCount}/${goal.sources.length}</em></header>
-      <div class="use-source-scroll" aria-label="Connected data sources">${goal.sources.map((source, index) => `<article class="use-source-row${source[2] === 'Live' ? ' is-live' : ''}" style="--live-shine-delay:${index * .42}s" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" aria-controls="useMcpDetailPopover" aria-label="View data available from ${escapeMissionText(source[0])}" data-use-source-detail="${index}" data-od-id="use-source-${index + 1}">${renderUseSourceIcon(source)}<span><b>${source[0]}</b><small class="status-${source[2].toLowerCase().replace(' ', '-')}"><i></i>${source[2]}</small></span><i class="use-source-detail-arrow" aria-hidden="true">›</i></article>`).join('')}</div>
-      <footer class="use-source-summary"><span><b>${connectedSourceCount}</b> of ${goal.sources.length} connected</span><button class="use-panel-link" id="useOpenImportData" type="button">See all <span>→</span></button></footer></section>`;
+    const sources = liveUseSources();
+    if (!sources.length) {
+      return `<section class="use-panel use-sources" data-od-id="use-data-sources-panel"><header><span><small>DATA SOURCES</small><b>MCP connections</b></span><em>0</em></header>
+        <div class="use-panel-empty" role="status">
+          <p>No connected sources yet.</p>
+          <button class="use-panel-link" id="useOpenImportData" type="button">Connect in Import Data <span>→</span></button>
+        </div>
+        <div class="use-skeleton-list" aria-hidden="true">${renderUseSkeletonRows(3)}</div>
+      </section>`;
+    }
+    const connectedSourceCount = sources.filter((source) => source[2] !== 'Not connected').length;
+    return `<section class="use-panel use-sources" data-od-id="use-data-sources-panel"><header><span><small>DATA SOURCES</small><b>MCP connections</b></span><em>${connectedSourceCount}/${sources.length}</em></header>
+      <div class="use-source-scroll" aria-label="Connected data sources">${sources.map((source, index) => `<article class="use-source-row${source[2] === 'Live' ? ' is-live' : ''}" style="--live-shine-delay:${index * .42}s" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" aria-controls="useMcpDetailPopover" aria-label="View data available from ${escapeMissionText(source[0])}" data-use-source-detail="${index}" data-od-id="use-source-${index + 1}">${renderUseSourceIcon(source)}<span><b>${escapeMissionText(source[0])}</b><small class="status-${String(source[2]).toLowerCase().replace(/\s+/g, '-')}"><i></i>${escapeMissionText(source[2])}</small></span><i class="use-source-detail-arrow" aria-hidden="true">›</i></article>`).join('')}</div>
+      <footer class="use-source-summary"><span><b>${connectedSourceCount}</b> of ${sources.length} connected</span><button class="use-panel-link" id="useOpenImportData" type="button">See all <span>→</span></button></footer></section>`;
   }
 
   function renderTaskPanel(goal) {
-    return `<section class="use-panel use-tasks" data-od-id="use-data-tasks-panel"><header><span><small>LIVE WORK</small><b>Tasks in progress</b></span><em>${goal.tasks.length}</em></header>
-      <div class="use-task-scroll">${goal.tasks.map((task, index) => {
-        const progress = getMissionPhaseProgress(task[2]);
+    const { tasks } = liveUseWorkSteps();
+    if (!tasks.length) {
+      return `<section class="use-panel use-tasks" data-od-id="use-data-tasks-panel"><header><span><small>LIVE WORK</small><b>Tasks in progress</b></span><em>0</em></header>
+        <div class="use-panel-empty" role="status"><p>Send a prompt to start live work.</p></div>
+        <div class="use-skeleton-list is-pulse" aria-hidden="true">${renderUseSkeletonRows(4)}</div>
+      </section>`;
+    }
+    return `<section class="use-panel use-tasks" data-od-id="use-data-tasks-panel"><header><span><small>LIVE WORK</small><b>Tasks in progress</b></span><em>${tasks.length}</em></header>
+      <div class="use-task-scroll">${tasks.map((task, index) => {
+        const progress = Math.max(0, Math.min(100, Number(task[2]) || 0));
         const complete = progress >= 100;
         const agent = useTaskAgents[index] || useTaskAgents[index % useTaskAgents.length];
-        return `<article class="use-task-row stage-item tone-${agent.tone}${complete ? ' complete' : ''}" style="--delay:${index * 70}ms" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" aria-controls="useTaskDetailPopover" aria-label="View timeline for ${escapeMissionText(task[0])}" data-use-task-detail="${index}" data-od-id="use-task-${index + 1}"><i class="use-task-check">${complete ? '✓' : missionIcon(agent.icon)}</i><span><b>${task[0]}</b><small>${task[1]}</small><em class="use-task-owner"><i></i>${agent.name} Agent</em></span><span class="use-task-ring${complete ? ' complete' : ''}" style="--progress:${progress}" aria-label="${progress}% complete"><i>${complete ? '✓' : `${progress}%`}</i></span></article>`;
+        return `<article class="use-task-row stage-item tone-${agent.tone}${complete ? ' complete' : ''}" style="--delay:${index * 70}ms" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" aria-controls="useTaskDetailPopover" aria-label="View timeline for ${escapeMissionText(task[0])}" data-use-task-detail="${index}" data-od-id="use-task-${index + 1}"><i class="use-task-check">${complete ? '✓' : missionIcon(agent.icon)}</i><span><b>${escapeMissionText(task[0])}</b><small>${escapeMissionText(task[1])}</small><em class="use-task-owner"><i></i>${agent.name} Agent</em></span><span class="use-task-ring${complete ? ' complete' : ''}" style="--progress:${progress}" aria-label="${progress}% complete"><i>${complete ? '✓' : `${progress}%`}</i></span></article>`;
       }).join('')}</div></section>`;
   }
 
   function getUseGuidelineSequence(goal) {
-    const sourceProgress = goal.guidelines.map(guide => getMissionPhaseProgress(guide[2]));
-    const activeIndex = sourceProgress.findIndex(progress => progress < 100);
-    return goal.guidelines.map((guide, index) => {
-      if (activeIndex === -1 || index < activeIndex) return { progress: 100, status: 'Completed', state: 'complete' };
-      if (index === activeIndex) return { progress: sourceProgress[index], status: 'In progress', state: 'active' };
-      return { progress: 0, status: 'Waiting', state: 'waiting' };
+    const { guidelines } = liveUseWorkSteps();
+    const sourceProgress = guidelines.map((guide) => Math.max(0, Math.min(100, Number(guide[2]) || 0)));
+    const activeIndex = sourceProgress.findIndex((progress) => progress < 100);
+    return guidelines.map((guide, index) => {
+      if (activeIndex === -1 || index < activeIndex) return { progress: 100, status: 'Completed', state: 'complete', title: guide[0], detail: guide[1] };
+      if (index === activeIndex) return { progress: sourceProgress[index], status: 'In progress', state: 'active', title: guide[0], detail: guide[1] };
+      return { progress: 0, status: 'Waiting', state: 'waiting', title: guide[0], detail: guide[1] };
     });
   }
 
   function renderGuidelinePanel(goal) {
     const sequence = getUseGuidelineSequence(goal);
-    return `<section class="use-panel use-guidelines" data-od-id="use-data-guidelines-panel"><header><span><small>GOAL PROCESS</small><b>Guidelines</b></span><em>${goal.guidelines.length}</em></header>
-      <div class="use-guideline-list">${goal.guidelines.map((guide, index) => {
-        const step = sequence[index];
+    if (!sequence.length) {
+      return `<section class="use-panel use-guidelines" data-od-id="use-data-guidelines-panel"><header><span><small>GOAL PROCESS</small><b>Guidelines</b></span><em>0</em></header>
+        <div class="use-panel-empty" role="status"><p>Guidelines appear while the agent runs.</p></div>
+        <div class="use-skeleton-list is-pulse" aria-hidden="true">${renderUseSkeletonRows(4)}</div>
+      </section>`;
+    }
+    return `<section class="use-panel use-guidelines" data-od-id="use-data-guidelines-panel"><header><span><small>GOAL PROCESS</small><b>Guidelines</b></span><em>${sequence.length}</em></header>
+      <div class="use-guideline-list">${sequence.map((step, index) => {
         const role = useGuidelineRoles[index] || useGuidelineRoles[index % useGuidelineRoles.length];
-        return `<article class="use-guideline-row stage-item tone-${role.tone} ${step.state}" style="--delay:${index * 90}ms" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" aria-controls="useGuidelineDetailPopover" aria-label="View guideline: ${escapeMissionText(guide[0])}" data-use-guideline-detail="${index}" data-od-id="use-guideline-${index + 1}"><i class="use-guideline-icon">${step.state === 'complete' ? '✓' : missionIcon(role.icon)}</i><span><b>${guide[0]}</b><small>${guide[1]}</small><em class="use-guide-state"><i></i>${step.status}</em><span class="use-guide-progress"><i style="--value:${step.progress}%"></i></span></span><em>${step.progress}%</em></article>`;
+        return `<article class="use-guideline-row stage-item tone-${role.tone} ${step.state}" style="--delay:${index * 90}ms" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" aria-controls="useGuidelineDetailPopover" aria-label="View guideline: ${escapeMissionText(step.title)}" data-use-guideline-detail="${index}" data-od-id="use-guideline-${index + 1}"><i class="use-guideline-icon">${step.state === 'complete' ? '✓' : missionIcon(role.icon)}</i><span><b>${escapeMissionText(step.title)}</b><small>${escapeMissionText(step.detail)}</small><em class="use-guide-state"><i></i>${step.status}</em><span class="use-guide-progress"><i style="--value:${step.progress}%"></i></span></span><em>${step.progress}%</em></article>`;
       }).join('')}</div></section>`;
   }
 
   function renderResultPanel(goal) {
-    const resultFactor = Math.min(1, Math.max(0, (state.useMissionExecutionPhase - 3) / 5));
+    const summary = String(state.useMissionSummary || '').trim();
+    const working = state.useMissionState === 'working';
+    if (!summary && working) {
+      return `<section class="use-panel use-results composition-${state.useMissionGoalIndex}" data-od-id="use-data-results-panel"><header><span><small>LIVE OUTCOME</small><b>Results snapshot</b></span></header>
+        <div class="use-panel-empty" role="status"><p>DeepSeek is preparing your answer…</p></div>
+        <div class="use-skeleton-list is-pulse" aria-hidden="true">${renderUseSkeletonRows(3, 'metric')}</div>
+      </section>`;
+    }
+    if (!summary) {
+      return `<section class="use-panel use-results composition-${state.useMissionGoalIndex}" data-od-id="use-data-results-panel"><header><span><small>LIVE OUTCOME</small><b>Results snapshot</b></span></header>
+        <div class="use-panel-empty" role="status"><p>No result yet. Ask a question to run DeepSeek Harness.</p></div>
+        <div class="use-skeleton-list" aria-hidden="true">${renderUseSkeletonRows(3, 'metric')}</div>
+      </section>`;
+    }
     return `<section class="use-panel use-results composition-${state.useMissionGoalIndex}" data-od-id="use-data-results-panel"><header><span><small>LIVE OUTCOME</small><b>Results snapshot</b></span><div class="use-result-header-actions"><button class="use-result-details-button" id="useResultViewDetails" type="button" aria-expanded="false" aria-controls="missionDetailDrawer">View details <i>›</i></button></div></header>
-      <div class="use-result-scroll" role="region" aria-label="Result snapshot metrics" tabindex="0"><div class="use-result-grid">${goal.results.map((result, index) => { const numeric = typeof result[1] === 'number'; const shown = numeric ? Math.round(result[1] * resultFactor) : (resultFactor >= .6 ? result[1] : '—'); return `<span data-od-id="use-result-${index + 1}"><b>${shown}</b><small>${result[0]}</small></span>`; }).join('')}</div></div>
+      <p class="use-result-agent-summary">${escapeMissionText(summary.slice(0, 520))}${summary.length > 520 ? '…' : ''}</p>
+      ${state.useMissionStatusText ? `<small class="use-result-status">${escapeMissionText(state.useMissionStatusText)}</small>` : ''}
     </section>`;
   }
 
   function renderExpertPanel() {
-    return `<section class="use-panel use-experts" data-od-id="use-data-experts-panel"><header><span><small>ACTIVE TEAM</small><b>AI experts</b></span><em>${useAgentDefinitions.length}</em></header>
-      <p>${useAgentDefinitions.length} specialists collaborating on this goal</p>
-      <div class="use-expert-grid">${useAgentDefinitions.map((agent, index) => `<figure class="use-expert tone-${agent[2]} stage-item" style="--delay:${index * 70}ms" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" aria-controls="useAgentDetailPopover" aria-label="View ${agent[0]} Agent profile" title="View ${agent[0]} Agent profile" data-use-agent-detail="${index}" data-od-id="use-expert-${index + 1}"><span><img src="${agent[1]}" alt=""><i></i></span><figcaption>${agent[0]}</figcaption></figure>`).join('')}</div>
+    const working = state.useMissionState === 'working' || Boolean(String(state.useMissionSummary || '').trim());
+    if (!working) {
+      return `<section class="use-panel use-experts" data-od-id="use-data-experts-panel"><header><span><small>ACTIVE TEAM</small><b>AI experts</b></span><em>0</em></header>
+        <div class="use-panel-empty" role="status"><p>Experts activate when a mission starts.</p></div>
+        <div class="use-skeleton-experts" aria-hidden="true">${renderUseSkeletonRows(4, 'chip')}</div>
+      </section>`;
+    }
+    const phase = Math.max(1, Number(state.useMissionExecutionPhase) || 1);
+    const activeCount = Math.min(useAgentDefinitions.length, Math.max(1, Math.ceil(phase / 2)));
+    return `<section class="use-panel use-experts" data-od-id="use-data-experts-panel"><header><span><small>ACTIVE TEAM</small><b>AI experts</b></span><em>${activeCount}/${useAgentDefinitions.length}</em></header>
+      <p>${activeCount} specialist${activeCount === 1 ? '' : 's'} active on this mission</p>
+      <div class="use-expert-grid">${useAgentDefinitions.map((agent, index) => `<figure class="use-expert tone-${agent[2]} stage-item${index < activeCount ? ' is-active' : ''}" style="--delay:${index * 70}ms" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" aria-controls="useAgentDetailPopover" aria-label="View ${agent[0]} Agent profile" title="View ${agent[0]} Agent profile" data-use-agent-detail="${index}" data-od-id="use-expert-${index + 1}"><span><img src="${agent[1]}" alt=""><i></i></span><figcaption>${agent[0]}</figcaption></figure>`).join('')}</div>
     </section>`;
   }
 
@@ -5376,7 +5609,7 @@ function __install() {
   function openUseMcpDetail(trigger) {
     const popover = useMissionStage?.querySelector('#useMcpDetailPopover');
     const sourceIndex = Number(trigger?.dataset.useSourceDetail);
-    const source = getUseDashboardGoal().sources[sourceIndex];
+    const source = liveUseSources()[sourceIndex];
     if (!popover || !source) return;
     if (useMcpDetailTrigger === trigger && popover.classList.contains('visible')) {
       closeUseMcpDetail(true);
@@ -5411,7 +5644,7 @@ function __install() {
   function renderUseAgentDetail(agent, index) {
     const profile = useAgentProfiles[index] || useAgentProfiles[0];
     const goal = getUseDashboardGoal();
-    const currentFocus = goal.tasks[index]?.[0] || `Supporting ${goal.short}`;
+    const currentFocus = liveUseWorkSteps().tasks[index]?.[0] || `Supporting ${goal.short}`;
     return `<header class="use-mcp-popover-header">
         <div class="use-mcp-popover-brand use-agent-popover-brand"><span class="use-agent-popover-avatar"><img src="${agent[1]}" alt=""><i></i></span><span><small>AI AGENT PROFILE</small><h2 id="useAgentDetailTitle">${escapeMissionText(agent[0])} Agent</h2></span></div>
         <button class="use-mcp-popover-close" type="button" data-use-agent-close aria-label="Close ${escapeMissionText(agent[0])} Agent profile">×</button>
@@ -5515,7 +5748,7 @@ function __install() {
   function renderUseTaskDetail(task, index) {
     const goal = getUseDashboardGoal();
     const agent = useTaskAgents[index] || useTaskAgents[index % useTaskAgents.length];
-    const progress = getMissionPhaseProgress(task[2]);
+    const progress = Math.max(0, Math.min(100, Number(task[2]) || 0));
     const complete = progress >= 100;
     const milestones = getUseTaskMilestones(goal, task, index, progress);
     const completedCount = milestones.filter(milestone => milestone.status === 'done').length;
@@ -5569,7 +5802,7 @@ function __install() {
   function openUseTaskDetail(trigger) {
     const popover = useMissionStage?.querySelector('#useTaskDetailPopover');
     const taskIndex = Number(trigger?.dataset.useTaskDetail);
-    const task = getUseDashboardGoal().tasks[taskIndex];
+    const task = liveUseWorkSteps().tasks[taskIndex];
     const agent = useTaskAgents[taskIndex] || useTaskAgents[taskIndex % useTaskAgents.length];
     if (!popover || !task || !agent) return;
     if (useTaskDetailTrigger === trigger && popover.classList.contains('visible')) {
@@ -5620,7 +5853,7 @@ function __install() {
     const role = useGuidelineRoles[index] || useGuidelineRoles[index % useGuidelineRoles.length];
     const agent = useAgentDefinitions[role.agentIndex] || useAgentDefinitions[0];
     const instructions = getUseGuidelineInstructions(goal, guide, index, role);
-    const nextGuideline = goal.guidelines[index + 1]?.[0] || 'Goal execution complete';
+    const nextGuideline = liveUseWorkSteps().guidelines[index + 1]?.[0] || 'Goal execution complete';
     const statusClass = step.state === 'complete' ? 'status-live' : step.state === 'active' ? 'status-syncing' : 'status-waiting';
     return `<header class="use-mcp-popover-header">
         <div class="use-mcp-popover-brand use-guideline-popover-brand"><span class="use-guideline-agent-avatar"><img src="${agent[1]}" alt=""><i></i></span><span><small>SEQUENTIAL GUIDELINE</small><h2 id="useGuidelineDetailTitle">${escapeMissionText(guide[0])}</h2></span></div>
@@ -5673,9 +5906,11 @@ function __install() {
   function openUseGuidelineDetail(trigger) {
     const popover = useMissionStage?.querySelector('#useGuidelineDetailPopover');
     const guidelineIndex = Number(trigger?.dataset.useGuidelineDetail);
-    const guide = getUseDashboardGoal().guidelines[guidelineIndex];
+    const sequence = getUseGuidelineSequence(getUseDashboardGoal());
+    const guide = sequence[guidelineIndex];
+    const guideRow = liveUseWorkSteps().guidelines[guidelineIndex];
     const role = useGuidelineRoles[guidelineIndex] || useGuidelineRoles[guidelineIndex % useGuidelineRoles.length];
-    if (!popover || !guide || !role) return;
+    if (!popover || !guide || !guideRow || !role) return;
     if (useGuidelineDetailTrigger === trigger && popover.classList.contains('visible')) {
       closeUseGuidelineDetail(true);
       return;
@@ -5688,7 +5923,7 @@ function __install() {
     trigger.classList.add('detail-open');
     trigger.setAttribute('aria-expanded', 'true');
     popover.className = `use-guideline-detail-popover tone-${role.tone} visible`;
-    popover.innerHTML = renderUseGuidelineDetail(guide, guidelineIndex);
+    popover.innerHTML = renderUseGuidelineDetail(guideRow, guidelineIndex);
     popover.setAttribute('aria-hidden', 'false');
     popover.querySelector('[data-use-guideline-close]')?.addEventListener('click', () => closeUseGuidelineDetail(true));
     window.requestAnimationFrame(() => positionUseGuidelineDetail(trigger));
@@ -5706,27 +5941,88 @@ function __install() {
     });
   }
 
+  function renderMissionMarkdown(markdown = '') {
+    const escaped = escapeMissionText(String(markdown || '').replace(/\r\n/g, '\n'));
+    return escaped
+      .replace(/^######\s+(.+)$/gm, '<h6>$1</h6>')
+      .replace(/^#####\s+(.+)$/gm, '<h5>$1</h5>')
+      .replace(/^####\s+(.+)$/gm, '<h4>$1</h4>')
+      .replace(/^###\s+(.+)$/gm, '<h3>$1</h3>')
+      .replace(/^##\s+(.+)$/gm, '<h2>$1</h2>')
+      .replace(/^#\s+(.+)$/gm, '<h1>$1</h1>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/^\s*[-*+]\s+(.+)$/gm, '<li>$1</li>')
+      .replace(/(?:<li>[\s\S]*?<\/li>\s*)+/g, (match) => `<ul>${match}</ul>`)
+      .replace(/^(?!<(?:h[1-6]|ul|ol|li|p|div|section|article)\b)(.+)$/gm, '<p>$1</p>')
+      .replace(/<p>\s*<\/p>/g, '');
+  }
+
+  function renderUseReportSkeleton() {
+    return `<section class="use-report-empty" role="status">
+        <div class="use-panel-empty"><p>No agent report yet. Send a prompt to generate a live DeepSeek result.</p></div>
+        <div class="use-skeleton-list is-pulse" aria-hidden="true">${renderUseSkeletonRows(4)}</div>
+        <div class="use-skeleton-list is-pulse" aria-hidden="true">${renderUseSkeletonRows(3, 'metric')}</div>
+      </section>`;
+  }
+
   function getUseResultReport() {
-    return useResultReportDetails[state.useMissionGoalIndex] || useResultReportDetails[0];
+    return buildUseResultReport({ renderMissionMarkdown });
   }
 
   function renderUseResultReport() {
-    const goal = getUseDashboardGoal();
     const report = getUseResultReport();
-    return `<section class="use-report-hero" style="--report-progress:${goal.progress}">
-        <div class="use-report-progress-ring"><strong>${goal.progress}<small>%</small></strong></div>
-        <span><small>CURRENT OUTCOME</small><h3>${escapeMissionText(report.headline)}</h3><p>${escapeMissionText(goal.state)} · based on ${goal.sources.length} connected sources</p></span>
+    if (report.empty) return renderUseReportSkeleton();
+
+    const sources = report.sources || [];
+    const metrics = report.metrics || [];
+    const canvas = report.reportHtml
+      ? `<section class="use-report-canvas" aria-label="Agent HTML report">
+          <header><span><small>LIVE CANVAS</small><b>Harness infographic report</b></span><em>Agent HTML</em></header>
+          <div class="use-report-canvas-frame">${report.reportHtml}</div>
+        </section>`
+      : `<section class="use-report-why">
+          <header><span><small>INFOGRAPHIC · WHY</small><b>Why this result emerged</b></span><em>Live run</em></header>
+          <div class="use-report-reason-flow" aria-label="Data to result reasoning flow">
+            <span><i>${sources.length}</i><b>Sources</b><small>Authorized signals</small></span><em>→</em>
+            <span><i>${report.taskCount || metrics[1]?.[1] || 0}</i><b>AI tasks</b><small>Grouped and checked</small></span><em>→</em>
+            <span><i>1</i><b>Outcome</b><small>Retained in report</small></span>
+          </div>
+          <div class="use-report-driver-list">${(report.drivers || []).map((driver, index) => `<span style="--driver:${driver[1]};--driver-index:${index}"><b>${escapeMissionText(driver[0])}</b><em>${driver[1]}%</em><i><strong></strong></i></span>`).join('')}</div>
+        </section>`;
+
+    const findingsBlock = (report.findings || []).length
+      ? `<section class="use-report-findings"><header><span><small>DETAILED REPORT</small><b>What the AI found</b></span><em>${report.findings.length} findings</em></header>
+          <div>${report.findings.map((finding, index) => `<article><i>${index + 1}</i><span><b>${escapeMissionText(finding[0])}</b><p>${escapeMissionText(finding[1])}</p></span></article>`).join('')}</div>
+        </section>`
+      : `<section class="use-report-findings"><header><span><small>DETAILED REPORT</small><b>What the AI found</b></span><em>0</em></header>
+          <div class="use-skeleton-list is-pulse" aria-hidden="true">${renderUseSkeletonRows(3)}</div>
+        </section>`;
+
+    const evidenceBlock = sources.length
+      ? `<section class="use-report-evidence"><header><small>EVIDENCE SOURCES</small><b>What informed this report</b></header>
+          <div>${sources.map((source) => `<span>${renderUseSourceIcon(source, 'use-report-evidence-logo')}<b>${escapeMissionText(source[0])}</b><small>${escapeMissionText(source[2])}</small></span>`).join('')}</div>
+        </section>`
+      : `<section class="use-report-evidence"><header><small>EVIDENCE SOURCES</small><b>What informed this report</b></header>
+          <div class="use-panel-empty"><p>No authorized sources were attached to this run.</p></div>
+          <div class="use-skeleton-list" aria-hidden="true">${renderUseSkeletonRows(3, 'chip')}</div>
+        </section>`;
+
+    return `<section class="use-report-hero" style="--report-progress:${report.progress}">
+        <div class="use-report-progress-ring"><strong>${report.progress}<small>%</small></strong></div>
+        <span><small>CURRENT OUTCOME</small><h3>${escapeMissionText(report.headline)}</h3><p>${escapeMissionText(report.interpretation)} · ${sources.length} connected source${sources.length === 1 ? '' : 's'}</p></span>
       </section>
-      <section class="use-report-metric-grid" aria-label="Result metrics">${goal.results.map(result => `<span><b>${escapeMissionText(result[1])}</b><small>${escapeMissionText(result[0])}</small></span>`).join('')}</section>
-      <article class="use-report-narrative"><small>EXECUTIVE SUMMARY</small><p>${escapeMissionText(report.summary)}</p><p>${escapeMissionText(report.interpretation)}</p></article>
-      <section class="use-report-findings"><header><span><small>DETAILED REPORT</small><b>What the AI found</b></span><em>${report.findings.length} findings</em></header><div>${report.findings.map((finding, index) => `<article><i>${index + 1}</i><span><b>${escapeMissionText(finding[0])}</b><p>${escapeMissionText(finding[1])}</p></span></article>`).join('')}</div></section>
-      <section class="use-report-why"><header><span><small>INFOGRAPHIC · WHY</small><b>Why this result emerged</b></span><em>Evidence weighted</em></header>
-        <div class="use-report-reason-flow" aria-label="Data to result reasoning flow"><span><i>${goal.sources.length}</i><b>Sources</b><small>Authorized signals</small></span><em>→</em><span><i>${goal.tasks.length}</i><b>AI tasks</b><small>Grouped and checked</small></span><em>→</em><span><i>${goal.results.length}</i><b>Outcomes</b><small>Retained in report</small></span></div>
-        <div class="use-report-driver-list">${report.drivers.map((driver, index) => `<span style="--driver:${driver[1]};--driver-index:${index}"><b>${escapeMissionText(driver[0])}</b><em>${driver[1]}%</em><i><strong></strong></i></span>`).join('')}</div>
-      </section>
-      <section class="use-report-evidence"><header><small>EVIDENCE SOURCES</small><b>What informed this report</b></header><div>${goal.sources.map(source => `<span>${renderUseSourceIcon(source, 'use-report-evidence-logo')}<b>${escapeMissionText(source[0])}</b><small>${escapeMissionText(source[2])}</small></span>`).join('')}</div></section>
+      <section class="use-report-metric-grid" aria-label="Result metrics">${metrics.map((result, index) => `<span data-od-id="use-report-metric-${index + 1}"><b>${escapeMissionText(result[1])}</b><small>${escapeMissionText(result[0])}</small></span>`).join('')}</section>
+      <article class="use-report-narrative">
+        <small>EXECUTIVE SUMMARY</small>
+        <div class="use-report-markdown">${report.summaryHtml || `<p>${escapeMissionText(report.summary)}</p>`}</div>
+      </article>
+      ${findingsBlock}
+      ${canvas}
+      ${evidenceBlock}
       <article class="use-report-recommendation"><i>✦</i><span><small>RECOMMENDED NEXT MOVE</small><p>${escapeMissionText(report.recommendation)}</p></span></article>
-      <p class="use-report-disclaimer">This report summarizes the current prototype data state. Review source permissions and confirm any external action before execution.</p>`;
+      <p class="use-report-disclaimer">Generated from your authorized synced data and the live DeepSeek Harness answer. Confirm any external action before execution.</p>`;
   }
 
   function closeUseResultReport(restoreFocus = false) {
@@ -5747,7 +6043,8 @@ function __install() {
     closeUseTaskDetail(false);
     closeUseGuidelineDetail(false);
     const goal = getUseDashboardGoal();
-    useResultReportTitle.textContent = goal.title;
+    const report = getUseResultReport();
+    useResultReportTitle.textContent = report.headline || goal.title;
     useResultReportContent.innerHTML = renderUseResultReport();
     useWorkspace?.classList.add('report-open');
     missionDetailDrawer.classList.add('visible');
@@ -5989,8 +6286,9 @@ function __install() {
   }
 
   function runUseMissionExecution() {
-    state.useMissionExecutionPhase = 8;
-    if (state.useMissionState === 'working') {
+    state.useMissionState = 'idle';
+    state.useMissionExecutionPhase = 1;
+    if (state.useWorkspaceActive) {
       refreshUseSidePanels();
       syncUsePersistentDashboard();
     }
@@ -6027,8 +6325,7 @@ function __install() {
       if (!prompt) { __showToast('Add a request before sending'); input?.focus(); return; }
       state.useMissionRequest = prompt;
       state.useMissionDraft = prompt;
-      state.useMissionExecutionPhase = 8;
-      setUseMissionState('working', { announce: false });
+      void startUseMissionFromPrompt(prompt);
     };
     input?.addEventListener('input', event => { state.useMissionDraft = event.currentTarget.value; });
     composer.querySelector('#missionVoiceStart')?.addEventListener('click', startMissionListeningDashboard);
@@ -7417,7 +7714,13 @@ closeDataWorkspace();
     document.querySelectorAll('[data-ready-filter]').forEach((item) => item.classList.toggle('active', item === button));
     renderSourceGrid();
   }));
-  addSourceButton?.addEventListener('click', openConnectionWizard);
+  addSourceButton?.addEventListener('click', openCatalogPicker);
+  catalogPickerClose?.addEventListener('click', closeCatalogPicker);
+  catalogPickerBackdrop?.addEventListener('click', closeCatalogPicker);
+  catalogPickerSearchInput?.addEventListener('input', () => {
+    catalogPickerSearch = catalogPickerSearchInput.value || '';
+    renderCatalogPicker();
+  });
   addAdapterButton?.addEventListener('click', openConnectionWizard);
   sourceInspectorClose?.addEventListener('click', () => closeSourceInspector());
   sourceInspectorBackdrop?.addEventListener('click', () => closeSourceInspector());

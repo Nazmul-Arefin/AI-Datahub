@@ -103,9 +103,10 @@
         "Selected labels"
       ],
       "auth_type": "nango",
-      "availability": "coming_soon",
+      "availability": "live",
       "region": "global",
-      "nango_provider_key": "google-mail"
+      "nango_provider_key": "google-mail",
+      "method": "Live"
     },
     {
       "id": "github",

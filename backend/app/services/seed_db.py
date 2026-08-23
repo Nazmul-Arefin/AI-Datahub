@@ -152,4 +152,51 @@ def seed_database(db: Session) -> None:
                 )
             )
 
+    # Keep Gmail Live after Nango enablement (idempotent repair).
+    gmail_catalog = db.get(IntegrationCatalog, "gmail")
+    if gmail_catalog is not None:
+        gmail_catalog.method = "Live"
+        gmail_catalog.auth_type = "nango"
+        gmail_catalog.nango_provider_key = "google-mail"
+        gmail_catalog.enabled = True
+
+    if db.get(DataSource, "gmail") is None:
+        gmail_seed = next((s for s in SEED_SOURCES if s.id == "gmail"), None)
+        if gmail_seed is not None:
+            db.add(
+                DataSource(
+                    id=gmail_seed.id,
+                    connection_id=None,
+                    name=gmail_seed.name,
+                    category=gmail_seed.category,
+                    type=gmail_seed.type,
+                    method=gmail_seed.method,
+                    status=gmail_seed.status,
+                    status_type=gmail_seed.status_type,
+                    last_sync=gmail_seed.last_sync,
+                    assets=gmail_seed.assets,
+                    scopes=list(gmail_seed.scopes),
+                    purposes=list(gmail_seed.purposes),
+                    used_by=gmail_seed.used_by,
+                    ai_enabled=gmail_seed.ai_enabled,
+                )
+            )
+
+    # WeChat must use AstrBot weixin_oc (QR) — never fake api_key Connected.
+    wechat_catalog = db.get(IntegrationCatalog, "wechat")
+    if wechat_catalog is not None:
+        wechat_catalog.method = "AstrBot"
+        wechat_catalog.auth_type = "astrbot"
+        wechat_catalog.nango_provider_key = None
+        wechat_catalog.enabled = True
+
+    wechat = db.get(DataSource, "wechat")
+    if wechat is not None and wechat.connection_id is None and wechat.status_type == "connected":
+        wechat.method = "AstrBot"
+        wechat.status = "Ready to connect"
+        wechat.status_type = "idle"
+        wechat.last_sync = "Not connected"
+        wechat.assets = "0 conversations"
+        wechat.used_by = "Connect from Import Data catalog"
+
     db.flush()

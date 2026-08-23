@@ -65,6 +65,17 @@ PLATFORM_SPECS: dict[str, dict[str, Any]] = {
         "setup_path": "/#/platforms",
         "hint": "Platforms → Add → qq_official (AppID + Secret).",
     },
+    "wechat": {
+        "id": "wechat",
+        "name": "微信 WeChat",
+        "astrbot_type": "weixin_oc",
+        "region": "cn",
+        "setup_path": "/#/platforms",
+        "hint": (
+            "Platforms → Add → 个人微信 (Personal WeChat) → scan the QR with your phone "
+            "WeChat, then Save and click I’ve set it up."
+        ),
+    },
 }
 
 PLATFORMS = tuple(

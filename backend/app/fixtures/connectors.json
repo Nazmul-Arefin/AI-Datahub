@@ -104,9 +104,10 @@
         "Selected labels"
       ],
       "auth_type": "nango",
-      "availability": "coming_soon",
+      "availability": "live",
       "region": "global",
-      "nango_provider_key": "google-mail"
+      "nango_provider_key": "google-mail",
+      "method": "Live"
     },
     {
       "id": "github",
@@ -179,13 +180,14 @@
       "id": "wechat",
       "name": "微信 WeChat",
       "category": "communication",
-      "description": "Import chosen chats for relationship context.",
+      "description": "Personal WeChat auto-reply via AstrBot weixin_oc (QR login).",
       "scopes": [
         "Chosen chats only"
       ],
-      "auth_type": "api_key",
-      "availability": "api_key",
-      "region": "cn"
+      "auth_type": "astrbot",
+      "availability": "astrbot",
+      "region": "cn",
+      "method": "AstrBot"
     },
     {
       "id": "wecom",
