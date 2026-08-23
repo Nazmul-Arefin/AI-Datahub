@@ -163,3 +163,21 @@ class SourceSyncedListResponse(BaseModel):
     items: list[SourceSyncItem] = Field(default_factory=list)
 
     model_config = {"populate_by_name": True}
+
+
+class GmailSendRequest(BaseModel):
+    to: str
+    subject: str
+    body: str
+    confirm: bool = False
+
+    model_config = {"populate_by_name": True}
+
+
+class GmailSendResponse(BaseModel):
+    ok: bool = True
+    message_id: str | None = Field(default=None, alias="messageId")
+    thread_id: str | None = Field(default=None, alias="threadId")
+    mode: str = "mock"
+
+    model_config = {"populate_by_name": True}

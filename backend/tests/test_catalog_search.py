@@ -112,3 +112,6 @@ async def test_catalog_filter_by_category(client):
     assert {item["category"] for item in data["items"]} == {"communication"}
     auth_types = {item["authType"] for item in data["items"]}
     assert "astrbot" in auth_types
+    wechat = next(item for item in data["items"] if item["id"] == "wechat")
+    assert wechat["authType"] == "astrbot"
+    assert wechat["method"] == "AstrBot"

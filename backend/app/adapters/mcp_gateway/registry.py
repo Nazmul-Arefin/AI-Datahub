@@ -34,11 +34,20 @@ GITHUB_TOOLS = [
     {"name": "get_user", "description": "Get the authenticated GitHub user profile"},
 ]
 
+GMAIL_TOOLS = [
+    {
+        "name": "send_email",
+        "description": "Send an email via Gmail (high-impact; requires confirm=true)",
+        "confirmationRequired": True,
+    },
+]
+
 _STUB_RESULTS: dict[str, dict[str, Any]] = {
     "list_repos": {"repos": [{"fullName": "acme/demo", "private": False}]},
     "get_user": {"login": "acme", "type": "User"},
     "list_chats": {"chats": [{"id": "chat-1", "title": "Demo"}]},
     "send_message": {"delivered": True},
+    "send_email": {"sent": True},
 }
 
 
@@ -54,6 +63,8 @@ def default_tools_for(name: str) -> list[dict]:
     key = name.lower()
     if "github" in key:
         return [dict(item) for item in GITHUB_TOOLS]
+    if "gmail" in key or "google-mail" in key or "google_mail" in key:
+        return [dict(item) for item in GMAIL_TOOLS]
     if "telegram" in key or "astrbot" in key:
         from app.adapters.astrbot.client import TELEGRAM_TOOLS
 

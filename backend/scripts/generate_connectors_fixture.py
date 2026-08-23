@@ -45,17 +45,17 @@ def main() -> None:
         c("discord", "Discord", "communication", "Connect Discord as a messaging source (AstrBot).", ["Authorized servers"], "astrbot", "astrbot", method="AstrBot"),
         c("google-calendar", "Google Calendar", "productivity", "Sync events and availability for planning.", ["Event title", "Time & availability"], "nango", "live", "global", "google-calendar", "Live"),
         c("google-drive", "Google Drive", "files", "Sync selected folders for document retrieval.", ["Selected folders"], "nango", "coming_soon", "global", "google-drive"),
-        c("gmail", "Gmail", "productivity", "Read selected mail for scheduling and follow-up.", ["Selected labels"], "nango", "coming_soon", "global", "google-mail"),
+        c("gmail", "Gmail", "productivity", "Read selected mail for scheduling and follow-up.", ["Selected labels"], "nango", "live", "global", "google-mail", "Live"),
         c("github", "GitHub", "productivity", "Read selected repositories for project context.", ["Selected repositories"], "nango", "coming_soon", "global", "github"),
         c("linear", "Linear", "productivity", "Track issues and project status.", ["Issue titles", "Status"], "nango", "coming_soon", "global", "linear"),
         c("slack", "Slack", "productivity", "Connect selected channels for work context.", ["Selected channels"], "nango", "coming_soon", "global", "slack"),
         c("apple-fitness", "Apple Fitness", "health", "Import activity and sleep summaries.", ["Activity", "Sleep summary"], "nango", "coming_soon", "global", "apple-health"),
         c("deepsearch", "DeepSearch", "identity", "Public research queries that never run automatically.", ["Per-task query only"], "mcp_url", "mcp_url", method="MCP URL"),
-        c("wechat", "微信 WeChat", "communication", "Import chosen chats for relationship context.", ["Chosen chats only"], "api_key", "api_key", "cn"),
     ]
 
     # AstrBot-ready China messaging (real bot connect via dashboard QR / env).
     astrbot_cn = [
+        ("wechat", "微信 WeChat", "communication", "Personal WeChat auto-reply via AstrBot weixin_oc (QR login).", ["Chosen chats only"]),
         ("wecom", "企业微信 WeCom", "communication", "Work chats and org directory for China workplaces (AstrBot bot).", ["Selected chats", "Org contacts"]),
         ("wecom-ai", "企微智能机器人", "communication", "WeCom AI bot channel via AstrBot wecom_ai_bot.", ["Bot conversations"]),
         ("dingtalk", "钉钉 DingTalk", "communication", "Alibaba workplace messaging via AstrBot (One-click QR).", ["Selected chats", "Calendar"]),

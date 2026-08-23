@@ -10568,7 +10568,7 @@ button.carousel-agenda-status.is-confirm:disabled {
 }
 
 /* Import Data: concise presentation. */
-.os-shell.data-page .data-heading-actions > #addSourceButton { display:none; }
+.os-shell.data-page .data-heading-actions > #addSourceButton { display:flex; }
 
 .os-shell.data-page .data-main { grid-template-rows:104px 42px 62px minmax(0,1fr); }
 

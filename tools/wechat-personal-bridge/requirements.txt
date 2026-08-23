@@ -1,0 +1,3 @@
+PyYAML>=6.0
+# Pin to WeChatFerry line for WeChat PC 3.9.12.x — install only on Windows host.
+wcferry==39.5.2.0; platform_system=="Windows"

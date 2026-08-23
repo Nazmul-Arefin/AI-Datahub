@@ -5,10 +5,10 @@
           <div class="data-heading-copy">
             <span><i></i>PRIVATE CONNECTIONS</span>
             <h1>Import Data</h1>
-            <p>Choose what Weeple can access.</p>
+            <p>Pin connectors from the Weeple catalog, then connect each one when you are ready.</p>
           </div>
           <div class="data-heading-actions">
-            <button id="addSourceButton" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Add source</span></button>
+            <button id="addSourceButton" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Add MCP</span></button>
           </div>
         </header>
 
@@ -47,6 +47,26 @@
           <section class="source-inspector-panel">
             <button class="source-inspector-close" id="sourceInspectorClose" type="button" aria-label="Close authorization detail"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
             <div id="sourceInspectorContent"></div>
+          </section>
+        </aside>
+
+        <aside class="catalog-picker" id="catalogPicker" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="catalogPickerTitle">
+          <div class="catalog-picker-backdrop" id="catalogPickerBackdrop" aria-hidden="true"></div>
+          <section class="catalog-picker-panel">
+            <button class="catalog-picker-close" id="catalogPickerClose" type="button" aria-label="Close catalog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
+            <header class="catalog-picker-header">
+              <span><i></i>WEEEPLE CATALOG</span>
+              <h2 id="catalogPickerTitle">Add MCP connector</h2>
+              <p>Browse the full connector catalog and add cards to your Import Data workspace.</p>
+            </header>
+            <div class="catalog-picker-toolbar">
+              <label class="catalog-picker-search" for="catalogPickerSearchInput">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.4-4.4m2.4-5.1a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z"/></svg>
+                <input id="catalogPickerSearchInput" type="search" placeholder="Search Gmail, Notion, 飞书, GitHub…" autocomplete="off" enterkeyhint="search">
+              </label>
+              <span class="catalog-picker-count" id="catalogPickerCount">0 connectors</span>
+            </div>
+            <div class="catalog-picker-grid" id="catalogPickerGrid" aria-live="polite"></div>
           </section>
         </aside>
 

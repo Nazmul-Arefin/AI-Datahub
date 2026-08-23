@@ -163,4 +163,55 @@ def seed_database(db: Session) -> None:
                 )
             )
 
+    # Repair stale demo rows after connector cutovers (idempotent).
+    wechat = db.get(DataSource, "wechat")
+    if wechat is not None and wechat.connection_id is None and wechat.status_type == "connected":
+        wechat.method = "AstrBot"
+        wechat.status = "Ready to connect"
+        wechat.status_type = "idle"
+        wechat.last_sync = "Not connected"
+        wechat.assets = "0 conversations"
+        wechat.used_by = "Connect from Import Data catalog"
+
+    gmail_catalog = db.get(IntegrationCatalog, "gmail")
+    if gmail_catalog is not None:
+        gmail_catalog.method = "Live"
+        gmail_catalog.auth_type = "nango"
+        gmail_catalog.nango_provider_key = "google-mail"
+        gmail_catalog.enabled = True
+
+    if db.get(DataSource, "gmail") is None:
+        gmail_seed = next((s for s in SEED_SOURCES if s.id == "gmail"), None)
+        if gmail_seed is not None:
+            db.add(
+                DataSource(
+                    id=gmail_seed.id,
+                    connection_id=None,
+                    name=gmail_seed.name,
+                    category=gmail_seed.category,
+                    type=gmail_seed.type,
+                    method=gmail_seed.method,
+                    status=gmail_seed.status,
+                    status_type=gmail_seed.status_type,
+                    last_sync=gmail_seed.last_sync,
+                    assets=gmail_seed.assets,
+                    scopes=list(gmail_seed.scopes),
+                    purposes=list(gmail_seed.purposes),
+                    used_by=gmail_seed.used_by,
+                    ai_enabled=gmail_seed.ai_enabled,
+                )
+            )
+    else:
+        gmail_source = db.get(DataSource, "gmail")
+        if gmail_source is not None and gmail_source.connection_id is None:
+            gmail_source.method = "Live"
+            if gmail_source.status_type in {"attention", "connected"} and gmail_source.status in {
+                "Coming soon",
+                "Connected",
+            }:
+                gmail_source.status = "Ready to connect"
+                gmail_source.status_type = "idle"
+                gmail_source.last_sync = "Not connected"
+                gmail_source.used_by = "Connect from Import Data catalog"
+
     db.flush()

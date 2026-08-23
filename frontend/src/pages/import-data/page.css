@@ -692,3 +692,314 @@
   .os-shell.data-page .page--import-data .source-inspector-close { right: 16px; top: 16px; }
 }
 @media (prefers-reduced-motion:reduce) { .os-shell.data-page .page--import-data .source-inspector, .os-shell.data-page .page--import-data .source-inspector-panel { transition:none; } }
+
+/* Pinned connector remove control */
+.os-shell.data-page .page--import-data .data-main--gallery .source-card {
+  position: relative;
+}
+
+.os-shell.data-page .page--import-data .data-main--gallery .source-card > .source-card-remove {
+  position: absolute;
+  z-index: 2;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(17,24,39,.08);
+  border-radius: 8px;
+  color: #7a828c;
+  background: rgba(255,255,255,.88);
+  box-shadow: 0 4px 12px rgba(17,24,39,.08);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(.92);
+  transition: opacity .18s ease, transform .18s ease, color .18s ease, border-color .18s ease, background .18s ease;
+}
+
+.os-shell.data-page .page--import-data .data-main--gallery .source-card:hover > .source-card-remove,
+.os-shell.data-page .page--import-data .data-main--gallery .source-card:focus-within > .source-card-remove {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.os-shell.data-page .page--import-data .data-main--gallery .source-card > .source-card-remove:hover,
+.os-shell.data-page .page--import-data .data-main--gallery .source-card > .source-card-remove:focus-visible {
+  color: #a14a4a;
+  border-color: rgba(161,74,74,.22);
+  background: rgba(255,245,245,.96);
+}
+
+.os-shell.data-page .page--import-data .source-grid-empty {
+  grid-column: 1 / -1;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 28px 20px;
+  border: 1px dashed rgba(255,94,0,.18);
+  border-radius: 20px;
+  color: #7a828c;
+  background: rgba(255,255,255,.42);
+  text-align: center;
+}
+
+.os-shell.data-page .page--import-data .source-grid-empty strong {
+  color: #2a3238;
+  font-size: 14px;
+}
+
+.os-shell.data-page .page--import-data .source-grid-empty p {
+  max-width: 360px;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.os-shell.data-page .page--import-data .source-grid-empty button {
+  min-height: 40px;
+  margin-top: 4px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 12px;
+  color: #fff;
+  background: linear-gradient(145deg,#ff5e00,#ff7830);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* Catalog picker modal */
+.os-shell.data-page .page--import-data .catalog-picker {
+  position: absolute;
+  z-index: 56;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .24s ease;
+}
+
+.os-shell.data-page .page--import-data .catalog-picker.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.os-shell.data-page .page--import-data .catalog-picker-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(248,249,250,.52);
+  backdrop-filter: blur(6px);
+}
+
+.os-shell.data-page .page--import-data .catalog-picker-panel {
+  position: relative;
+  z-index: 1;
+  width: min(920px, calc(100vw - 40px));
+  max-height: min(82vh, 760px);
+  display: flex;
+  flex-direction: column;
+  padding: 22px 22px 18px;
+  border: 1px solid rgba(255,255,255,.95);
+  border-radius: 28px;
+  background: rgba(255,255,255,.96);
+  box-shadow: 0 34px 110px rgba(17,24,39,.22), inset 0 1px 0 #fff;
+  transform: translateY(12px) scale(.98);
+  transition: transform .28s ease;
+}
+
+.os-shell.data-page .page--import-data .catalog-picker.visible .catalog-picker-panel {
+  transform: translateY(0) scale(1);
+}
+
+.os-shell.data-page .page--import-data .catalog-picker-close {
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: #7b828c;
+  background: rgba(17,24,39,.045);
+  cursor: pointer;
+}
+
+.os-shell.data-page .page--import-data .catalog-picker-close svg {
+  width: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
+
+.os-shell.data-page .page--import-data .catalog-picker-header > span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--orange);
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .12em;
+}
+
+.os-shell.data-page .page--import-data .catalog-picker-header > span i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--orange);
+}
+
+.os-shell.data-page .page--import-data .catalog-picker-header h2 {
+  margin: 10px 0 0;
+  font-size: 24px;
+  letter-spacing: -.04em;
+}
+
+.os-shell.data-page .page--import-data .catalog-picker-header p {
+  margin: 6px 0 0;
+  color: #818994;
+  font-size: 11px;
+}
+
+.os-shell.data-page .page--import-data .catalog-picker-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.os-shell.data-page .page--import-data .catalog-picker-search {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid rgba(17,24,39,.08);
+  border-radius: 14px;
+  background: rgba(248,249,250,.88);
+}
+
+.os-shell.data-page .page--import-data .catalog-picker-search svg {
+  width: 16px;
+  fill: none;
+  stroke: #9aa3ac;
+  stroke-width: 1.8;
+}
+
+.os-shell.data-page .page--import-data .catalog-picker-search input {
+  flex: 1;
+  min-width: 0;
+  min-height: 42px;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+}
+
+.os-shell.data-page .page--import-data .catalog-picker-count {
+  flex: none;
+  color: #8b959f;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.os-shell.data-page .page--import-data .catalog-picker-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+  padding-right: 4px;
+  overflow-y: auto;
+}
+
+.os-shell.data-page .page--import-data .catalog-picker-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 118px;
+  padding: 12px;
+  border: 1px solid rgba(17,24,39,.07);
+  border-radius: 16px;
+  background: rgba(248,249,250,.72);
+}
+
+.os-shell.data-page .page--import-data .catalog-picker-card.is-added {
+  border-color: rgba(16,185,129,.22);
+  background: rgba(16,185,129,.04);
+}
+
+.os-shell.data-page .page--import-data .catalog-picker-card-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.os-shell.data-page .page--import-data .catalog-picker-card-copy strong {
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.os-shell.data-page .page--import-data .catalog-picker-card-copy span {
+  color: #8b5cf6;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.os-shell.data-page .page--import-data .catalog-picker-card-copy small {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #8e95a0;
+  font-size: 10px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.os-shell.data-page .page--import-data .catalog-picker-add {
+  min-height: 34px;
+  margin-top: auto;
+  border: 1px solid rgba(255,94,0,.18);
+  border-radius: 11px;
+  color: #d85418;
+  background: rgba(255,94,0,.06);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.os-shell.data-page .page--import-data .catalog-picker-add:disabled {
+  color: #5f9f84;
+  border-color: rgba(16,185,129,.2);
+  background: rgba(16,185,129,.08);
+  cursor: default;
+}
+
+@media (max-width: 900px) {
+  .os-shell.data-page .page--import-data .catalog-picker-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 610px) {
+  .os-shell.data-page .page--import-data .catalog-picker { padding: 0; align-items: end; }
+  .os-shell.data-page .page--import-data .catalog-picker-panel {
+    width: 100%;
+    max-height: calc(100vh - 18px);
+    border-radius: 26px 26px 0 0;
+  }
+  .os-shell.data-page .page--import-data .catalog-picker-grid { grid-template-columns: 1fr; }
+}

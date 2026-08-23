@@ -193,5 +193,12 @@ class MessagingService:
             platform=platform,
         )
 
+    async def set_platform_enabled(self, platform: str, enabled: bool) -> dict:
+        """Pause/Resume AstrBot auto-reply for a messaging platform."""
+        setter = getattr(self._client, "set_platform_enabled", None)
+        if not callable(setter):
+            return {"platform": platform, "ok": False, "reason": "unsupported"}
+        return strip_secrets(await setter(platform, enabled))
+
 
 messaging_service = MessagingService()

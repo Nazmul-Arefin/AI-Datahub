@@ -1,7 +1,11 @@
+import logging
+
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.core.deps import CurrentUserId, DbSession
 from app.schemas.sources import (
+    GmailSendRequest,
+    GmailSendResponse,
     Source,
     SourceListResponse,
     SourcePatchRequest,
@@ -10,8 +14,11 @@ from app.schemas.sources import (
     SourceSyncedListResponse,
     SourceSyncResponse,
 )
+from app.services.messaging_service import messaging_service
 from app.services.source_service import source_service
 from app.services.sync_service import sync_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -33,6 +40,24 @@ async def get_source(source_id: str, _user_id: CurrentUserId, db: DbSession) -> 
     return source
 
 
+@router.post("/gmail/send", response_model=GmailSendResponse)
+async def send_gmail(
+    payload: GmailSendRequest,
+    _user_id: CurrentUserId,
+    db: DbSession,
+) -> GmailSendResponse:
+    try:
+        return await sync_service.send_gmail(payload, db=db)
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+
+
 @router.patch("/{source_id}", response_model=Source)
 async def patch_source(
     source_id: str,
@@ -43,6 +68,18 @@ async def patch_source(
     source = source_service.patch_source(source_id, payload, db=db)
     if not source:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
+    if payload.ai_enabled is not None:
+        auth_type = source_service._auth_type_for(source, db=db)
+        if auth_type == "astrbot":
+            catalog_key = source_service._catalog_key_for(source, db=db) or source_id
+            try:
+                await messaging_service.set_platform_enabled(catalog_key, payload.ai_enabled)
+            except Exception:
+                logger.exception(
+                    "Failed to toggle AstrBot platform %s enabled=%s",
+                    catalog_key,
+                    payload.ai_enabled,
+                )
     return source
 
 
