@@ -97,7 +97,7 @@ async def test_china_astrbot_catalog_rows_are_ready(client):
     catalog = await client.get("/api/v1/integrations/catalog")
     assert catalog.status_code == 200
     by_id = {item["id"]: item for item in catalog.json()["items"]}
-    for key in ("feishu", "dingtalk", "wecom", "qq", "wecom-ai"):
+    for key in ("feishu", "dingtalk", "wecom", "qq", "wecom-ai", "wechat"):
         assert key in by_id, key
         assert by_id[key]["authType"] == "astrbot", key
         assert by_id[key]["method"] == "AstrBot", key
@@ -107,6 +107,27 @@ async def test_china_astrbot_catalog_rows_are_ready(client):
     body = start.json()
     assert body["state"]
     assert body.get("authorizationUrl") or body.get("setupUrl")
+
+    wechat = await client.post("/api/v1/integrations/wechat/connect")
+    assert wechat.status_code == 200
+    wechat_body = wechat.json()
+    assert wechat_body["state"]
+    assert wechat_body.get("authorizationUrl") or wechat_body.get("setupUrl")
+
+
+@pytest.mark.asyncio
+async def test_gmail_catalog_is_live_nango(client):
+    catalog = await client.get("/api/v1/integrations/catalog")
+    assert catalog.status_code == 200
+    gmail = next(item for item in catalog.json()["items"] if item["id"] == "gmail")
+    assert gmail["authType"] == "nango"
+    assert gmail["method"] == "Live"
+    assert gmail["nangoProviderKey"] == "google-mail"
+
+    sources = await client.get("/api/v1/sources")
+    assert sources.status_code == 200
+    gmail_source = next(item for item in sources.json()["sources"] if item["id"] == "gmail")
+    assert gmail_source["statusType"] in {"idle", "connected"}
 
 
 @pytest.mark.asyncio

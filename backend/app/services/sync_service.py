@@ -313,6 +313,157 @@ class SyncService:
         key = (provider_key or "").lower().replace("_", "-")
         return key in {"google-calendar", "googlecalendar"}
 
+    def _is_gmail_provider(self, provider_key: str) -> bool:
+        key = (provider_key or "").lower().replace("_", "-")
+        return key in {"google-mail", "gmail", "googlemail"}
+
+    def _mock_gmail_messages(self, source_id: str) -> list[dict]:
+        now = datetime.now(timezone.utc)
+        return [
+            {
+                "id": f"mock-mail-{source_id}-1",
+                "object": "email_message",
+                "title": "Weekly planning notes",
+                "url": "https://mail.google.com/mail/u/0/#inbox/mock-1",
+                "last_edited_time": now.isoformat(),
+                "content_text": "From: alex@example.com / Date: today / Snippet: Agenda for Monday sync",
+                "parent": {"type": "thread", "thread": f"thread-{source_id}-1"},
+            },
+            {
+                "id": f"mock-mail-{source_id}-2",
+                "object": "email_message",
+                "title": "Invoice received",
+                "url": "https://mail.google.com/mail/u/0/#inbox/mock-2",
+                "last_edited_time": now.isoformat(),
+                "content_text": "From: billing@vendor.com / Date: yesterday / Snippet: Your receipt is attached",
+                "parent": {"type": "thread", "thread": f"thread-{source_id}-2"},
+            },
+        ]
+
+    def _gmail_header(self, payload: dict, name: str) -> str:
+        headers = payload.get("payload", {}).get("headers") if isinstance(payload.get("payload"), dict) else None
+        if not isinstance(headers, list):
+            headers = payload.get("headers") if isinstance(payload.get("headers"), list) else []
+        needle = name.lower()
+        for header in headers:
+            if not isinstance(header, dict):
+                continue
+            if str(header.get("name") or "").lower() == needle:
+                return str(header.get("value") or "").strip()
+        return ""
+
+    async def _fetch_gmail_messages(self, connection_id: str, provider_key: str) -> list[dict]:
+        """Pull recent Gmail messages via Nango → Gmail API."""
+        list_path = "/gmail/v1/users/me/messages?" + urlencode(
+            {"maxResults": "50", "q": "newer_than:30d"}
+        )
+        listing = await self._client.proxy(
+            "GET",
+            list_path,
+            connection_id=connection_id,
+            provider_config_key=provider_key,
+        )
+        results: list[dict] = []
+        for row in listing.get("messages") or []:
+            if not isinstance(row, dict):
+                continue
+            msg_id = str(row.get("id") or "").strip()
+            if not msg_id:
+                continue
+            detail = await self._client.proxy(
+                "GET",
+                f"/gmail/v1/users/me/messages/{msg_id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date",
+                connection_id=connection_id,
+                provider_config_key=provider_key,
+            )
+            subject = self._gmail_header(detail, "Subject") or "(No subject)"
+            sender = self._gmail_header(detail, "From")
+            date = self._gmail_header(detail, "Date")
+            snippet = str(detail.get("snippet") or "").strip()
+            thread_id = str(detail.get("threadId") or row.get("threadId") or msg_id)
+            content = " / ".join(part for part in (f"From: {sender}" if sender else "", f"Date: {date}" if date else "", snippet) if part)
+            results.append(
+                {
+                    "id": msg_id,
+                    "object": "email_message",
+                    "title": subject,
+                    "url": f"https://mail.google.com/mail/u/0/#inbox/{msg_id}",
+                    "last_edited_time": date or None,
+                    "content_text": content[:400],
+                    "parent": {"type": "thread", "thread": thread_id},
+                }
+            )
+            if len(results) >= 50:
+                break
+        return results
+
+    async def send_gmail(self, payload, db: Session | None = None):
+        """Confirm-gated Gmail send through Nango proxy."""
+        from app.schemas.sources import GmailSendResponse
+
+        if not getattr(payload, "confirm", False):
+            raise PermissionError("Sending email requires confirm=true")
+
+        to = str(getattr(payload, "to", "") or "").strip()
+        subject = str(getattr(payload, "subject", "") or "").strip()
+        body = str(getattr(payload, "body", "") or "")
+        if not to or not subject:
+            raise ValueError("to and subject are required")
+
+        source = source_service.get_source("gmail", db=db)
+        if not source:
+            raise LookupError("Gmail source not found")
+        if source.status_type == "revoked" or (
+            source.connection and source.connection.status == "revoked"
+        ):
+            raise PermissionError("Gmail access is revoked")
+
+        catalog_key = self._catalog_key(source, db)
+        provider_key = self._provider_key(catalog_key, db)
+        stored_ext = source.connection.external_connection_id if source.connection else None
+        resolved = await self._client.resolve_connection_id(stored_ext, provider_key)
+
+        live = self._client.mode == "live" and bool(self._client.secret_key) and bool(resolved)
+        if not live:
+            return GmailSendResponse(
+                ok=True,
+                messageId=f"mock-send-{uuid4().hex[:10]}",
+                threadId=f"mock-thread-{uuid4().hex[:8]}",
+                mode="mock",
+            )
+
+        import base64
+        from email.mime.text import MIMEText
+
+        message = MIMEText(body, _charset="utf-8")
+        message["To"] = to
+        message["Subject"] = subject
+        raw = base64.urlsafe_b64encode(message.as_bytes()).decode("ascii").rstrip("=")
+        try:
+            sent = await self._client.proxy(
+                "POST",
+                "/gmail/v1/users/me/messages/send",
+                connection_id=resolved,
+                provider_config_key=provider_key,
+                json_body={"raw": raw},
+            )
+        except Exception as exc:
+            logger.exception("Gmail send failed")
+            raise RuntimeError(str(exc)) from exc
+
+        activity_service.record(
+            "Gmail message sent",
+            f"To {to}: {subject[:80]}",
+            route="import-data",
+            db=db,
+        )
+        return GmailSendResponse(
+            ok=True,
+            messageId=str(sent.get("id") or "") or None,
+            threadId=str(sent.get("threadId") or "") or None,
+            mode="live",
+        )
+
     async def _fetch_astrbot_platform_status(self, catalog_key: str) -> list[dict]:
         """Confirm messaging adapter; for Feishu also pull chats/messages via Open API."""
         key = catalog_key.lower().replace("_", "-")
@@ -673,22 +824,36 @@ class SyncService:
             "google-calendar",
             "calendar",
         }
+        is_gmail = self._is_gmail_provider(provider_key) or catalog_key in {"gmail", "google-mail"}
         if live:
             try:
                 if is_gcal:
                     remote_items = await self._fetch_google_calendar_events(resolved, provider_key)
+                elif is_gmail:
+                    remote_items = await self._fetch_gmail_messages(resolved, provider_key)
                 else:
                     remote_items = await self._fetch_notion_objects(resolved, provider_key)
             except Exception as exc:
-                label = "Google Calendar" if is_gcal else "Notion"
+                label = "Google Calendar" if is_gcal else "Gmail" if is_gmail else "Notion"
                 logger.exception("%s sync failed for %s", label, source_id)
                 raise RuntimeError(str(exc)) from exc
         else:
-            remote_items = (
-                self._mock_google_calendar_events(source_id)
-                if is_gcal
-                else self._mock_notion_objects(source_id)
-            )
+            if is_gcal:
+                remote_items = self._mock_google_calendar_events(source_id)
+            elif is_gmail:
+                remote_items = self._mock_gmail_messages(source_id)
+            else:
+                remote_items = self._mock_notion_objects(source_id)
+
+        if is_gcal:
+            activity_detail = "Synced Google Calendar events"
+            storage_extra = "Google Calendar events via Nango"
+        elif is_gmail:
+            activity_detail = "Synced Gmail messages"
+            storage_extra = "Gmail messages via Nango"
+        else:
+            activity_detail = ""
+            storage_extra = ""
 
         return self._finalize_sync(
             source=source,
@@ -697,8 +862,8 @@ class SyncService:
             remote_items=remote_items,
             connection_row_id=connection_row_id,
             db=db,
-            activity_detail="Synced Google Calendar events" if is_gcal else "",
-            storage_extra="Google Calendar events via Nango" if is_gcal else "",
+            activity_detail=activity_detail,
+            storage_extra=storage_extra,
         )
 
 

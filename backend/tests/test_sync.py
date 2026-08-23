@@ -54,3 +54,33 @@ async def test_sync_google_calendar_mock(client):
     assert body["source"]["id"] == "calendar"
     assert body["items"]
     assert body["items"][0]["objectType"] == "calendar_event"
+
+
+@pytest.mark.asyncio
+async def test_sync_gmail_mock(client):
+    response = await client.post("/api/v1/sources/gmail/sync")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["fetched"] >= 1
+    assert body["source"]["id"] == "gmail"
+    assert body["items"]
+    assert body["items"][0]["objectType"] == "email_message"
+
+
+@pytest.mark.asyncio
+async def test_gmail_send_requires_confirm(client):
+    denied = await client.post(
+        "/api/v1/sources/gmail/send",
+        json={"to": "a@example.com", "subject": "Hi", "body": "Hello"},
+    )
+    assert denied.status_code in {400, 403}, denied.text
+
+    allowed = await client.post(
+        "/api/v1/sources/gmail/send",
+        json={"to": "a@example.com", "subject": "Hi", "body": "Hello", "confirm": True},
+    )
+    assert allowed.status_code == 200, allowed.text
+    payload = allowed.json()
+    assert payload["ok"] is True
+    assert payload.get("messageId")
+    assert payload.get("mode") in {"mock", "live"}

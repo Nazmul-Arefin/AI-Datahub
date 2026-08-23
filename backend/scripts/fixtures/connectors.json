@@ -77,9 +77,10 @@
         "Time & availability"
       ],
       "auth_type": "nango",
-      "availability": "coming_soon",
+      "availability": "live",
       "region": "global",
-      "nango_provider_key": "google-calendar"
+      "nango_provider_key": "google-calendar",
+      "method": "Live"
     },
     {
       "id": "google-drive",
@@ -103,9 +104,10 @@
         "Selected labels"
       ],
       "auth_type": "nango",
-      "availability": "coming_soon",
+      "availability": "live",
       "region": "global",
-      "nango_provider_key": "google-mail"
+      "nango_provider_key": "google-mail",
+      "method": "Live"
     },
     {
       "id": "github",
@@ -178,65 +180,83 @@
       "id": "wechat",
       "name": "微信 WeChat",
       "category": "communication",
-      "description": "Import chosen chats for relationship context.",
+      "description": "Personal WeChat auto-reply via AstrBot weixin_oc (QR login).",
       "scopes": [
         "Chosen chats only"
       ],
-      "auth_type": "api_key",
-      "availability": "api_key",
-      "region": "cn"
+      "auth_type": "astrbot",
+      "availability": "astrbot",
+      "region": "cn",
+      "method": "AstrBot"
     },
     {
       "id": "wecom",
       "name": "企业微信 WeCom",
       "category": "communication",
-      "description": "Work chats and org directory for China workplaces.",
+      "description": "Work chats and org directory for China workplaces (AstrBot bot).",
       "scopes": [
         "Selected chats",
         "Org contacts"
       ],
-      "auth_type": "api_key",
-      "availability": "api_key",
-      "region": "cn"
+      "auth_type": "astrbot",
+      "availability": "astrbot",
+      "region": "cn",
+      "method": "AstrBot"
+    },
+    {
+      "id": "wecom-ai",
+      "name": "企微智能机器人",
+      "category": "communication",
+      "description": "WeCom AI bot channel via AstrBot wecom_ai_bot.",
+      "scopes": [
+        "Bot conversations"
+      ],
+      "auth_type": "astrbot",
+      "availability": "astrbot",
+      "region": "cn",
+      "method": "AstrBot"
     },
     {
       "id": "dingtalk",
       "name": "钉钉 DingTalk",
       "category": "communication",
-      "description": "Alibaba workplace messaging, calendar, and approval context.",
+      "description": "Alibaba workplace messaging via AstrBot (One-click QR).",
       "scopes": [
         "Selected chats",
         "Calendar"
       ],
-      "auth_type": "api_key",
-      "availability": "api_key",
-      "region": "cn"
+      "auth_type": "astrbot",
+      "availability": "astrbot",
+      "region": "cn",
+      "method": "AstrBot"
     },
     {
       "id": "feishu",
       "name": "飞书 Feishu / Lark",
       "category": "productivity",
-      "description": "Docs, calendar, and chat from ByteDance workplace suite.",
+      "description": "Docs, calendar, and chat via AstrBot lark (One-click QR).",
       "scopes": [
         "Selected docs",
         "Calendar",
         "Chats"
       ],
-      "auth_type": "api_key",
-      "availability": "api_key",
-      "region": "cn"
+      "auth_type": "astrbot",
+      "availability": "astrbot",
+      "region": "cn",
+      "method": "AstrBot"
     },
     {
       "id": "qq",
       "name": "QQ",
       "category": "communication",
-      "description": "Personal QQ chats for relationship and schedule context.",
+      "description": "QQ Official Bot via AstrBot (AppID + Secret).",
       "scopes": [
         "Chosen chats"
       ],
-      "auth_type": "api_key",
-      "availability": "api_key",
-      "region": "cn"
+      "auth_type": "astrbot",
+      "availability": "astrbot",
+      "region": "cn",
+      "method": "AstrBot"
     },
     {
       "id": "weibo",

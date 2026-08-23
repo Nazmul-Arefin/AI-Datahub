@@ -1,0 +1,58 @@
+# Safe personal WeChat auto-reply bridge (WeChatFerry / wcferry)
+#
+# Defaults are conservative:
+# - dry_run: true  (log only, never send)
+# - enabled: false (must flip on explicitly)
+# - allowlist-only 1:1 chats
+# - rate limits + cooldown
+#
+# Target WeChat PC: 3.9.12.51 (NOT Weixin 4.x)
+
+allowlist:
+  - nazmularefin
+
+# Master switch. Keep false until you are ready to demo.
+enabled: false
+
+# When true, never call send_text — only log what would be sent.
+dry_run: true
+
+# 1:1 only. Groups are always ignored.
+allow_groups: false
+
+# Ignore messages you send yourself.
+ignore_self: true
+
+# Only plain text (type 1). Ignore images/voice/system.
+text_only: true
+
+# Safety limits
+cooldown_seconds: 45
+max_replies_per_hour: 12
+max_reply_chars: 180
+
+# template | llm
+# template is safer for first demo; llm needs DEEPSEEK_API_KEY.
+reply_mode: template
+
+template_reply: >-
+  Hi — I'm tied up right now and will reply properly soon. (auto-reply)
+
+llm:
+  base_url: https://api.deepseek.com
+  model: deepseek-chat
+  # Read from env DEEPSEEK_API_KEY — never put the key in this file.
+  system_prompt: >-
+    You are helping the WeChat account owner reply briefly and politely
+    in their voice. Keep answers under 2 short sentences. Do not invent
+    facts about location, meetings, or money. If unsure, say you will
+    check and reply soon. Never mention that you are an AI unless asked.
+
+# Optional HTTP control (Pause / Resume) — localhost only.
+control:
+  host: 127.0.0.1
+  port: 8765
+
+logging:
+  level: INFO
+  file: logs/wechat-bridge.log

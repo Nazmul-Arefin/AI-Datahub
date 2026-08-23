@@ -242,6 +242,12 @@ function __install() {
   const wizardContinue = document.getElementById('wizardContinue');
   const wizardPermissionPreview = document.getElementById('wizardPermissionPreview');
   const wizardCatalog = document.getElementById('wizardCatalog');
+  const catalogPicker = document.getElementById('catalogPicker');
+  const catalogPickerBackdrop = document.getElementById('catalogPickerBackdrop');
+  const catalogPickerClose = document.getElementById('catalogPickerClose');
+  const catalogPickerGrid = document.getElementById('catalogPickerGrid');
+  const catalogPickerSearchInput = document.getElementById('catalogPickerSearchInput');
+  const catalogPickerCount = document.getElementById('catalogPickerCount');
   const useWorkspace = document.getElementById('useWorkspace');
   const useMissionStage = document.getElementById('useMissionStage');
   const missionProgress = document.getElementById('missionProgress');
@@ -374,6 +380,13 @@ function __install() {
     useMissionStatusText: '',
     useMissionToolsUsed: [],
     useMissionSummary: '',
+    useMissionWorkPlan: [],
+    useMissionGuidelinePlan: [],
+    useMissionFindings: [],
+    useMissionSourcesUsed: [],
+    useMissionHeadline: '',
+    useMissionRecommendation: '',
+    useMissionReportHtml: '',
     currentGoalIndex: 0,
     currentGoalProgress: 72,
     selectedSourceId: 'iphone',
@@ -391,6 +404,28 @@ function __install() {
   };
 
   try { state.useMissionGoalStringHidden = localStorage.getItem('weeple-use-goal-string-hidden') === '1'; } catch (error) { /* storage is optional */ }
+
+  const DEFAULT_IMPORT_PINNED_CATALOG_IDS = ['notion', 'google-calendar', 'gmail', 'feishu', 'wechat'];
+  const IMPORT_PINNED_STORAGE_KEY = 'weeple-import-pinned-connectors';
+  let importPinnedCatalogIds = [];
+  let catalogPickerSearch = '';
+
+  function loadImportPinnedCatalogIds() {
+    try {
+      const raw = localStorage.getItem(IMPORT_PINNED_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length) return parsed.map(String);
+      }
+    } catch (_error) { /* storage is optional */ }
+    return [...DEFAULT_IMPORT_PINNED_CATALOG_IDS];
+  }
+
+  function saveImportPinnedCatalogIds() {
+    try { localStorage.setItem(IMPORT_PINNED_STORAGE_KEY, JSON.stringify(importPinnedCatalogIds)); } catch (_error) { /* storage is optional */ }
+  }
+
+  importPinnedCatalogIds = loadImportPinnedCatalogIds();
 
   let topologyAnimationFrame = 0;
   let topologyDirty = false;
@@ -4987,11 +5022,13 @@ function __install() {
 
   function catalogAvailability(item) {
     const method = String(item?.method || '');
-    if (/^live$/i.test(method)) return 'live';
+    const authType = String(item?.authType || '');
+    // Live Nango rows must Connect even if method text is stale in a cached payload.
+    if (authType === 'nango' || /^live$/i.test(method)) return 'live';
     if (/coming soon/i.test(method)) return 'coming_soon';
-    if (/mcp/i.test(method) || item?.authType === 'mcp_url') return 'mcp_url';
-    if (/astrbot/i.test(method) || item?.authType === 'astrbot') return 'astrbot';
-    if (/api key/i.test(method) || item?.authType === 'api_key') return 'api_key';
+    if (/mcp/i.test(method) || authType === 'mcp_url') return 'mcp_url';
+    if (/astrbot/i.test(method) || authType === 'astrbot') return 'astrbot';
+    if (/api key/i.test(method) || authType === 'api_key') return 'api_key';
     return 'coming_soon';
   }
 
@@ -5081,9 +5118,12 @@ function __install() {
       identity: '<circle cx="16" cy="11" r="6"/><path d="M5 29c1-7 5-10 11-10s10 3 11 10"/><path d="m23 7 2 2 4-4"/>',
       wechat: '<path d="M4 14c0-6 5-10 12-10s12 4 12 10-5 10-12 10c-2 0-4-.4-5.5-1.2L6 25l1.2-4C5.2 19.2 4 16.8 4 14Z"/><path d="M17 20c0-4 3.5-7 8-7s7 3 7 7-3 7-7 7c-1.3 0-2.5-.2-3.6-.7L18 28l.8-3c-1.1-1.3-1.8-3-1.8-5Z"/>',
       drive: '<path d="m16 4 6 10H10L16 4Z"/><path d="m10 14-6 10h12l6-10H10Z"/><path d="m22 14 6 10H16l6-10Z"/>',
-      web: '<circle cx="16" cy="16" r="13"/><path d="M3 16h26M16 3c4 4 6 8 6 13s-2 9-6 13c-4-4-6-8-6-13s2-9 6-13Z"/>'
+      web: '<circle cx="16" cy="16" r="13"/><path d="M3 16h26M16 3c4 4 6 8 6 13s-2 9-6 13c-4-4-6-8-6-13s2-9 6-13Z"/>',
+      gmail: '<rect x="5" y="8" width="22" height="16" rx="3"/><path d="m5 10 11 8 11-8"/>',
+      feishu: '<rect x="6" y="6" width="20" height="20" rx="5"/><path d="M11 12h10M11 16h7"/>'
     };
-    return `<svg viewBox="0 0 32 32" aria-hidden="true">${icons[source.id] || icons.web}</svg>`;
+    const iconKey = source.catalogId || String(source.id || '').replace(/^catalog:/, '');
+    return `<svg viewBox="0 0 32 32" aria-hidden="true">${icons[iconKey] || icons.web}</svg>`;
   }
 
   function reconnectSource(source, button) {
@@ -5160,6 +5200,7 @@ function __install() {
   // Catalog id → Import Data source id (matches backend CATALOG_SOURCE_IDS).
   const CATALOG_SOURCE_IDS = {
     'google-calendar': 'calendar',
+    gmail: 'gmail',
     notion: 'notion',
     feishu: 'feishu',
     dingtalk: 'dingtalk',
@@ -5168,29 +5209,68 @@ function __install() {
     qq: 'qq',
     telegram: 'telegram',
     discord: 'discord',
+    wechat: 'wechat',
   };
 
+  function catalogIdForSource(source) {
+    if (source?.catalogId) return source.catalogId;
+    for (const [catalogId, sourceId] of Object.entries(CATALOG_SOURCE_IDS)) {
+      if (sourceId === source?.id) return catalogId;
+    }
+    if (String(source?.id || '').startsWith('catalog:')) return String(source.id).slice('catalog:'.length);
+    return null;
+  }
+
+  function buildPinnedSourceCards() {
+    const cards = [];
+    const seen = new Set();
+    for (const catalogId of importPinnedCatalogIds) {
+      const mappedSourceId = CATALOG_SOURCE_IDS[catalogId];
+      if (mappedSourceId) {
+        const source = dataSources.find((item) => item.id === mappedSourceId);
+        if (source && !seen.has(source.id)) {
+          cards.push({ ...source, catalogId, pinnedCatalogId: catalogId });
+          seen.add(source.id);
+          continue;
+        }
+      }
+      const item = catalogBrowseItems.find((entry) => entry.id === catalogId);
+      if (item) {
+        const card = catalogCardFromItem(item);
+        card.pinnedCatalogId = catalogId;
+        if (!seen.has(card.id)) {
+          cards.push(card);
+          seen.add(card.id);
+        }
+      }
+    }
+    return cards;
+  }
+
+  function pinCatalogConnector(catalogId) {
+    if (!catalogId || importPinnedCatalogIds.includes(catalogId)) return;
+    importPinnedCatalogIds.push(catalogId);
+    saveImportPinnedCatalogIds();
+    renderSourceGrid();
+    renderCatalogPicker();
+  }
+
+  function unpinCatalogConnector(catalogId) {
+    importPinnedCatalogIds = importPinnedCatalogIds.filter((id) => id !== catalogId);
+    saveImportPinnedCatalogIds();
+    renderSourceGrid();
+    renderCatalogPicker();
+  }
+
   function renderSourceGrid() {
-    const connectedIds = new Set(dataSources.map((source) => source.id));
-    const authorizedSourceIds = new Set(
-      dataSources
-        .filter((source) => source.statusType === 'connected' && source.connection?.externalConnectionId)
-        .map((source) => source.id)
-    );
-    const catalogCards = catalogBrowseItems
-      .filter((item) => {
-        if (connectedIds.has(item.id)) return false;
-        const mappedSourceId = CATALOG_SOURCE_IDS[item.id];
-        // Hide catalog Connect once the mapped source has a real provider connection.
-        if (mappedSourceId && authorizedSourceIds.has(mappedSourceId)) return false;
-        return true;
-      })
-      .map(catalogCardFromItem);
-    const combined = [...dataSources, ...catalogCards];
-    const visibleSources = combined.filter(matchesSourceFilters);
+    const pinnedCards = buildPinnedSourceCards();
+    const visibleSources = pinnedCards.filter(matchesSourceFilters);
     sourceCount.textContent = `${visibleSources.length} connector${visibleSources.length === 1 ? '' : 's'}`;
-    sourceGrid.innerHTML = visibleSources.map((source, index) => `
-      <article class="source-card${source.aiEnabled === false ? ' is-paused' : ''}${source.isCatalogOnly ? ' is-catalog' : ''}" data-source-id="${source.id}" style="--card-order:${index}">
+    sourceGrid.innerHTML = visibleSources.length ? visibleSources.map((source, index) => {
+      const catalogId = source.pinnedCatalogId || catalogIdForSource(source) || '';
+      return `
+      <article class="source-card${source.aiEnabled === false ? ' is-paused' : ''}${source.isCatalogOnly ? ' is-catalog' : ''}" data-source-id="${source.id}" data-catalog-id="${catalogId}" style="--card-order:${index}">
+        <button class="source-card-remove" type="button" data-remove-catalog="${catalogId}" aria-label="Remove ${escapeGoalText(source.name)} from Import Data">&times;</button>
         <span class="source-mini-icon ${source.category}">${sourceAdapterIcon(source)}</span>
         <span class="source-card-copy"><strong>${source.name}</strong>${sourceStatusLabel(source)}${source.isCatalogOnly ? '' : sourceConnectionLabel(source)}</span>
         <footer>
@@ -5198,7 +5278,14 @@ function __install() {
           <button class="manage" type="button" data-source-manage="${source.id}" aria-haspopup="dialog"><span>${source.isCatalogOnly ? (source.availability === 'coming_soon' ? 'Notify' : 'Connect') : 'Manage'}</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7.5 5 5 5-5 5"/></svg></button>
         </footer>
       </article>
-    `).join('');
+    `;
+    }).join('') : `
+      <div class="source-grid-empty">
+        <strong>No connectors pinned yet</strong>
+        <p>Add MCP cards from the Weeple catalog to build your Import Data workspace.</p>
+        <button type="button" data-open-catalog-picker>Add MCP</button>
+      </div>
+    `;
     sourceGrid.querySelectorAll('.source-card').forEach(card => {
       card.addEventListener('pointermove', event => {
         if (event.pointerType === 'touch') return;
@@ -5215,9 +5302,17 @@ function __install() {
         card.style.removeProperty('--tilt-y');
       });
     });
+    sourceGrid.querySelectorAll('[data-remove-catalog]').forEach((button) => button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const catalogId = button.dataset.removeCatalog;
+      if (!catalogId) return;
+      unpinCatalogConnector(catalogId);
+      __showToast('Removed from Import Data');
+    }));
+    sourceGrid.querySelector('[data-open-catalog-picker]')?.addEventListener('click', openCatalogPicker);
     sourceGrid.querySelectorAll('[data-source-manage]').forEach(button => button.addEventListener('click', () => {
       const id = button.dataset.sourceManage;
-      const catalogCard = combined.find((item) => item.id === id && item.isCatalogOnly);
+      const catalogCard = pinnedCards.find((item) => item.id === id && item.isCatalogOnly);
       if (catalogCard) {
         connectCatalogCard(catalogCard);
         return;
@@ -5258,6 +5353,71 @@ function __install() {
     }).catch(() => {
       __showToast(`Could not connect ${card.name}`);
     });
+  }
+
+  function catalogPickerMethodLabel(item) {
+    const availability = catalogAvailability(item);
+    if (availability === 'coming_soon') return 'Coming soon';
+    if (availability === 'mcp_url') return 'MCP URL';
+    if (availability === 'astrbot') return 'AstrBot';
+    if (availability === 'api_key') return 'API key';
+    return item.method || 'Connector';
+  }
+
+  function renderCatalogPicker() {
+    if (!catalogPickerGrid) return;
+    const query = String(catalogPickerSearch || '').trim().toLowerCase();
+    const pinnedSet = new Set(importPinnedCatalogIds);
+    let items = [...catalogBrowseItems];
+    if (query) {
+      items = items.filter((item) => {
+        const hay = [item.name, item.category, item.method, item.description, item.authType].join(' ').toLowerCase();
+        return hay.includes(query);
+      });
+    }
+    items.sort((left, right) => {
+      const leftSoon = catalogAvailability(left) === 'coming_soon' ? 1 : 0;
+      const rightSoon = catalogAvailability(right) === 'coming_soon' ? 1 : 0;
+      if (leftSoon !== rightSoon) return leftSoon - rightSoon;
+      return String(left.name || '').localeCompare(String(right.name || ''));
+    });
+    if (catalogPickerCount) {
+      catalogPickerCount.textContent = `${items.length} connector${items.length === 1 ? '' : 's'}`;
+    }
+    catalogPickerGrid.innerHTML = items.length ? items.map((item) => {
+      const pinned = pinnedSet.has(item.id);
+      const description = String(item.description || '').replace(/^\[中国\]\s*/, '');
+      return `
+        <article class="catalog-picker-card${pinned ? ' is-added' : ''}">
+          <div class="catalog-picker-card-copy">
+            <strong>${escapeGoalText(item.name)}</strong>
+            <span>${escapeGoalText(catalogPickerMethodLabel(item))}</span>
+            <small>${escapeGoalText(description || item.category || 'Connector')}</small>
+          </div>
+          <button type="button" class="catalog-picker-add" data-add-catalog="${item.id}" ${pinned ? 'disabled' : ''}>${pinned ? 'Added' : 'Add'}</button>
+        </article>
+      `;
+    }).join('') : '<div class="source-grid-empty"><strong>No matches</strong><p>Try another search term from the Weeple catalog.</p></div>';
+    catalogPickerGrid.querySelectorAll('[data-add-catalog]').forEach((button) => button.addEventListener('click', () => {
+      pinCatalogConnector(button.dataset.addCatalog);
+      __showToast('Added to Import Data');
+    }));
+  }
+
+  function openCatalogPicker() {
+    catalogPickerSearch = '';
+    if (catalogPickerSearchInput) catalogPickerSearchInput.value = '';
+    renderCatalogPicker();
+    catalogPicker?.classList.add('visible');
+    catalogPicker?.setAttribute('aria-hidden', 'false');
+    dataWorkspace?.classList.add('catalog-picker-open');
+    window.requestAnimationFrame(() => catalogPickerSearchInput?.focus());
+  }
+
+  function closeCatalogPicker() {
+    catalogPicker?.classList.remove('visible');
+    catalogPicker?.setAttribute('aria-hidden', 'true');
+    dataWorkspace?.classList.remove('catalog-picker-open');
   }
 
   function formatConnectedAt(value) {
@@ -6507,72 +6667,276 @@ function __install() {
     else avatarImage.addEventListener('load', applyAlignment, { once: true });
   }
 
+  function renderUseSkeletonRows(count = 4, kind = 'row') {
+    return Array.from({ length: count }, (_, index) => {
+      if (kind === 'chip') {
+        return `<span class="use-skeleton-chip" style="--delay:${index * 90}ms" aria-hidden="true"><i></i><em></em></span>`;
+      }
+      if (kind === 'metric') {
+        return `<span class="use-skeleton-metric" style="--delay:${index * 80}ms" aria-hidden="true"><b></b><small></small></span>`;
+      }
+      return `<article class="use-skeleton-row" style="--delay:${index * 70}ms" aria-hidden="true"><i></i><span><b></b><small></small></span><em></em></article>`;
+    }).join('');
+  }
+
+  function liveUseSources(options = {}) {
+    const preferUsed = Boolean(options.preferUsed);
+    const usedHints = (Array.isArray(state.useMissionSourcesUsed) ? state.useMissionSourcesUsed : [])
+      .map((item) => String(item || '').toLowerCase())
+      .filter(Boolean);
+    const rows = Array.isArray(dataSources) ? dataSources : [];
+    const mapped = rows
+      .filter((source) => source && !source.isCatalogOnly)
+      .filter((source) => {
+        const statusType = String(source.statusType || '').toLowerCase();
+        if (!(statusType === 'connected' || statusType === 'attention' || statusType === 'processing')) {
+          return false;
+        }
+        const connection = source.connection || null;
+        const id = String(source.id || '').toLowerCase();
+        const name = String(source.name || '').toLowerCase();
+        const hinted = usedHints.some((hint) => id.includes(hint) || name.includes(hint) || hint.includes(id));
+        if (preferUsed && usedHints.length) return hinted;
+        if (connection?.externalConnectionId) return true;
+        if (connection?.authProvider === 'astrbot' && connection?.status === 'connected') return true;
+        if (Number(source.syncedCount || source.assetCount || 0) > 0) return true;
+        // Keep mission-relevant hinted sources even without Nango id.
+        if (hinted) return true;
+        return false;
+      })
+      .map((source) => {
+        const statusType = String(source.statusType || '').toLowerCase();
+        let status = source.status || 'Connected';
+        if (statusType === 'processing' || statusType === 'attention') status = 'Syncing';
+        else if (statusType === 'connected') {
+          status = /live/i.test(source.method || '') || /live/i.test(source.lastSync || '') ? 'Live' : 'Connected';
+        }
+        return [
+          source.name || source.id || 'Source',
+          useSourceLogoPath(source),
+          status,
+          source.id || 'source',
+          source.assets || source.lastSync || '',
+        ];
+      });
+    if (preferUsed && usedHints.length && !mapped.length) {
+      return liveUseSources({ preferUsed: false });
+    }
+    return mapped;
+  }
+
+  function normalizeMissionPlanSteps(items) {
+    if (!Array.isArray(items)) return [];
+    return items.map((item) => {
+      if (Array.isArray(item)) {
+        return [String(item[0] || '').trim(), String(item[1] || '').trim(), Number(item[2]) || 0];
+      }
+      if (typeof item === 'string') return [item.trim(), '', 0];
+      if (item && typeof item === 'object') {
+        return [
+          String(item.title || item.name || item.step || '').trim(),
+          String(item.detail || item.description || item.subtitle || '').trim(),
+          Number(item.progress) || 0,
+        ];
+      }
+      return ['', '', 0];
+    }).filter((item) => item[0]);
+  }
+
+  function applyProgressToPlan(steps, { done = false, working = false, phase = 0 } = {}) {
+    const total = Math.max(1, steps.length);
+    return steps.map((step, index) => {
+      let progress = 0;
+      if (done) progress = 100;
+      else if (working) {
+        const start = (index / total) * 8;
+        const end = ((index + 1) / total) * 8;
+        if (phase <= start) progress = index === 0 ? 18 : 0;
+        else if (phase >= end) progress = 100;
+        else progress = Math.round(((phase - start) / Math.max(0.1, end - start)) * 100);
+      }
+      return [step[0], step[1], Math.max(0, Math.min(100, progress))];
+    });
+  }
+
+  function parseWeeplePlanFromText(raw = '') {
+    const textValue = String(raw || '');
+    const blocks = [...textValue.matchAll(/```(?:weeple-plan|json)\s*([\s\S]*?)```/gi)].map((match) => match[1].trim());
+    if (textValue.trim().startsWith('{')) blocks.unshift(textValue.trim());
+    for (const blob of blocks) {
+      try {
+        const data = JSON.parse(blob);
+        if (!data || typeof data !== 'object') continue;
+        return {
+          workPlan: normalizeMissionPlanSteps(data.workPlan || data.tasks || []),
+          guidelinePlan: normalizeMissionPlanSteps(data.guidelinePlan || data.guidelines || []),
+          findings: (Array.isArray(data.findings) ? data.findings : []).map((item) => {
+            if (typeof item === 'string') return [item, ''];
+            return [String(item?.title || item?.name || '').trim(), String(item?.detail || item?.description || '').trim()];
+          }).filter((item) => item[0]),
+          sourcesUsed: (data.sourcesUsed || data.sources || []).map((item) => String(item || '').trim()).filter(Boolean),
+          headline: String(data.headline || data.title || '').trim(),
+          recommendation: String(data.recommendation || '').trim(),
+        };
+      } catch (_error) {
+        /* try next block */
+      }
+    }
+    return null;
+  }
+
+  function ingestMissionPlanPayload(runOrText) {
+    let plan = null;
+    if (runOrText && typeof runOrText === 'object') {
+      if (runOrText.workPlan || runOrText.guidelinePlan || runOrText.findings) {
+        plan = {
+          workPlan: normalizeMissionPlanSteps(runOrText.workPlan || runOrText.planPhase?.workPlan || []),
+          guidelinePlan: normalizeMissionPlanSteps(runOrText.guidelinePlan || runOrText.planPhase?.guidelinePlan || []),
+          findings: (runOrText.findings || []).map((item) => {
+            if (typeof item === 'string') return [item, ''];
+            if (Array.isArray(item)) return [String(item[0] || ''), String(item[1] || '')];
+            return [String(item?.title || item?.name || '').trim(), String(item?.detail || item?.description || '').trim()];
+          }).filter((item) => item[0]),
+          sourcesUsed: (runOrText.sourcesUsed || runOrText.planPhase?.sourcesUsed || []).map((item) => String(item || '').trim()).filter(Boolean),
+          headline: String(runOrText.headline || '').trim(),
+          recommendation: String(runOrText.recommendation || '').trim(),
+        };
+      }
+      const summaryPlan = parseWeeplePlanFromText(runOrText.summary || '');
+      if (summaryPlan) {
+        plan = {
+          workPlan: plan?.workPlan?.length ? plan.workPlan : summaryPlan.workPlan,
+          guidelinePlan: plan?.guidelinePlan?.length ? plan.guidelinePlan : summaryPlan.guidelinePlan,
+          findings: plan?.findings?.length ? plan.findings : summaryPlan.findings,
+          sourcesUsed: plan?.sourcesUsed?.length ? plan.sourcesUsed : summaryPlan.sourcesUsed,
+          headline: plan?.headline || summaryPlan.headline,
+          recommendation: plan?.recommendation || summaryPlan.recommendation,
+        };
+      }
+    } else {
+      plan = parseWeeplePlanFromText(runOrText);
+    }
+    if (!plan) return false;
+    if (plan.workPlan?.length) state.useMissionWorkPlan = plan.workPlan;
+    if (plan.guidelinePlan?.length) state.useMissionGuidelinePlan = plan.guidelinePlan;
+    if (plan.findings?.length) state.useMissionFindings = plan.findings;
+    if (plan.sourcesUsed?.length) state.useMissionSourcesUsed = plan.sourcesUsed;
+    if (plan.headline) state.useMissionHeadline = plan.headline;
+    if (plan.recommendation) state.useMissionRecommendation = plan.recommendation;
+    return true;
+  }
+
+  function liveUseWorkSteps() {
+    const phase = Math.max(0, Number(state.useMissionExecutionPhase) || 0);
+    const working = state.useMissionState === 'working';
+    const done = Boolean(String(state.useMissionSummary || '').trim()) && !working;
+    if (!working && !done) return { tasks: [], guidelines: [] };
+
+    const tasks = applyProgressToPlan(
+      normalizeMissionPlanSteps(state.useMissionWorkPlan),
+      { done, working, phase }
+    );
+    const guidelines = applyProgressToPlan(
+      normalizeMissionPlanSteps(state.useMissionGuidelinePlan),
+      { done, working, phase }
+    );
+    return { tasks, guidelines };
+  }
+
   function renderSourcePanel(goal) {
-    const connectedSourceCount = goal.sources.filter(source => source[2] !== 'Not connected').length;
-    return `<section class="use-panel use-sources" data-od-id="use-data-sources-panel"><header><span><small>DATA SOURCES</small><b>MCP connections</b></span><em>${connectedSourceCount}/${goal.sources.length}</em></header>
-      <div class="use-source-scroll" aria-label="Connected data sources">${goal.sources.map((source, index) => `<article class="use-source-row${source[2] === 'Live' ? ' is-live' : ''}" style="--live-shine-delay:${index * .42}s" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" aria-controls="useMcpDetailPopover" aria-label="View data available from ${escapeMissionText(source[0])}" data-use-source-detail="${index}" data-od-id="use-source-${index + 1}">${renderUseSourceIcon(source)}<span><b>${source[0]}</b><small class="status-${source[2].toLowerCase().replace(' ', '-')}"><i></i>${source[2]}</small></span><i class="use-source-detail-arrow" aria-hidden="true">›</i></article>`).join('')}</div>
-      <footer class="use-source-summary"><span><b>${connectedSourceCount}</b> of ${goal.sources.length} connected</span><button class="use-panel-link" id="useOpenImportData" type="button">See all <span>→</span></button></footer></section>`;
+    const sources = liveUseSources();
+    if (!sources.length) {
+      return `<section class="use-panel use-sources" data-od-id="use-data-sources-panel"><header><span><small>DATA SOURCES</small><b>MCP connections</b></span><em>0</em></header>
+        <div class="use-panel-empty" role="status">
+          <p>No connected sources yet.</p>
+          <button class="use-panel-link" id="useOpenImportData" type="button">Connect in Import Data <span>→</span></button>
+        </div>
+        <div class="use-skeleton-list" aria-hidden="true">${renderUseSkeletonRows(3)}</div>
+      </section>`;
+    }
+    const connectedSourceCount = sources.filter((source) => source[2] !== 'Not connected').length;
+    return `<section class="use-panel use-sources" data-od-id="use-data-sources-panel"><header><span><small>DATA SOURCES</small><b>MCP connections</b></span><em>${connectedSourceCount}/${sources.length}</em></header>
+      <div class="use-source-scroll" aria-label="Connected data sources">${sources.map((source, index) => `<article class="use-source-row${source[2] === 'Live' ? ' is-live' : ''}" style="--live-shine-delay:${index * .42}s" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" aria-controls="useMcpDetailPopover" aria-label="View data available from ${escapeMissionText(source[0])}" data-use-source-detail="${index}" data-od-id="use-source-${index + 1}">${renderUseSourceIcon(source)}<span><b>${escapeMissionText(source[0])}</b><small class="status-${String(source[2]).toLowerCase().replace(/\s+/g, '-')}"><i></i>${escapeMissionText(source[2])}</small></span><i class="use-source-detail-arrow" aria-hidden="true">›</i></article>`).join('')}</div>
+      <footer class="use-source-summary"><span><b>${connectedSourceCount}</b> of ${sources.length} connected</span><button class="use-panel-link" id="useOpenImportData" type="button">See all <span>→</span></button></footer></section>`;
   }
 
   function renderTaskPanel(goal) {
-    return `<section class="use-panel use-tasks" data-od-id="use-data-tasks-panel"><header><span><small>LIVE WORK</small><b>Tasks in progress</b></span><em>${goal.tasks.length}</em></header>
-      <div class="use-task-scroll">${goal.tasks.map((task, index) => {
-        const progress = getMissionPhaseProgress(task[2]);
+    const { tasks } = liveUseWorkSteps();
+    if (!tasks.length) {
+      return `<section class="use-panel use-tasks" data-od-id="use-data-tasks-panel"><header><span><small>LIVE WORK</small><b>Tasks in progress</b></span><em>0</em></header>
+        <div class="use-panel-empty" role="status"><p>Send a prompt to start live work.</p></div>
+        <div class="use-skeleton-list is-pulse" aria-hidden="true">${renderUseSkeletonRows(4)}</div>
+      </section>`;
+    }
+    return `<section class="use-panel use-tasks" data-od-id="use-data-tasks-panel"><header><span><small>LIVE WORK</small><b>Tasks in progress</b></span><em>${tasks.length}</em></header>
+      <div class="use-task-scroll">${tasks.map((task, index) => {
+        const progress = Math.max(0, Math.min(100, Number(task[2]) || 0));
         const complete = progress >= 100;
         const agent = useTaskAgents[index] || useTaskAgents[index % useTaskAgents.length];
-        return `<article class="use-task-row stage-item tone-${agent.tone}${complete ? ' complete' : ''}" style="--delay:${index * 70}ms" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" aria-controls="useTaskDetailPopover" aria-label="View timeline for ${escapeMissionText(task[0])}" data-use-task-detail="${index}" data-od-id="use-task-${index + 1}"><i class="use-task-check">${complete ? '✓' : missionIcon(agent.icon)}</i><span><b>${task[0]}</b><small>${task[1]}</small><em class="use-task-owner"><i></i>${agent.name} Agent</em></span><span class="use-task-ring${complete ? ' complete' : ''}" style="--progress:${progress}" aria-label="${progress}% complete"><i>${complete ? '✓' : `${progress}%`}</i></span></article>`;
+        return `<article class="use-task-row stage-item tone-${agent.tone}${complete ? ' complete' : ''}" style="--delay:${index * 70}ms" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" aria-controls="useTaskDetailPopover" aria-label="View timeline for ${escapeMissionText(task[0])}" data-use-task-detail="${index}" data-od-id="use-task-${index + 1}"><i class="use-task-check">${complete ? '✓' : missionIcon(agent.icon)}</i><span><b>${escapeMissionText(task[0])}</b><small>${escapeMissionText(task[1])}</small><em class="use-task-owner"><i></i>${agent.name} Agent</em></span><span class="use-task-ring${complete ? ' complete' : ''}" style="--progress:${progress}" aria-label="${progress}% complete"><i>${complete ? '✓' : `${progress}%`}</i></span></article>`;
       }).join('')}</div></section>`;
   }
 
   function getUseGuidelineSequence(goal) {
-    const sourceProgress = goal.guidelines.map(guide => getMissionPhaseProgress(guide[2]));
-    const activeIndex = sourceProgress.findIndex(progress => progress < 100);
-    return goal.guidelines.map((guide, index) => {
-      if (activeIndex === -1 || index < activeIndex) return { progress: 100, status: 'Completed', state: 'complete' };
-      if (index === activeIndex) return { progress: sourceProgress[index], status: 'In progress', state: 'active' };
-      return { progress: 0, status: 'Waiting', state: 'waiting' };
+    const { guidelines } = liveUseWorkSteps();
+    const sourceProgress = guidelines.map((guide) => Math.max(0, Math.min(100, Number(guide[2]) || 0)));
+    const activeIndex = sourceProgress.findIndex((progress) => progress < 100);
+    return guidelines.map((guide, index) => {
+      if (activeIndex === -1 || index < activeIndex) return { progress: 100, status: 'Completed', state: 'complete', title: guide[0], detail: guide[1] };
+      if (index === activeIndex) return { progress: sourceProgress[index], status: 'In progress', state: 'active', title: guide[0], detail: guide[1] };
+      return { progress: 0, status: 'Waiting', state: 'waiting', title: guide[0], detail: guide[1] };
     });
   }
 
   function renderGuidelinePanel(goal) {
     const sequence = getUseGuidelineSequence(goal);
-    return `<section class="use-panel use-guidelines" data-od-id="use-data-guidelines-panel"><header><span><small>GOAL PROCESS</small><b>Guidelines</b></span><em>${goal.guidelines.length}</em></header>
-      <div class="use-guideline-list">${goal.guidelines.map((guide, index) => {
-        const step = sequence[index];
+    if (!sequence.length) {
+      return `<section class="use-panel use-guidelines" data-od-id="use-data-guidelines-panel"><header><span><small>GOAL PROCESS</small><b>Guidelines</b></span><em>0</em></header>
+        <div class="use-panel-empty" role="status"><p>Guidelines appear while the agent runs.</p></div>
+        <div class="use-skeleton-list is-pulse" aria-hidden="true">${renderUseSkeletonRows(4)}</div>
+      </section>`;
+    }
+    return `<section class="use-panel use-guidelines" data-od-id="use-data-guidelines-panel"><header><span><small>GOAL PROCESS</small><b>Guidelines</b></span><em>${sequence.length}</em></header>
+      <div class="use-guideline-list">${sequence.map((step, index) => {
         const role = useGuidelineRoles[index] || useGuidelineRoles[index % useGuidelineRoles.length];
-        return `<article class="use-guideline-row stage-item tone-${role.tone} ${step.state}" style="--delay:${index * 90}ms" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" aria-controls="useGuidelineDetailPopover" aria-label="View guideline: ${escapeMissionText(guide[0])}" data-use-guideline-detail="${index}" data-od-id="use-guideline-${index + 1}"><i class="use-guideline-icon">${step.state === 'complete' ? '✓' : missionIcon(role.icon)}</i><span><b>${guide[0]}</b><small>${guide[1]}</small><em class="use-guide-state"><i></i>${step.status}</em><span class="use-guide-progress"><i style="--value:${step.progress}%"></i></span></span><em>${step.progress}%</em></article>`;
+        return `<article class="use-guideline-row stage-item tone-${role.tone} ${step.state}" style="--delay:${index * 90}ms" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" aria-controls="useGuidelineDetailPopover" aria-label="View guideline: ${escapeMissionText(step.title)}" data-use-guideline-detail="${index}" data-od-id="use-guideline-${index + 1}"><i class="use-guideline-icon">${step.state === 'complete' ? '✓' : missionIcon(role.icon)}</i><span><b>${escapeMissionText(step.title)}</b><small>${escapeMissionText(step.detail)}</small><em class="use-guide-state"><i></i>${step.status}</em><span class="use-guide-progress"><i style="--value:${step.progress}%"></i></span></span><em>${step.progress}%</em></article>`;
       }).join('')}</div></section>`;
   }
 
   function renderResultPanel(goal) {
-    const resultFactor = Math.min(1, Math.max(0, (state.useMissionExecutionPhase - 3) / 5));
-    const liveTools = Array.isArray(state.useMissionToolsUsed) ? state.useMissionToolsUsed : [];
-    const summary = state.useMissionSummary || state.useMissionStatusText || '';
-    const metrics = (goal.results || []).length
-      ? goal.results.map((result, index) => {
-        const numeric = typeof result[1] === 'number';
-        const shown = numeric ? Math.round(result[1] * resultFactor) : (resultFactor >= .6 ? result[1] : '—');
-        return `<span data-od-id="use-result-${index + 1}"><b>${shown}</b><small>${result[0]}</small></span>`;
-      }).join('')
-      : (summary
-        ? `<span data-od-id="use-result-1"><b>${escapeMissionText(summary.slice(0, 48))}</b><small>Run status</small></span>`
-        : '<span data-od-id="use-result-1"><b>—</b><small>Waiting for agent</small></span>');
+    const summary = String(state.useMissionSummary || '').trim();
+    const working = state.useMissionState === 'working';
+    if (!summary && working) {
+      return `<section class="use-panel use-results composition-${state.useMissionGoalIndex}" data-od-id="use-data-results-panel"><header><span><small>LIVE OUTCOME</small><b>Results snapshot</b></span></header>
+        <div class="use-panel-empty" role="status"><p>DeepSeek is preparing your answer…</p></div>
+        <div class="use-skeleton-list is-pulse" aria-hidden="true">${renderUseSkeletonRows(3, 'metric')}</div>
+      </section>`;
+    }
+    if (!summary) {
+      return `<section class="use-panel use-results composition-${state.useMissionGoalIndex}" data-od-id="use-data-results-panel"><header><span><small>LIVE OUTCOME</small><b>Results snapshot</b></span></header>
+        <div class="use-panel-empty" role="status"><p>No result yet. Ask a question to run DeepSeek Harness.</p></div>
+        <div class="use-skeleton-list" aria-hidden="true">${renderUseSkeletonRows(3, 'metric')}</div>
+      </section>`;
+    }
     return `<section class="use-panel use-results composition-${state.useMissionGoalIndex}" data-od-id="use-data-results-panel"><header><span><small>LIVE OUTCOME</small><b>Results snapshot</b></span><div class="use-result-header-actions"><button class="use-result-details-button" id="useResultViewDetails" type="button" aria-expanded="false" aria-controls="missionDetailDrawer">View details <i>›</i></button></div></header>
-      <div class="use-result-scroll" role="region" aria-label="Result snapshot metrics" tabindex="0"><div class="use-result-grid">${metrics}</div>
-      ${liveTools.length ? `<p class="use-result-tools"><small>TOOLS USED</small> ${liveTools.map((tool) => `<span>${escapeMissionText(tool)}</span>`).join(' ')}</p>` : ''}
-      ${summary ? `<p class="use-result-summary">${escapeMissionText(summary)}</p>` : ''}</div>
+      <p class="use-result-agent-summary">${escapeMissionText(summary.slice(0, 520))}${summary.length > 520 ? '…' : ''}</p>
+      ${state.useMissionStatusText ? `<small class="use-result-status">${escapeMissionText(state.useMissionStatusText)}</small>` : ''}
     </section>`;
   }
 
   function renderExpertPanel() {
-    const toolCount = agentToolsCache.length;
-    const subtitle = toolCount
-      ? `${useAgentDefinitions.length} specialists · ${toolCount} live tools available`
-      : `${useAgentDefinitions.length} specialists collaborating on this goal`;
-    return `<section class="use-panel use-experts" data-od-id="use-data-experts-panel"><header><span><small>ACTIVE TEAM</small><b>AI experts</b></span><em>${useAgentDefinitions.length}</em></header>
-      <p>${escapeMissionText(subtitle)}</p>
-      ${toolCount ? `<div class="use-expert-tools" aria-label="Allowed tools">${agentToolsCache.slice(0, 6).map((tool) => `<span>${escapeMissionText(tool.name || tool.serverName || 'tool')}</span>`).join('')}</div>` : ''}
-      <div class="use-expert-grid">${useAgentDefinitions.map((agent, index) => `<figure class="use-expert tone-${agent[2]} stage-item" style="--delay:${index * 70}ms" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" aria-controls="useAgentDetailPopover" aria-label="View ${agent[0]} Agent profile" title="View ${agent[0]} Agent profile" data-use-agent-detail="${index}" data-od-id="use-expert-${index + 1}"><span><img src="${agent[1]}" alt=""><i></i></span><figcaption>${agent[0]}</figcaption></figure>`).join('')}</div>
+    const working = state.useMissionState === 'working' || Boolean(String(state.useMissionSummary || '').trim());
+    if (!working) {
+      return `<section class="use-panel use-experts" data-od-id="use-data-experts-panel"><header><span><small>ACTIVE TEAM</small><b>AI experts</b></span><em>0</em></header>
+        <div class="use-panel-empty" role="status"><p>Experts activate when a mission starts.</p></div>
+        <div class="use-skeleton-experts" aria-hidden="true">${renderUseSkeletonRows(4, 'chip')}</div>
+      </section>`;
+    }
+    const phase = Math.max(1, Number(state.useMissionExecutionPhase) || 1);
+    const activeCount = Math.min(useAgentDefinitions.length, Math.max(1, Math.ceil(phase / 2)));
+    return `<section class="use-panel use-experts" data-od-id="use-data-experts-panel"><header><span><small>ACTIVE TEAM</small><b>AI experts</b></span><em>${activeCount}/${useAgentDefinitions.length}</em></header>
+      <p>${activeCount} specialist${activeCount === 1 ? '' : 's'} active on this mission</p>
+      <div class="use-expert-grid">${useAgentDefinitions.map((agent, index) => `<figure class="use-expert tone-${agent[2]} stage-item${index < activeCount ? ' is-active' : ''}" style="--delay:${index * 70}ms" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" aria-controls="useAgentDetailPopover" aria-label="View ${agent[0]} Agent profile" title="View ${agent[0]} Agent profile" data-use-agent-detail="${index}" data-od-id="use-expert-${index + 1}"><span><img src="${agent[1]}" alt=""><i></i></span><figcaption>${agent[0]}</figcaption></figure>`).join('')}</div>
     </section>`;
   }
 
@@ -7055,49 +7419,254 @@ function __install() {
     });
   }
 
-  function getUseResultReport() {
-    const goal = getUseDashboardGoal();
-    const agentSummary = String(state.useMissionSummary || '').trim();
-    if (agentSummary) {
+  function stripMarkdownNoise(value = '') {
+    return String(value)
+      .replace(/^#{1,6}\s+/gm, '')
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/\*([^*]+)\*/g, '$1')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/^\s*[-*+]\s+/gm, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function renderMissionMarkdown(markdown = '') {
+    const escaped = escapeMissionText(String(markdown || '').replace(/\r\n/g, '\n'));
+    const html = escaped
+      .replace(/^######\s+(.+)$/gm, '<h6>$1</h6>')
+      .replace(/^#####\s+(.+)$/gm, '<h5>$1</h5>')
+      .replace(/^####\s+(.+)$/gm, '<h4>$1</h4>')
+      .replace(/^###\s+(.+)$/gm, '<h3>$1</h3>')
+      .replace(/^##\s+(.+)$/gm, '<h2>$1</h2>')
+      .replace(/^#\s+(.+)$/gm, '<h1>$1</h1>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/^\s*[-*+]\s+(.+)$/gm, '<li>$1</li>')
+      .replace(/(?:<li>[\s\S]*?<\/li>\s*)+/g, match => `<ul>${match}</ul>`)
+      .replace(/^(?!<(?:h[1-6]|ul|ol|li|p|div|section|article)\b)(.+)$/gm, '<p>$1</p>')
+      .replace(/<p>\s*<\/p>/g, '');
+    return html;
+  }
+
+  function sanitizeAgentReportHtml(html = '') {
+    const template = document.createElement('template');
+    template.innerHTML = String(html || '');
+    const banned = new Set(['SCRIPT', 'IFRAME', 'OBJECT', 'EMBED', 'LINK', 'META', 'BASE', 'FORM', 'INPUT', 'BUTTON', 'TEXTAREA', 'SELECT']);
+    template.content.querySelectorAll('*').forEach((node) => {
+      if (banned.has(node.tagName)) {
+        node.remove();
+        return;
+      }
+      [...node.attributes].forEach((attr) => {
+        const name = attr.name.toLowerCase();
+        const value = String(attr.value || '');
+        if (name.startsWith('on') || ((name === 'href' || name === 'src') && /^\s*javascript:/i.test(value))) {
+          node.removeAttribute(attr.name);
+        }
+      });
+    });
+    return template.innerHTML;
+  }
+
+  function extractAgentHtmlReport(raw = '') {
+    const text = String(raw || '');
+    const fenced = text.match(/```(?:html|htm)\s*([\s\S]*?)```/i);
+    if (fenced?.[1]) {
       return {
-        headline: goal?.title ? `${goal.title} · agent result` : 'Agent result',
-        summary: agentSummary,
-        interpretation: state.useMissionStatusText || 'Generated by the live agent run.',
-        findings: (goal?.report?.findings || []).slice(0, 4),
-        drivers: goal?.report?.drivers || [['Run progress', Math.round((Number(state.useMissionExecutionPhase) || 0) / 8 * 100)]],
-        recommendation: (goal?.report?.recommendation)
-          || 'Review the prepared output before any external action.',
+        html: sanitizeAgentReportHtml(fenced[1].trim()),
+        markdown: text.replace(fenced[0], '').trim(),
       };
     }
-    if (goal?.report) return goal.report;
+    if (/<(?:section|article|div|h[1-6]|ul|ol|p)\b/i.test(text) && /<\/(?:section|article|div|h[1-6]|ul|ol|p)>/i.test(text)) {
+      return { html: sanitizeAgentReportHtml(text), markdown: '' };
+    }
+    return { html: '', markdown: text.trim() };
+  }
+
+  function parseAgentReportSections(rawMarkdown = '') {
+    const markdown = String(rawMarkdown || '').trim();
+    const lines = markdown.split(/\n/);
+    let headline = '';
+    const findings = [];
+    let recommendation = '';
+    const bodyLines = [];
+    let inRecommend = false;
+    let inFindings = false;
+
+    lines.forEach((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        bodyLines.push('');
+        return;
+      }
+      const heading = trimmed.match(/^#{1,6}\s+(.+)$/);
+      if (heading) {
+        const title = stripMarkdownNoise(heading[1]);
+        if (!headline) headline = title;
+        inFindings = /findings?|insights?|priorit/i.test(title) && !/recommend|next\s*(step|move|action)/i.test(title);
+        inRecommend = /recommend|next\s*(step|move|action)/i.test(title);
+        bodyLines.push(trimmed);
+        return;
+      }
+      const bullet = trimmed.match(/^[-*+]\s+(.+)$/);
+      if (bullet) {
+        const item = stripMarkdownNoise(bullet[1]);
+        if (inRecommend && !recommendation) recommendation = item;
+        else if (inFindings && findings.length < 6) {
+          const parts = item.split(/[:—–-]\s+/);
+          const detail = parts.slice(1).join(': ').slice(0, 220);
+          findings.push([parts[0].slice(0, 90), detail || 'Insight from the harness answer.']);
+        }
+        bodyLines.push(trimmed);
+        return;
+      }
+      if (inRecommend && !recommendation) recommendation = stripMarkdownNoise(trimmed).slice(0, 280);
+      bodyLines.push(trimmed);
+    });
+
+    if (!headline) {
+      const first = stripMarkdownNoise(lines.find((line) => line.trim()) || '');
+      headline = first.slice(0, 96) || 'Agent result';
+    }
+
     return {
-      headline: goal?.title || 'No active goal',
-      summary: 'No agent report yet. Start a Use Data mission to generate one.',
-      interpretation: 'Reports come from live agent runs, not demo content.',
-      findings: [],
-      drivers: [['Goal progress', Number(goal?.progress) || 0]],
-      recommendation: 'Start a mission from your current goal.',
+      headline,
+      findings,
+      recommendation,
+      markdown: bodyLines.join('\n').trim() || markdown,
     };
   }
 
-  function renderUseResultReport() {
+  function getUseResultReport() {
     const goal = getUseDashboardGoal();
-    const report = getUseResultReport();
-    return `<section class="use-report-hero" style="--report-progress:${goal.progress}">
-        <div class="use-report-progress-ring"><strong>${goal.progress}<small>%</small></strong></div>
-        <span><small>CURRENT OUTCOME</small><h3>${escapeMissionText(report.headline)}</h3><p>${escapeMissionText(goal.state)} · based on ${goal.sources.length} connected sources</p></span>
-      </section>
-      <section class="use-report-metric-grid" aria-label="Result metrics">${goal.results.map(result => `<span><b>${escapeMissionText(result[1])}</b><small>${escapeMissionText(result[0])}</small></span>`).join('')}</section>
-      <article class="use-report-narrative"><small>EXECUTIVE SUMMARY</small><p>${escapeMissionText(report.summary)}</p><p>${escapeMissionText(report.interpretation)}</p></article>
-      <section class="use-report-findings"><header><span><small>DETAILED REPORT</small><b>What the AI found</b></span><em>${report.findings.length} findings</em></header><div>${report.findings.map((finding, index) => `<article><i>${index + 1}</i><span><b>${escapeMissionText(finding[0])}</b><p>${escapeMissionText(finding[1])}</p></span></article>`).join('')}</div></section>
-      <section class="use-report-why"><header><span><small>INFOGRAPHIC · WHY</small><b>Why this result emerged</b></span><em>Evidence weighted</em></header>
-        <div class="use-report-reason-flow" aria-label="Data to result reasoning flow"><span><i>${goal.sources.length}</i><b>Sources</b><small>Authorized signals</small></span><em>→</em><span><i>${goal.tasks.length}</i><b>AI tasks</b><small>Grouped and checked</small></span><em>→</em><span><i>${goal.results.length}</i><b>Outcomes</b><small>Retained in report</small></span></div>
-        <div class="use-report-driver-list">${report.drivers.map((driver, index) => `<span style="--driver:${driver[1]};--driver-index:${index}"><b>${escapeMissionText(driver[0])}</b><em>${driver[1]}%</em><i><strong></strong></i></span>`).join('')}</div>
-      </section>
-      <section class="use-report-evidence"><header><small>EVIDENCE SOURCES</small><b>What informed this report</b></header><div>${goal.sources.map(source => `<span>${renderUseSourceIcon(source, 'use-report-evidence-logo')}<b>${escapeMissionText(source[0])}</b><small>${escapeMissionText(source[2])}</small></span>`).join('')}</div></section>
-      <article class="use-report-recommendation"><i>✦</i><span><small>RECOMMENDED NEXT MOVE</small><p>${escapeMissionText(report.recommendation)}</p></span></article>
-      <p class="use-report-disclaimer">This report summarizes the current prototype data state. Review source permissions and confirm any external action before execution.</p>`;
+    const agentSummary = String(state.useMissionSummary || '').trim();
+    const sources = liveUseSources({ preferUsed: true });
+    const work = liveUseWorkSteps();
+    const phase = Math.max(0, Number(state.useMissionExecutionPhase) || 0);
+    const progress = Math.min(100, Math.round((phase / 8) * 100) || (agentSummary ? 100 : 0));
+    const hasPlans = Boolean((state.useMissionWorkPlan || []).length || (state.useMissionGuidelinePlan || []).length);
+
+    if (!agentSummary && !hasPlans) {
+      return {
+        empty: true,
+        headline: 'No report yet',
+        summary: '',
+        summaryHtml: '',
+        reportHtml: '',
+        interpretation: 'Ask a question in Use Data to run DeepSeek Harness.',
+        findings: [],
+        drivers: [],
+        recommendation: '',
+        metrics: [],
+        sources,
+        taskCount: work.tasks.length,
+        progress,
+      };
+    }
+
+    const extracted = extractAgentHtmlReport(agentSummary);
+    const parsed = parseAgentReportSections(extracted.markdown || agentSummary);
+    const tools = Array.isArray(state.useMissionToolsUsed) ? state.useMissionToolsUsed : [];
+    const findings = (state.useMissionFindings || []).length
+      ? state.useMissionFindings
+      : (parsed.findings || []);
+    const taskAvg = work.tasks.length
+      ? Math.round(work.tasks.reduce((sum, task) => sum + (Number(task[2]) || 0), 0) / work.tasks.length)
+      : 0;
+    const guideAvg = work.guidelines.length
+      ? Math.round(work.guidelines.reduce((sum, item) => sum + (Number(item[2]) || 0), 0) / work.guidelines.length)
+      : 0;
+
+    return {
+      empty: false,
+      headline: state.useMissionHeadline || parsed.headline || (goal?.short ? `${goal.short} · agent result` : 'Agent result'),
+      summary: parsed.markdown || agentSummary,
+      summaryHtml: agentSummary ? renderMissionMarkdown(parsed.markdown || agentSummary) : '<p>Harness plans are ready. Waiting for the executed answer…</p>',
+      reportHtml: extracted.html || String(state.useMissionReportHtml || '').trim(),
+      interpretation: state.useMissionStatusText || 'Generated by the live DeepSeek Harness run.',
+      findings,
+      drivers: [
+        ['Run progress', progress],
+        ['Work plan', taskAvg],
+        ['Guideline plan', guideAvg],
+        ['Tool usage', Math.min(100, tools.length * 25)],
+      ],
+      recommendation: state.useMissionRecommendation || parsed.recommendation
+        || 'Review the answer against your synced sources, then decide the next human-approved action.',
+      metrics: [
+        ['Sources', sources.length],
+        ['Work tasks', work.tasks.length],
+        ['Guidelines', work.guidelines.length],
+      ],
+      sources,
+      taskCount: work.tasks.length,
+      progress,
+    };
   }
+
+  function renderUseReportSkeleton() {
+    return `<section class="use-report-empty" role="status">
+        <div class="use-panel-empty"><p>No agent report yet. Send a prompt to generate a live DeepSeek result.</p></div>
+        <div class="use-skeleton-list is-pulse" aria-hidden="true">${renderUseSkeletonRows(4)}</div>
+        <div class="use-skeleton-list is-pulse" aria-hidden="true">${renderUseSkeletonRows(3, 'metric')}</div>
+      </section>`;
+  }
+
+  function renderUseResultReport() {
+    const report = getUseResultReport();
+    if (report.empty) return renderUseReportSkeleton();
+
+    const sources = report.sources || [];
+    const metrics = report.metrics || [];
+    const canvas = report.reportHtml
+      ? `<section class="use-report-canvas" aria-label="Agent HTML report">
+          <header><span><small>LIVE CANVAS</small><b>Harness infographic report</b></span><em>Agent HTML</em></header>
+          <div class="use-report-canvas-frame">${report.reportHtml}</div>
+        </section>`
+      : `<section class="use-report-why">
+          <header><span><small>INFOGRAPHIC · WHY</small><b>Why this result emerged</b></span><em>Live run</em></header>
+          <div class="use-report-reason-flow" aria-label="Data to result reasoning flow">
+            <span><i>${sources.length}</i><b>Sources</b><small>Authorized signals</small></span><em>→</em>
+            <span><i>${report.taskCount || metrics[1]?.[1] || 0}</i><b>AI tasks</b><small>Grouped and checked</small></span><em>→</em>
+            <span><i>1</i><b>Outcome</b><small>Retained in report</small></span>
+          </div>
+          <div class="use-report-driver-list">${(report.drivers || []).map((driver, index) => `<span style="--driver:${driver[1]};--driver-index:${index}"><b>${escapeMissionText(driver[0])}</b><em>${driver[1]}%</em><i><strong></strong></i></span>`).join('')}</div>
+        </section>`;
+
+    const findingsBlock = (report.findings || []).length
+      ? `<section class="use-report-findings"><header><span><small>DETAILED REPORT</small><b>What the AI found</b></span><em>${report.findings.length} findings</em></header>
+          <div>${report.findings.map((finding, index) => `<article><i>${index + 1}</i><span><b>${escapeMissionText(finding[0])}</b><p>${escapeMissionText(finding[1])}</p></span></article>`).join('')}</div>
+        </section>`
+      : `<section class="use-report-findings"><header><span><small>DETAILED REPORT</small><b>What the AI found</b></span><em>0</em></header>
+          <div class="use-skeleton-list is-pulse" aria-hidden="true">${renderUseSkeletonRows(3)}</div>
+        </section>`;
+
+    const evidenceBlock = sources.length
+      ? `<section class="use-report-evidence"><header><small>EVIDENCE SOURCES</small><b>What informed this report</b></header>
+          <div>${sources.map((source) => `<span>${renderUseSourceIcon(source, 'use-report-evidence-logo')}<b>${escapeMissionText(source[0])}</b><small>${escapeMissionText(source[2])}</small></span>`).join('')}</div>
+        </section>`
+      : `<section class="use-report-evidence"><header><small>EVIDENCE SOURCES</small><b>What informed this report</b></header>
+          <div class="use-panel-empty"><p>No authorized sources were attached to this run.</p></div>
+          <div class="use-skeleton-list" aria-hidden="true">${renderUseSkeletonRows(3, 'chip')}</div>
+        </section>`;
+
+    return `<section class="use-report-hero" style="--report-progress:${report.progress}">
+        <div class="use-report-progress-ring"><strong>${report.progress}<small>%</small></strong></div>
+        <span><small>CURRENT OUTCOME</small><h3>${escapeMissionText(report.headline)}</h3><p>${escapeMissionText(report.interpretation)} · ${sources.length} connected source${sources.length === 1 ? '' : 's'}</p></span>
+      </section>
+      <section class="use-report-metric-grid" aria-label="Result metrics">${metrics.map((result, index) => `<span data-od-id="use-report-metric-${index + 1}"><b>${escapeMissionText(result[1])}</b><small>${escapeMissionText(result[0])}</small></span>`).join('')}</section>
+      <article class="use-report-narrative">
+        <small>EXECUTIVE SUMMARY</small>
+        <div class="use-report-markdown">${report.summaryHtml || `<p>${escapeMissionText(report.summary)}</p>`}</div>
+      </article>
+      ${findingsBlock}
+      ${canvas}
+      ${evidenceBlock}
+      <article class="use-report-recommendation"><i>✦</i><span><small>RECOMMENDED NEXT MOVE</small><p>${escapeMissionText(report.recommendation)}</p></span></article>
+      <p class="use-report-disclaimer">Generated from your authorized synced data and the live DeepSeek Harness answer. Confirm any external action before execution.</p>`;
+  }
+
 
   function closeUseResultReport(restoreFocus = false) {
     if (!missionDetailDrawer) return;
@@ -7117,7 +7686,8 @@ function __install() {
     closeUseTaskDetail(false);
     closeUseGuidelineDetail(false);
     const goal = getUseDashboardGoal();
-    useResultReportTitle.textContent = goal.title;
+    const report = getUseResultReport();
+    useResultReportTitle.textContent = report.headline || goal.title || 'Live outcome report';
     useResultReportContent.innerHTML = renderUseResultReport();
     useWorkspace?.classList.add('report-open');
     missionDetailDrawer.classList.add('visible');
@@ -7291,13 +7861,15 @@ function __install() {
     const dashboard = useMissionStage?.querySelector('.use-dashboard-persistent');
     if (!dashboard) return;
     const working = state.useMissionState === 'working';
+    const hasOutcome = Boolean(String(state.useMissionSummary || '').trim());
     const sidePanels = dashboard.querySelector('.use-persistent-panels');
-    dashboard.classList.toggle('is-working', working);
-    dashboard.dataset.missionState = working ? 'working' : 'idle';
+    dashboard.classList.toggle('is-working', working || hasOutcome);
+    dashboard.classList.toggle('has-outcome', hasOutcome);
+    dashboard.dataset.missionState = working ? 'working' : (hasOutcome ? 'complete' : 'idle');
     dashboard.dataset.phase = state.useMissionExecutionPhase;
-    sidePanels?.setAttribute('aria-hidden', String(!working));
-    if (sidePanels) sidePanels.inert = !working;
-    if (!working) {
+    sidePanels?.setAttribute('aria-hidden', 'false');
+    if (sidePanels) sidePanels.inert = false;
+    if (!working && !hasOutcome) {
       closeUseMcpDetail(false);
       closeUseAgentDetail(false);
       closeUseTaskDetail(false);
@@ -7368,6 +7940,16 @@ function __install() {
     }
   }
 
+  function clearUseMissionPlanState() {
+    state.useMissionWorkPlan = [];
+    state.useMissionGuidelinePlan = [];
+    state.useMissionFindings = [];
+    state.useMissionSourcesUsed = [];
+    state.useMissionHeadline = '';
+    state.useMissionRecommendation = '';
+    state.useMissionReportHtml = '';
+  }
+
   function applyAgentRunProgress(run) {
     if (!run) return;
     const phase = Number(run.phase);
@@ -7379,6 +7961,7 @@ function __install() {
         state.useMissionExecutionPhase = Math.max(1, Math.min(8, Math.round(progress * 8) || 1));
       }
     }
+    ingestMissionPlanPayload(run);
     const events = Array.isArray(run.events) ? run.events : [];
     if (events.length) {
       const latest = events[events.length - 1];
@@ -7392,25 +7975,44 @@ function __install() {
     const summary = extractAgentRunSummary(run);
     if (summary) {
       state.useMissionSummary = summary;
+      const extracted = extractAgentHtmlReport(summary);
+      if (extracted.html) state.useMissionReportHtml = extracted.html;
+      ingestMissionPlanPayload({ ...run, summary });
     }
-    if (state.useMissionState === 'working') {
+    const { tasks, guidelines } = liveUseWorkSteps();
+    const steps = [...tasks, ...guidelines];
+    if (steps.length) {
+      const avg = steps.reduce((sum, step) => sum + (Number(step[2]) || 0), 0) / steps.length;
+      if (state.useMissionState === 'working' && avg > 0) {
+        state.useMissionExecutionPhase = Math.max(state.useMissionExecutionPhase, Math.min(8, Math.round((avg / 100) * 8) || 1));
+      }
+    }
+    if (state.useMissionState === 'working' || String(state.useMissionSummary || '').trim()) {
       refreshUseSidePanels();
       syncUsePersistentDashboard();
     }
+  }
+
+  function finalizeUseMissionRun(run) {
+    applyAgentRunProgress(run);
+    state.useMissionExecutionPhase = 8;
+    refreshUseSidePanels();
+    syncUsePersistentDashboard({ refreshPanels: true });
   }
 
   async function pollUseMissionRun(runId) {
     clearUseMissionRunPoll();
     useMissionRunId = runId;
     let attempts = 0;
+    const maxAttempts = 200;
     useMissionRunTimer = window.setInterval(async () => {
       attempts += 1;
       const run = await getAgentRunOnApi(runId);
       if (run) applyAgentRunProgress(run);
       const status = String(run?.status || '').toLowerCase();
-      if (['completed', 'complete', 'succeeded', 'success', 'failed', 'error', 'cancelled'].includes(status) || attempts >= 24) {
+      if (['completed', 'complete', 'succeeded', 'success', 'failed', 'error', 'cancelled'].includes(status) || attempts >= maxAttempts) {
         clearUseMissionRunPoll();
-        if (status === 'failed' || status === 'error' || status === 'cancelled' || (!run && attempts >= 24)) {
+        if (status === 'failed' || status === 'error' || status === 'cancelled' || (!run && attempts >= maxAttempts)) {
           state.useMissionState = 'idle';
           state.useMissionExecutionPhase = 1;
           __showToast('Agent runtime unavailable');
@@ -7418,11 +8020,7 @@ function __install() {
           syncUsePersistentDashboard({ refreshPanels: true });
           return;
         }
-        state.useMissionExecutionPhase = 8;
-        if (state.useMissionState === 'working') {
-          refreshUseSidePanels();
-          syncUsePersistentDashboard();
-        }
+        finalizeUseMissionRun(run);
         try { hydrateOverviewFromApi(); } catch (_error) { /* optional */ }
       }
     }, 900);
@@ -7432,10 +8030,13 @@ function __install() {
     state.useMissionRequest = prompt;
     state.useMissionDraft = prompt;
     state.useMissionExecutionPhase = 1;
-    state.useMissionStatusText = '';
+    state.useMissionStatusText = 'Starting DeepSeek Harness…';
     state.useMissionToolsUsed = [];
     state.useMissionSummary = '';
+    clearUseMissionPlanState();
     setUseMissionState('working', { announce: false });
+    refreshUseSidePanels();
+    syncUsePersistentDashboard({ refreshPanels: true });
     const goal = getUseDashboardGoal();
     const run = await startAgentRunOnApi({
       mission: prompt,
@@ -7451,9 +8052,7 @@ function __install() {
     applyAgentRunProgress(run);
     const status = String(run.status || '').toLowerCase();
     if (['completed', 'complete', 'succeeded', 'success'].includes(status)) {
-      state.useMissionExecutionPhase = 8;
-      refreshUseSidePanels();
-      syncUsePersistentDashboard();
+      finalizeUseMissionRun(run);
       try { hydrateOverviewFromApi(); } catch (_error) { /* optional */ }
       return;
     }
@@ -7698,7 +8297,7 @@ function __install() {
     state.dataWorkspaceActive = true; stopTopologyLoop(); dataWorkspace.classList.add('visible'); dataWorkspace.setAttribute('aria-hidden', 'false'); osShell.classList.add('data-page');
     renderSourceGrid(); focusCluster('data', false); if (announce) __showToast('Personal data control center opened');
   }
-  function closeDataWorkspace() { state.dataWorkspaceActive = false; dataWorkspace.classList.remove('visible'); dataWorkspace.setAttribute('aria-hidden', 'true'); osShell.classList.remove('data-page'); closeSourceInspector(false); closeConnectionWizard(); }
+  function closeDataWorkspace() { state.dataWorkspaceActive = false; dataWorkspace.classList.remove('visible'); dataWorkspace.setAttribute('aria-hidden', 'true'); osShell.classList.remove('data-page'); closeSourceInspector(false); closeConnectionWizard(); closeCatalogPicker(); }
   function openUseWorkspace(announce = true) {
     try { rebuildUseDashboardGoals({ preserveSelection: true }); } catch (_error) { /* keep fallback goals */ }
     state.useWorkspaceActive = true; stopTopologyLoop(); useWorkspace.classList.add('visible'); useWorkspace.setAttribute('aria-hidden', 'false'); osShell.classList.add('use-page'); focusCluster('memory', false); renderUseMission(); if (announce) __showToast('Use Data mission workspace opened');
@@ -8994,8 +9593,14 @@ closeDataWorkspace();
     document.querySelectorAll('[data-ready-filter]').forEach((item) => item.classList.toggle('active', item === button));
     renderSourceGrid();
   }));
-  addSourceButton?.addEventListener('click', openConnectionWizard);
+  addSourceButton?.addEventListener('click', openCatalogPicker);
   addAdapterButton?.addEventListener('click', openConnectionWizard);
+  catalogPickerClose?.addEventListener('click', closeCatalogPicker);
+  catalogPickerBackdrop?.addEventListener('click', closeCatalogPicker);
+  catalogPickerSearchInput?.addEventListener('input', () => {
+    catalogPickerSearch = catalogPickerSearchInput.value || '';
+    renderCatalogPicker();
+  });
   sourceInspectorClose?.addEventListener('click', () => closeSourceInspector());
   sourceInspectorBackdrop?.addEventListener('click', () => closeSourceInspector());
   connectionWizardClose?.addEventListener('click', closeConnectionWizard);
@@ -10579,6 +11184,7 @@ closeDataWorkspace();
       closeGoalCreateSheet();
       closeSourceInspector();
       closeConnectionWizard();
+      closeCatalogPicker();
       closeMemoryProposal();
       closeMemoryDrawer();
       closeCalendarTaskModal();
