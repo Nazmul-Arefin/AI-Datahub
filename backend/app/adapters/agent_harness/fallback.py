@@ -17,6 +17,7 @@ class FallbackLoopAdapter:
         mission: str,
         goal_id: str | None = None,
         context: dict | None = None,
+        role: str | None = None,
     ) -> dict:
         reply = await self._llm.chat([{"role": "user", "content": mission}])
         text = str(reply.get("content") or "")
@@ -35,6 +36,7 @@ class FallbackLoopAdapter:
             ],
             "context": context or {},
             "mode": "fallback",
+            "role": role,
         }
         self._runs[run_id] = record
         return dict(record)

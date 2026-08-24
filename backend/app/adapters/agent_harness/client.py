@@ -70,17 +70,22 @@ def compact_events(raw: list[Any], limit: int = 80) -> list[dict[str, Any]]:
 
 def _is_usable_answer(text: str | None) -> bool:
     value = str(text or "").strip()
+    lowered = value.lower()
+    if "```weeple-plan" in lowered or '"workplan"' in lowered:
+        return len(value) >= 20
     if len(value) < 40:
         return False
-    lowered = value.lower()
     noise = (
         "current runtime context",
         "current dsh file policy",
         "supersedes earlier runtime-context",
         "workspace-write",
         "you are weeple planning a use data mission",
+        "you are weeple's planning agent",
+        "you are weeple's execution agent",
+        "return only one fenced json",
     )
-    if any(token in lowered[:180] for token in noise):
+    if any(token in lowered[:220] for token in noise):
         return False
     return True
 
@@ -172,8 +177,28 @@ class HarnessClient:
         value = result.get("value")
         return value if isinstance(value, dict) else {"value": value}
 
-    def _mock_start(self, mission: str, goal_id: str | None, context: dict | None) -> dict:
+    def _mock_start(
+        self,
+        mission: str,
+        goal_id: str | None,
+        context: dict | None,
+        role: str | None = None,
+    ) -> dict:
         run_id = f"run-{uuid4().hex[:10]}"
+        if role == "planning":
+            summary = (
+                "```weeple-plan\n"
+                '{"headline":"Mock mission","workPlan":[{"title":"Parse request","detail":"mock"}],'
+                '"guidelinePlan":[{"title":"Use authorized data","detail":"mock"}],'
+                '"sourcesUsed":["gmail"],"recommendation":"Switch harness to live"}\n'
+                "```"
+            )
+        else:
+            summary = (
+                f"# Mock result\n\nAnswered: {mission[:240]}\n\n"
+                "## Findings\n- Harness mock mode completed the planned work.\n\n"
+                "## Recommended next move\n- Switch harness to live for real MCP data."
+            )
         record = {
             "runId": run_id,
             "sessionId": f"session-mock-{uuid4().hex[:8]}",
@@ -182,18 +207,11 @@ class HarnessClient:
             "goalId": goal_id,
             "phase": 8,
             "progress": 1.0,
-            "events": [{"type": "assistant/message", "seq": 1, "text": f"Mock answer for: {mission[:180]}"}],
-            "summary": (
-                "```weeple-plan\n"
-                '{"headline":"Mock mission","workPlan":[{"title":"Parse request","detail":"mock"}],'
-                '"guidelinePlan":[{"title":"Use authorized data","detail":"mock"}],'
-                '"findings":[{"title":"Mock finding","detail":"Harness mock mode"}],'
-                '"sourcesUsed":["gmail"],"recommendation":"Switch harness to live"}\n'
-                "```\n"
-                f"# Mock result\n\nAnswered: {mission[:240]}"
-            ),
+            "events": [{"type": "assistant/message", "seq": 1, "text": summary}],
+            "summary": summary,
             "context": context or {},
             "mode": "mock",
+            "role": role,
         }
         self._runs[run_id] = record
         return dict(record)
@@ -243,9 +261,10 @@ class HarnessClient:
         mission: str,
         goal_id: str | None = None,
         context: dict | None = None,
+        role: str | None = None,
     ) -> dict:
         if self.mode != "live":
-            return self._mock_start(mission, goal_id, context)
+            return self._mock_start(mission, goal_id, context, role=role)
         created = await self._rpc("session.create", {})
         session_id = created.get("sessionId") or f"session-{uuid4().hex[:8]}"
         try:
@@ -265,7 +284,10 @@ class HarnessClient:
             timeout=120.0,
         )
         # CRITICAL: session.prompt returns when queued, NOT when the model finishes.
-        events, summary, status, phase, progress = await self._await_session_answer(session_id)
+        events, summary, status, phase, progress = await self._await_session_answer(
+            session_id,
+            timeout_s=90.0 if role == "planning" else 240.0,
+        )
         record = {
             "runId": session_id,
             "sessionId": session_id,
