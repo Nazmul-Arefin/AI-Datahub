@@ -48,7 +48,10 @@ async def test_run_includes_memory_and_tools_and_persists(tmp_path):
     )
     result = await service.run("Plan the morning", goal_id="goal-1")
     assert result["runId"]
-    assert result["status"] == "queued"
+    assert result["status"] in {"queued", "planning", "executing", "running", "completed"}
+    assert result.get("workPlan")
+    assert result.get("guidelinePlan")
+    assert result.get("summary")
     assert result.get("sessionId")
     assert result["mode"] == "mock"
     assert "list_repos" in result["context"]["allowedTools"]
@@ -99,7 +102,7 @@ async def test_fallback_when_harness_raises(tmp_path):
     assert result["mode"] == "fallback"
     assert result["status"] == "completed"
     assert result["events"]
-    assert result["events"][-1]["type"] == "assistant/message"
+    assert any(item.get("type") == "assistant/message" for item in result["events"])
 
 
 @pytest.mark.asyncio
@@ -108,7 +111,9 @@ async def test_agents_runs_http_returns_session(client):
     assert started.status_code == 200
     body = started.json()
     assert body["runId"]
-    assert body["status"] in {"queued", "running", "completed"}
+    assert body["status"] in {"queued", "planning", "executing", "running", "completed"}
+    assert body.get("workPlan")
+    assert body.get("guidelinePlan")
     assert body.get("sessionId")
     assert "accessToken" not in json.dumps(body)
 

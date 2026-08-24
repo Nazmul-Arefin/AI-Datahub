@@ -372,7 +372,10 @@ class SyncService:
                 continue
             detail = await self._client.proxy(
                 "GET",
-                f"/gmail/v1/users/me/messages/{msg_id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date",
+                (
+                    f"/gmail/v1/users/me/messages/{msg_id}?format=metadata"
+                    "&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date"
+                ),
                 connection_id=connection_id,
                 provider_config_key=provider_key,
             )
@@ -381,7 +384,15 @@ class SyncService:
             date = self._gmail_header(detail, "Date")
             snippet = str(detail.get("snippet") or "").strip()
             thread_id = str(detail.get("threadId") or row.get("threadId") or msg_id)
-            content = " / ".join(part for part in (f"From: {sender}" if sender else "", f"Date: {date}" if date else "", snippet) if part)
+            content = " / ".join(
+                part
+                for part in (
+                    f"From: {sender}" if sender else "",
+                    f"Date: {date}" if date else "",
+                    snippet,
+                )
+                if part
+            )
             results.append(
                 {
                     "id": msg_id,

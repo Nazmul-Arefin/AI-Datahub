@@ -73,7 +73,7 @@ PLATFORM_SPECS: dict[str, dict[str, Any]] = {
         "setup_path": "/#/platforms",
         "hint": (
             "Platforms → Add → 个人微信 (Personal WeChat) → scan the QR with your phone "
-            "WeChat, then Save and Connect again."
+            "WeChat, then Save and click I’ve set it up."
         ),
     },
 }
@@ -443,74 +443,6 @@ class AstrBotClient:
             }
 
         return self._setup_required(key, spec)
-
-    async def set_platform_enabled(self, platform: str, enabled: bool) -> dict[str, Any]:
-        """Toggle AstrBot bot enable flag (Pause/Resume AI auto-reply)."""
-        key = platform.lower().replace("_", "-")
-        if key in {"wecom_ai", "wecom_ai_bot"}:
-            key = "wecom-ai"
-        if key == "lark":
-            key = "feishu"
-
-        spec = PLATFORM_SPECS.get(key)
-        if not spec:
-            return {"platform": platform, "ok": False, "reason": "unsupported"}
-
-        if self.mode != "live":
-            return {
-                "platform": key,
-                "ok": True,
-                "enabled": enabled,
-                "mode": "mock",
-                "astrbotType": str(spec["astrbot_type"]),
-            }
-
-        astrbot_type = str(spec["astrbot_type"])
-        remote = await self.list_remote_bots()
-        match = next(
-            (bot for bot in remote if str(bot.get("type") or "") == astrbot_type),
-            None,
-        )
-        if not match or not match.get("id"):
-            return {
-                "platform": key,
-                "ok": False,
-                "reason": "bot_not_found",
-                "astrbotType": astrbot_type,
-            }
-
-        bot_id = str(match["id"])
-        try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                response = await client.patch(
-                    f"{self.base_url}/api/v1/bots/{bot_id}/enabled",
-                    headers=self._auth_headers(),
-                    json={"enabled": bool(enabled)},
-                )
-        except httpx.HTTPError as exc:
-            return {
-                "platform": key,
-                "ok": False,
-                "reason": f"http_error:{exc}",
-                "botId": bot_id,
-                "astrbotType": astrbot_type,
-            }
-        if response.status_code >= 400:
-            return {
-                "platform": key,
-                "ok": False,
-                "reason": f"status_{response.status_code}",
-                "botId": bot_id,
-                "astrbotType": astrbot_type,
-            }
-        return {
-            "platform": key,
-            "ok": True,
-            "enabled": bool(enabled),
-            "botId": bot_id,
-            "mode": "live",
-            "astrbotType": astrbot_type,
-        }
 
     async def send_telegram(self, content: str, chat_id: str) -> dict | None:
         """Deliver via Telegram Bot API when TELEGRAM_BOT_TOKEN is set. Never returns the token."""

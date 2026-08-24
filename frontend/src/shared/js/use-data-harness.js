@@ -63,6 +63,18 @@ export function parseWeeplePlanFromText(raw = '') {
   return null;
 }
 
+export function isCompletedAgentStatus(status) {
+  return ['completed', 'complete', 'succeeded', 'success'].includes(String(status || '').toLowerCase());
+}
+
+export function stripPlanOnlySummary(raw = '') {
+  const cleaned = String(raw || '')
+    .replace(/```(?:weeple-plan|json)[\s\S]*?```/gi, '')
+    .trim();
+  if (!cleaned || cleaned.startsWith('{')) return '';
+  return cleaned;
+}
+
 export function extractAgentRunSummary(run) {
   if (!run) return '';
   if (run.summary) return String(run.summary).trim();
@@ -70,6 +82,8 @@ export function extractAgentRunSummary(run) {
   const events = Array.isArray(run.events) ? run.events : [];
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index];
+    const typ = String(event?.type || '').toLowerCase();
+    if (typ === 'stage' || typ.startsWith('user')) continue;
     const text = event?.text || event?.detail || event?.message || event?.label || '';
     if (text) return String(text).trim();
   }
@@ -178,15 +192,86 @@ export function parseAgentReportSections(rawMarkdown = '') {
 
 export function useSourceLogoPath(source) {
   const key = `${source?.id || ''} ${source?.name || ''}`.toLowerCase();
-  if (/notion/.test(key)) return 'assets/logos/notion.webp';
-  if (/calendar/.test(key)) return 'assets/logos/Google_Calendar.webp';
-  if (/gmail|mail/.test(key)) return 'assets/logos/gmail.webp';
   if (/github/.test(key)) return 'assets/logos/github.svg';
-  if (/feishu|lark/.test(key)) return 'assets/logos/feishu.webp';
-  if (/wechat|weixin/.test(key)) return 'assets/logos/wechat.webp';
-  if (/telegram/.test(key)) return 'assets/logos/telegram.webp';
+  if (/discord/.test(key)) return 'assets/logos/discord.svg';
+  if (/linkedin/.test(key)) return 'assets/logos/linkedin.svg';
   if (/whatsapp/.test(key)) return 'assets/logos/whatsapp.svg';
+  if (/outlook/.test(key)) return 'assets/logos/outlook.svg';
+  if (/dropbox/.test(key)) return 'assets/logos/dropbox.svg';
+  if (/figma/.test(key)) return 'assets/logos/figma.svg';
+  if (/linear/.test(key)) return 'assets/logos/linear.svg';
+  if (/drive|onedrive/.test(key)) return 'assets/logos/one_drive.svg';
+  if (/task/.test(key)) return 'assets/logos/googletasks.svg';
+  if (/map/.test(key)) return 'assets/logos/google_maps.svg';
   return '';
+}
+
+export function isAuthorizedLiveSource(source) {
+  if (!source || source.isCatalogOnly) return false;
+  const statusType = String(source.statusType || '').toLowerCase();
+  if (['revoked', 'idle', 'available'].includes(statusType)) return false;
+  const connection = source.connection || {};
+  const connStatus = String(connection.status || '').toLowerCase();
+  if (connStatus && !['connected', 'active', 'authorized'].includes(connStatus)) return false;
+  const hasProviderLink = Boolean(
+    connection.externalConnectionId
+    || (String(connection.authProvider || '').toLowerCase() === 'astrbot' && ['connected', 'active', 'authorized', ''].includes(connStatus))
+  );
+  return hasProviderLink && ['connected', 'attention', 'processing'].includes(statusType || 'connected');
+}
+
+export function extractSnapshotInfographic({
+  summary = '',
+  findings = [],
+  metrics = [],
+  headline = '',
+} = {}) {
+  const clean = String(summary || '')
+    .replace(/```(?:weeple-plan|json|html|htm)[\s\S]*?```/gi, '')
+    .replace(/<[^>]+>/g, ' ');
+  const noise = new Set(['the', 'and', 'for', 'from', 'with', 'this', 'that', 'your', 'are', 'was', 'has', 'have']);
+  const extractedMetrics = [];
+  const seen = new Set();
+  const pushMetric = (value, label) => {
+    const safeLabel = String(label || '').replace(/[.,;:]+$/, '').trim();
+    const key = `${value}|${safeLabel}`.toLowerCase();
+    if (value === '' || value == null || !safeLabel || noise.has(safeLabel.toLowerCase()) || seen.has(key)) return;
+    seen.add(key);
+    extractedMetrics.push([safeLabel, value]);
+  };
+  (Array.isArray(metrics) ? metrics : []).forEach((item) => pushMetric(item?.[1], item?.[0]));
+  for (const match of clean.matchAll(/\*{0,2}(\d[\d,]*(?:\.\d+)?)\*{0,2}\s+([A-Za-z\u4e00-\u9fff%][A-Za-z0-9\u4e00-\u9fff%/\-]{1,22})/g)) {
+    pushMetric(match[1], match[2]);
+  }
+  const bullets = [];
+  const addBullet = (text) => {
+    const item = stripMarkdownNoise(text).slice(0, 140);
+    if (item && !bullets.includes(item)) bullets.push(item);
+  };
+  String(clean).split(/\n/).forEach((line) => {
+    const bullet = line.match(/^\s*(?:[-*+]|\d+\.)\s+(.+)$/);
+    if (bullet) addBullet(bullet[1]);
+  });
+  (Array.isArray(findings) ? findings : []).forEach((finding) => {
+    const title = Array.isArray(finding) ? finding[0] : finding;
+    const detail = Array.isArray(finding) ? finding[1] : '';
+    addBullet(detail ? `${title} — ${detail}` : title);
+  });
+  if (!bullets.length) {
+    clean
+      .replace(/[#*_`]/g, '')
+      .split(/(?<=[.!?])\s+/)
+      .map((item) => item.trim())
+      .filter((item) => item.length > 24)
+      .slice(0, 3)
+      .forEach(addBullet);
+  }
+  const firstLine = stripMarkdownNoise(clean.split('\n').find((line) => line.trim()) || '');
+  return {
+    headline: String(headline || firstLine).slice(0, 96) || 'Agent result',
+    metrics: extractedMetrics.slice(0, 4),
+    bullets: bullets.slice(0, 5),
+  };
 }
 
 /**
@@ -210,6 +295,8 @@ export function createUseMissionHarness(deps) {
     refreshUseSidePanels,
     syncUsePersistentDashboard,
     hydrateOverviewFromApi,
+    collapseGoalStringOnPrompt,
+    setMissionBusy,
   } = deps;
 
   let useMissionRunTimer = null;
@@ -299,44 +386,29 @@ export function createUseMissionHarness(deps) {
     const usedHints = (Array.isArray(state.useMissionSourcesUsed) ? state.useMissionSourcesUsed : [])
       .map((item) => String(item || '').toLowerCase())
       .filter(Boolean);
-    const rows = Array.isArray(getDataSources()) ? getDataSources() : [];
-    const mapped = rows
-      .filter((source) => source && !source.isCatalogOnly)
-      .filter((source) => {
-        const statusType = String(source.statusType || '').toLowerCase();
-        if (!(statusType === 'connected' || statusType === 'attention' || statusType === 'processing')) {
-          return false;
-        }
-        const connection = source.connection || null;
+    const rows = (Array.isArray(getDataSources()) ? getDataSources() : [])
+      .filter(isAuthorizedLiveSource);
+    const filtered = preferUsed && usedHints.length
+      ? rows.filter((source) => {
         const id = String(source.id || '').toLowerCase();
         const name = String(source.name || '').toLowerCase();
-        const hinted = usedHints.some((hint) => id.includes(hint) || name.includes(hint) || hint.includes(id));
-        if (preferUsed && usedHints.length) return hinted;
-        if (connection?.externalConnectionId) return true;
-        if (connection?.authProvider === 'astrbot' && connection?.status === 'connected') return true;
-        if (Number(source.syncedCount || source.assetCount || 0) > 0) return true;
-        if (hinted) return true;
-        return false;
+        return usedHints.some((hint) => id.includes(hint) || name.includes(hint) || hint.includes(id) || hint.includes(name));
       })
-      .map((source) => {
-        const statusType = String(source.statusType || '').toLowerCase();
-        let status = source.status || 'Connected';
-        if (statusType === 'processing' || statusType === 'attention') status = 'Syncing';
-        else if (statusType === 'connected') {
-          status = /live/i.test(source.method || '') || /live/i.test(source.lastSync || '') ? 'Live' : 'Connected';
-        }
-        return [
-          source.name || source.id || 'Source',
-          useSourceLogoPath(source),
-          status,
-          source.id || 'source',
-          source.assets || source.lastSync || '',
-        ];
-      });
-    if (preferUsed && usedHints.length && !mapped.length) {
-      return liveUseSources({ preferUsed: false });
-    }
-    return mapped;
+      : rows;
+    const chosen = filtered.length ? filtered : rows;
+    return chosen.map((source) => {
+      const statusType = String(source.statusType || '').toLowerCase();
+      let status = 'Connected';
+      if (statusType === 'processing' || statusType === 'attention') status = 'Syncing';
+      else if (/live/i.test(source.method || '') || /live/i.test(source.lastSync || '')) status = 'Live';
+      return [
+        source.name || source.id || 'Source',
+        useSourceLogoPath(source),
+        status,
+        source.id || 'source',
+        source.assets || source.lastSync || '',
+      ];
+    });
   }
 
   function applyAgentRunProgress(run) {
@@ -362,7 +434,8 @@ export function createUseMissionHarness(deps) {
         .filter(Boolean);
       if (tools.length) state.useMissionToolsUsed = [...new Set(tools)].slice(-6);
     }
-    const summary = extractAgentRunSummary(run);
+    const complete = isCompletedAgentStatus(run.status || run.stage);
+    const summary = complete ? stripPlanOnlySummary(extractAgentRunSummary(run)) : '';
     if (summary) {
       state.useMissionSummary = summary;
       const extracted = extractAgentHtmlReport(summary);
@@ -387,6 +460,7 @@ export function createUseMissionHarness(deps) {
     applyAgentRunProgress(run);
     const state = getState();
     state.useMissionExecutionPhase = 8;
+    setMissionBusy?.(false);
     refreshUseSidePanels();
     syncUsePersistentDashboard({ refreshPanels: true });
   }
@@ -400,13 +474,14 @@ export function createUseMissionHarness(deps) {
       attempts += 1;
       const run = await getAgentRunOnApi(runId);
       if (run) applyAgentRunProgress(run);
-      const status = String(run?.status || '').toLowerCase();
+      const status = String(run?.status || run?.stage || '').toLowerCase();
       if (['completed', 'complete', 'succeeded', 'success', 'failed', 'error', 'cancelled'].includes(status) || attempts >= maxAttempts) {
         clearUseMissionRunPoll();
         if (status === 'failed' || status === 'error' || status === 'cancelled' || (!run && attempts >= maxAttempts)) {
           const state = getState();
           state.useMissionState = 'idle';
           state.useMissionExecutionPhase = 1;
+          setMissionBusy?.(false);
           showToast('Agent runtime unavailable');
           try { await hydrateOverviewFromApi(); } catch (_error) { /* optional */ }
           syncUsePersistentDashboard({ refreshPanels: true });
@@ -420,6 +495,7 @@ export function createUseMissionHarness(deps) {
 
   async function startUseMissionFromPrompt(prompt) {
     const state = getState();
+    clearUseMissionRunPoll();
     state.useMissionRequest = prompt;
     state.useMissionDraft = prompt;
     state.useMissionExecutionPhase = 1;
@@ -427,6 +503,8 @@ export function createUseMissionHarness(deps) {
     state.useMissionToolsUsed = [];
     state.useMissionSummary = '';
     clearUseMissionPlanState();
+    collapseGoalStringOnPrompt?.();
+    setMissionBusy?.(true);
     setUseMissionState('working', { announce: false });
     refreshUseSidePanels();
     syncUsePersistentDashboard({ refreshPanels: true });
@@ -438,12 +516,13 @@ export function createUseMissionHarness(deps) {
     if (!run?.runId) {
       state.useMissionState = 'idle';
       state.useMissionExecutionPhase = 1;
+      setMissionBusy?.(false);
       showToast('Agent runtime unavailable');
       syncUsePersistentDashboard({ refreshPanels: true });
       return;
     }
     applyAgentRunProgress(run);
-    const status = String(run.status || '').toLowerCase();
+    const status = String(run.status || run.stage || '').toLowerCase();
     if (['completed', 'complete', 'succeeded', 'success'].includes(status)) {
       finalizeUseMissionRun(run);
       try { await hydrateOverviewFromApi(); } catch (_error) { /* optional */ }
@@ -452,6 +531,7 @@ export function createUseMissionHarness(deps) {
     if (['failed', 'error', 'cancelled'].includes(status)) {
       state.useMissionState = 'idle';
       state.useMissionExecutionPhase = 1;
+      setMissionBusy?.(false);
       showToast('Agent runtime unavailable');
       syncUsePersistentDashboard({ refreshPanels: true });
       return;
@@ -488,7 +568,10 @@ export function createUseMissionHarness(deps) {
     }
 
     const extracted = extractAgentHtmlReport(agentSummary);
-    const parsed = parseAgentReportSections(extracted.markdown || agentSummary);
+    const cleanedMarkdown = String(extracted.markdown || agentSummary)
+      .replace(/```(?:weeple-plan|json)[\s\S]*?```/gi, '')
+      .trim();
+    const parsed = parseAgentReportSections(cleanedMarkdown || agentSummary);
     const tools = Array.isArray(state.useMissionToolsUsed) ? state.useMissionToolsUsed : [];
     const findings = (state.useMissionFindings || []).length
       ? state.useMissionFindings
@@ -503,8 +586,10 @@ export function createUseMissionHarness(deps) {
     return {
       empty: false,
       headline: state.useMissionHeadline || parsed.headline || (goal?.short ? `${goal.short} · agent result` : 'Agent result'),
-      summary: parsed.markdown || agentSummary,
-      summaryHtml: agentSummary ? renderMissionMarkdown(parsed.markdown || agentSummary) : '<p>Harness plans are ready. Waiting for the executed answer…</p>',
+      summary: parsed.markdown || cleanedMarkdown || agentSummary,
+      summaryHtml: (parsed.markdown || cleanedMarkdown)
+        ? renderMissionMarkdown(parsed.markdown || cleanedMarkdown)
+        : (agentSummary ? renderMissionMarkdown(agentSummary) : '<p>Harness plans are ready. Waiting for the executed answer…</p>'),
       reportHtml: extracted.html || String(state.useMissionReportHtml || '').trim(),
       interpretation: state.useMissionStatusText || 'Generated by the live DeepSeek Harness run.',
       findings,
@@ -527,6 +612,18 @@ export function createUseMissionHarness(deps) {
     };
   }
 
+  function buildUseResultSnapshot(options = {}) {
+    const report = buildUseResultReport({
+      renderMissionMarkdown: options.renderMissionMarkdown || ((value) => value),
+    });
+    return extractSnapshotInfographic({
+      summary: report.summary,
+      findings: report.findings,
+      metrics: report.metrics,
+      headline: report.headline,
+    });
+  }
+
   return {
     clearUseMissionPlanState,
     ingestMissionPlanPayload,
@@ -537,6 +634,7 @@ export function createUseMissionHarness(deps) {
     startUseMissionFromPrompt,
     pollUseMissionRun,
     buildUseResultReport,
+    buildUseResultSnapshot,
     clearUseMissionRunPoll,
   };
 }

@@ -81,6 +81,18 @@ services:
     ports:
       - "3003:3003"
       - "3009:3009"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3003/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
     depends_on:
       nango-db:
         condition: service_healthy

@@ -13,7 +13,10 @@ class AgentRunRequest(BaseModel):
 class AgentRunResponse(BaseModel):
     run_id: str = Field(alias="runId")
     status: str = "queued"
+    stage: str | None = None
     session_id: str | None = Field(default=None, alias="sessionId")
+    planning_session_id: str | None = Field(default=None, alias="planningSessionId")
+    execution_session_id: str | None = Field(default=None, alias="executionSessionId")
     phase: int = 0
     progress: float = 0.0
     events: list[dict] = Field(default_factory=list)
@@ -26,6 +29,7 @@ class AgentRunResponse(BaseModel):
     headline: str | None = None
     recommendation: str | None = None
     plan_phase: dict | None = Field(default=None, alias="planPhase")
+    refreshed_source_ids: list[str] = Field(default_factory=list, alias="refreshedSourceIds")
 
     model_config = {"populate_by_name": True, "extra": "ignore"}
 
@@ -33,7 +37,10 @@ class AgentRunResponse(BaseModel):
 class AgentRunStatus(BaseModel):
     run_id: str = Field(alias="runId")
     status: str
+    stage: str | None = None
     session_id: str | None = Field(default=None, alias="sessionId")
+    planning_session_id: str | None = Field(default=None, alias="planningSessionId")
+    execution_session_id: str | None = Field(default=None, alias="executionSessionId")
     phase: int = 0
     progress: float = 0.0
     events: list[dict] = Field(default_factory=list)
@@ -46,6 +53,7 @@ class AgentRunStatus(BaseModel):
     headline: str | None = None
     recommendation: str | None = None
     plan_phase: dict | None = Field(default=None, alias="planPhase")
+    refreshed_source_ids: list[str] = Field(default_factory=list, alias="refreshedSourceIds")
 
     model_config = {"populate_by_name": True, "extra": "ignore"}
 

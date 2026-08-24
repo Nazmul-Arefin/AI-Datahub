@@ -166,16 +166,7 @@ def seed_database(db: Session) -> None:
                 )
             )
 
-    # Repair stale demo rows after connector cutovers (idempotent).
-    wechat = db.get(DataSource, "wechat")
-    if wechat is not None and wechat.connection_id is None and wechat.status_type == "connected":
-        wechat.method = "AstrBot"
-        wechat.status = "Ready to connect"
-        wechat.status_type = "idle"
-        wechat.last_sync = "Not connected"
-        wechat.assets = "0 conversations"
-        wechat.used_by = "Connect from Import Data catalog"
-
+    # Keep Gmail Live after Nango enablement (idempotent repair).
     gmail_catalog = db.get(IntegrationCatalog, "gmail")
     if gmail_catalog is not None:
         gmail_catalog.method = "Live"
@@ -217,5 +208,22 @@ def seed_database(db: Session) -> None:
                 gmail_source.status_type = "idle"
                 gmail_source.last_sync = "Not connected"
                 gmail_source.used_by = "Connect from Import Data catalog"
+
+    # WeChat must use AstrBot weixin_oc (QR) — never fake api_key Connected.
+    wechat_catalog = db.get(IntegrationCatalog, "wechat")
+    if wechat_catalog is not None:
+        wechat_catalog.method = "AstrBot"
+        wechat_catalog.auth_type = "astrbot"
+        wechat_catalog.nango_provider_key = None
+        wechat_catalog.enabled = True
+
+    wechat = db.get(DataSource, "wechat")
+    if wechat is not None and wechat.connection_id is None and wechat.status_type == "connected":
+        wechat.method = "AstrBot"
+        wechat.status = "Ready to connect"
+        wechat.status_type = "idle"
+        wechat.last_sync = "Not connected"
+        wechat.assets = "0 conversations"
+        wechat.used_by = "Connect from Import Data catalog"
 
     db.flush()
