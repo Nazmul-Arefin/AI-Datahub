@@ -6329,6 +6329,11 @@ function __install() {
     return useDashboardGoals[state.useMissionGoalIndex] || useDashboardGoals[0] || EMPTY_USE_DASHBOARD_GOAL;
   }
 
+  function useGoalProgressPrompt(goal) {
+    const title = String(goal?.title || '').trim();
+    return title ? `Help me make progress on: ${title}` : '';
+  }
+
   function useSourceLogoPath(source) {
     const key = `${source?.id || ''} ${source?.name || ''}`.toLowerCase();
     if (/notion/.test(key)) return 'assets/logos/notion.webp';
@@ -6461,10 +6466,10 @@ function __install() {
       tone: tones[index % tones.length],
       linkedGoalId: goal.id || null,
       linkedGoalIndex: goalProfiles.indexOf(goal),
-      sources: buildUseSourcesForGoal(goal),
-      tasks: buildUseTasksForGoal(goal),
-      guidelines: buildUseGuidelinesForGoal(goal),
-      results: buildUseResultsForGoal(goal),
+      sources: [],
+      tasks: [],
+      guidelines: [],
+      results: [],
       report: {
         headline: goal.prediction?.title || `${goal.title} · live plan`,
         summary: (typeof goal.prediction === 'object' ? goal.prediction?.title : goal.prediction)
@@ -6494,7 +6499,9 @@ function __install() {
     const previousId = preserveSelection ? useDashboardGoals[state.useMissionGoalIndex]?.linkedGoalId : null;
     const previousTitle = preserveSelection ? useDashboardGoals[state.useMissionGoalIndex]?.title : null;
     if (Array.isArray(goalProfiles) && goalProfiles.length) {
-      useDashboardGoals = goalProfiles.map((goal, index) => profileToUseDashboardGoal(goal, index));
+      useDashboardGoals = goalProfiles
+        .filter((goal) => !goal.archived)
+        .map((goal, index) => profileToUseDashboardGoal(goal, index));
     } else {
       useDashboardGoals = [];
     }
@@ -6509,7 +6516,7 @@ function __install() {
       nextIndex = Math.min(state.useMissionGoalIndex || 0, Math.max(0, useDashboardGoals.length - 1));
     }
     state.useMissionGoalIndex = useDashboardGoals.length ? Math.max(0, nextIndex) : 0;
-    if (state.useWorkspaceActive && useMissionStage) {
+    if (state.useWorkspaceActive && useMissionStage && state.useMissionState !== 'working') {
       useMissionStage.innerHTML = '';
       try { renderUseMission({ refreshPanels: true }); } catch (_error) { /* stage may remount */ }
     }
@@ -7975,7 +7982,7 @@ function __install() {
     state.useMissionListening = false;
     window.clearInterval(missionListeningTimer);
     missionListeningTimer = 0;
-    if (!state.useMissionDraft.trim()) state.useMissionDraft = state.useMissionDraft || getUseDashboardGoal()?.title || '';
+    if (!state.useMissionDraft.trim()) state.useMissionDraft = useGoalProgressPrompt(getUseDashboardGoal()) || '';
     refreshUseComposer({ focusInput: true });
   }
 
@@ -8169,20 +8176,23 @@ function __install() {
 
   function switchUseDashboardGoal(nextIndex) {
     const goalIndex = Number(nextIndex);
-    if (!Number.isInteger(goalIndex) || !useDashboardGoals[goalIndex] || goalIndex === state.useMissionGoalIndex) return;
-
+    if (!Number.isInteger(goalIndex) || !useDashboardGoals[goalIndex]) return;
+    const goal = useDashboardGoals[goalIndex];
+    const same = goalIndex === state.useMissionGoalIndex;
     state.useMissionGoalIndex = goalIndex;
-    const linkedIndex = useDashboardGoals[goalIndex]?.linkedGoalIndex;
+    const linkedIndex = goal.linkedGoalIndex;
     if (Number.isInteger(linkedIndex) && linkedIndex >= 0) state.currentGoalIndex = linkedIndex;
-    if (state.useMissionState === 'idle') state.useMissionDraft = useDashboardGoals[goalIndex].title;
-    useMissionStage?.querySelectorAll('[data-use-goal]').forEach(button => {
+    if (state.useMissionState === 'idle') {
+      state.useMissionDraft = useGoalProgressPrompt(goal);
+      const promptInput = document.getElementById('missionPromptInput');
+      if (promptInput) promptInput.value = state.useMissionDraft;
+    }
+    useMissionStage?.querySelectorAll('[data-use-goal]').forEach((button) => {
       const active = Number(button.dataset.useGoal) === goalIndex;
       button.classList.toggle('active', active);
       button.setAttribute('aria-pressed', String(active));
     });
-    const promptInput = document.getElementById('missionPromptInput');
-    if (promptInput && state.useMissionState === 'idle') promptInput.value = state.useMissionDraft;
-    refreshUseSidePanels();
+    if (!same) refreshUseSidePanels();
     if (state.useMissionState === 'working') window.requestAnimationFrame(() => {
       useMissionStage?.querySelector(`[data-use-goal="${goalIndex}"]`)?.focus({ preventScroll: true });
     });
