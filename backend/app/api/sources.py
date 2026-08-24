@@ -25,16 +25,16 @@ router = APIRouter()
 
 @router.get("", response_model=SourceListResponse)
 async def list_sources(
-    _user_id: CurrentUserId,
+    user_id: CurrentUserId,
     db: DbSession,
     category: str | None = Query(default="all"),
 ) -> SourceListResponse:
-    return source_service.list_sources(category=category, db=db)
+    return source_service.list_sources(category=category, db=db, user_id=user_id)
 
 
 @router.get("/{source_id}", response_model=Source)
-async def get_source(source_id: str, _user_id: CurrentUserId, db: DbSession) -> Source:
-    source = source_service.get_source(source_id, db=db)
+async def get_source(source_id: str, user_id: CurrentUserId, db: DbSession) -> Source:
+    source = source_service.get_source(source_id, db=db, user_id=user_id)
     if not source:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
     return source
@@ -65,7 +65,7 @@ async def patch_source(
     _user_id: CurrentUserId,
     db: DbSession,
 ) -> Source:
-    source = source_service.patch_source(source_id, payload, db=db)
+    source = source_service.patch_source(source_id, payload, db=db, user_id=_user_id)
     if not source:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
     if payload.ai_enabled is not None:
@@ -84,8 +84,8 @@ async def patch_source(
 
 
 @router.post("/{source_id}/disconnect", response_model=Source)
-async def disconnect_source(source_id: str, _user_id: CurrentUserId, db: DbSession) -> Source:
-    source = await source_service.disconnect_source(source_id, db=db)
+async def disconnect_source(source_id: str, user_id: CurrentUserId, db: DbSession) -> Source:
+    source = await source_service.disconnect_source(source_id, db=db, user_id=user_id)
     if not source:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
     return source
@@ -128,7 +128,7 @@ async def list_synced_assets(
     db: DbSession,
     limit: int = Query(default=100, ge=1, le=500),
 ) -> SourceSyncedListResponse:
-    source = source_service.get_source(source_id, db=db)
+    source = source_service.get_source(source_id, db=db, user_id=_user_id)
     if not source:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
     items = sync_service.list_assets(source_id, db=db, limit=limit)

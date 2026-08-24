@@ -7,6 +7,11 @@ from app.models.goal import Goal as GoalRow
 from app.schemas.goals import Goal, GoalCreateRequest, GoalListResponse, GoalPrediction, GoalUpdateRequest
 from app.services.activity_service import activity_service
 from app.services.runtime_store import runtime_store
+from app.services.seed_data import ADMIN_USER_ID
+
+
+def _workspace_user(user_id: str | None) -> str:
+    return user_id or ADMIN_USER_ID
 
 
 def _sync_progress_from_subgoals(goal: Goal) -> Goal:
@@ -158,22 +163,41 @@ def _apply_goal_row(row: GoalRow, goal: Goal) -> None:
 
 
 class GoalService:
-    def list_goals(self, db: Session | None = None) -> GoalListResponse:
+    def list_goals(self, db: Session | None = None, user_id: str | None = None) -> GoalListResponse:
+        uid = _workspace_user(user_id)
         if db is not None:
-            rows = db.query(GoalRow).order_by(GoalRow.created_at, GoalRow.id).all()
+            rows = (
+                db.query(GoalRow)
+                .filter(GoalRow.user_id == uid)
+                .order_by(GoalRow.created_at, GoalRow.id)
+                .all()
+            )
             goals = [_goal_from_row(row) for row in rows]
         else:
-            goals = [_hydrate_goal_metrics(goal.model_copy(deep=True)) for goal in runtime_store.goals.values()]
+            goals = [
+                _hydrate_goal_metrics(goal.model_copy(deep=True))
+                for goal_id, goal in runtime_store.goals.items()
+                if runtime_store.goal_owners.get(goal_id, ADMIN_USER_ID) == uid
+            ]
         return GoalListResponse(goals=goals, total=len(goals))
 
-    def get_goal(self, goal_id: str, db: Session | None = None) -> Goal | None:
+    def get_goal(self, goal_id: str, db: Session | None = None, user_id: str | None = None) -> Goal | None:
+        uid = user_id
         if db is not None:
             row = db.get(GoalRow, goal_id)
-            return _goal_from_row(row) if row else None
+            if not row:
+                return None
+            if uid is not None and getattr(row, "user_id", ADMIN_USER_ID) != uid:
+                return None
+            return _goal_from_row(row)
         goal = runtime_store.goals.get(goal_id)
-        return _hydrate_goal_metrics(goal.model_copy(deep=True)) if goal else None
+        if not goal:
+            return None
+        if uid is not None and runtime_store.goal_owners.get(goal_id, ADMIN_USER_ID) != uid:
+            return None
+        return _hydrate_goal_metrics(goal.model_copy(deep=True))
 
-    def create_goal(self, payload: GoalCreateRequest, db: Session | None = None) -> Goal:
+    def create_goal(self, payload: GoalCreateRequest, db: Session | None = None, user_id: str | None = None) -> Goal:
         goal_id = f"goal-{uuid4().hex[:8]}"
         image_status = "generating" if settings.coze_enabled else "idle"
         if image_status == "idle":
@@ -200,17 +224,20 @@ class GoalService:
             imageStatus=image_status,
         )
         _hydrate_goal_metrics(goal)
+        owner = _workspace_user(user_id)
         if db is not None:
-            row = GoalRow(id=goal_id)
+            row = GoalRow(id=goal_id, user_id=owner)
             _apply_goal_row(row, goal)
             db.add(row)
         else:
             runtime_store.goals[goal_id] = goal
+            runtime_store.goal_owners[goal_id] = owner
         activity_service.record(
             "Goal created",
             f"{goal.title} is now tracked",
             route="goals",
             related_goal_id=goal_id,
+            user_id=owner,
             db=db,
         )
         return goal
@@ -237,8 +264,10 @@ class GoalService:
             runtime_store.goals[goal_id] = goal
         return goal
 
-    def update_goal(self, goal_id: str, payload: GoalUpdateRequest, db: Session | None = None) -> Goal | None:
-        goal = self.get_goal(goal_id, db=db)
+    def update_goal(
+        self, goal_id: str, payload: GoalUpdateRequest, db: Session | None = None, user_id: str | None = None
+    ) -> Goal | None:
+        goal = self.get_goal(goal_id, db=db, user_id=user_id)
         if not goal:
             return None
         previous_status = goal.status
@@ -258,6 +287,7 @@ class GoalService:
                 f"Moved from {previous_status} to {updated.status}",
                 route="goals",
                 related_goal_id=goal_id,
+                user_id=_workspace_user(user_id),
                 db=db,
             )
         if payload.monitoring_paused is not None:
@@ -266,20 +296,26 @@ class GoalService:
                 f"{updated.title} monitoring {'paused' if updated.monitoring_paused else 'resumed'}",
                 route="goals",
                 related_goal_id=goal_id,
+                user_id=_workspace_user(user_id),
                 db=db,
             )
         return updated
 
-    def delete_goal(self, goal_id: str, db: Session | None = None) -> bool:
+    def delete_goal(self, goal_id: str, db: Session | None = None, user_id: str | None = None) -> bool:
         if db is not None:
             row = db.get(GoalRow, goal_id)
             if not row:
+                return False
+            if user_id is not None and getattr(row, "user_id", ADMIN_USER_ID) != user_id:
                 return False
             db.delete(row)
             return True
         if goal_id not in runtime_store.goals:
             return False
+        if user_id is not None and runtime_store.goal_owners.get(goal_id, ADMIN_USER_ID) != user_id:
+            return False
         del runtime_store.goals[goal_id]
+        runtime_store.goal_owners.pop(goal_id, None)
         return True
 
 

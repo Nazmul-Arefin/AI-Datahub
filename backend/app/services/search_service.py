@@ -29,7 +29,7 @@ def _score(text: str, query: str, tokens: list[str]) -> float:
 
 
 class SearchService:
-    async def search(self, query: str, *, db: Session | None = None, limit: int = 20) -> SearchResponse:
+    async def search(self, query: str, *, db: Session | None = None, limit: int = 20, user_id: str | None = None) -> SearchResponse:
         q = (query or "").strip()
         if not q:
             return SearchResponse(query="", total=0, items=[], summary="Type something to search Weeple.")
@@ -38,7 +38,7 @@ class SearchService:
         needle = _norm(q)
         hits: list[SearchHit] = []
 
-        goals = goal_service.list_goals(db=db).goals
+        goals = goal_service.list_goals(db=db, user_id=user_id).goals
         for goal in goals:
             blob = " ".join(
                 filter(
@@ -69,7 +69,7 @@ class SearchService:
                 )
             )
 
-        sources = source_service.list_sources(db=db).sources
+        sources = source_service.list_sources(db=db, user_id=user_id).sources
         for source in sources:
             blob = " ".join(
                 filter(
@@ -116,7 +116,7 @@ class SearchService:
                 )
             )
 
-        tasks = task_service.list_tasks(db=db).tasks
+        tasks = task_service.list_tasks(db=db, user_id=user_id).tasks
         for task in tasks:
             blob = " ".join(filter(None, [task.name, task.state, task.subgoal_name, task.owner, task.due_at]))
             score = _score(blob, needle, tokens)
@@ -134,7 +134,7 @@ class SearchService:
                 )
             )
 
-        overview = overview_service.get_overview(db=db)
+        overview = overview_service.get_overview(db=db, user_id=user_id)
         for item in overview.activity:
             blob = " ".join(filter(None, [item.label, item.detail, item.route]))
             score = _score(blob, needle, tokens)

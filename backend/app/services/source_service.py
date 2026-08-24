@@ -21,7 +21,7 @@ from app.services.activity_service import activity_service
 from app.services.auth_connector import auth_connector
 from app.services.mcp_service import mcp_service
 from app.services.messaging_service import messaging_service
-from app.services.runtime_store import expires_in, runtime_store
+from app.services.runtime_store import expires_in, runtime_store, source_store_key
 from app.services.seed_data import ADMIN_USER_ID, CATALOG_SOURCE_IDS, SOURCE_CATALOG_KEYS
 
 logger = logging.getLogger(__name__)
@@ -119,44 +119,58 @@ class SourceService:
             source.connection = _connection_from_record(record) if record else None
         return source
 
-    def list_sources(self, category: str | None = None, db: Session | None = None) -> SourceListResponse:
+    def list_sources(
+        self, category: str | None = None, db: Session | None = None, user_id: str | None = None
+    ) -> SourceListResponse:
+        uid = user_id or ADMIN_USER_ID
         if db is not None:
-            query = db.query(DataSource).options(selectinload(DataSource.connection))
+            query = db.query(DataSource).options(selectinload(DataSource.connection)).filter(DataSource.user_id == uid)
             if category and category != "all":
                 query = query.filter(DataSource.category == category)
             sources = [_source_from_row(row) for row in query.order_by(DataSource.name, DataSource.id).all()]
         else:
-            sources = list(runtime_store.sources.values())
+            sources = runtime_store.list_user_sources(uid)
             if category and category != "all":
                 sources = [source for source in sources if source.category == category]
             sources = [self._attach_connection(source, db) for source in sources]
         return SourceListResponse(sources=sources, total=len(sources))
 
-    def get_source(self, source_id: str, db: Session | None = None) -> Source | None:
+    def get_source(self, source_id: str, db: Session | None = None, user_id: str | None = None) -> Source | None:
+        uid = user_id or ADMIN_USER_ID
         if db is not None:
             row = db.get(DataSource, source_id)
-            return _source_from_row(row) if row else None
-        source = runtime_store.sources.get(source_id)
+            if row is None or getattr(row, "user_id", ADMIN_USER_ID) != uid:
+                return None
+            return _source_from_row(row)
+        source = runtime_store.source(source_id, uid)
         return self._attach_connection(source, db) if source else None
 
-    def _save_source(self, source: Source, db: Session | None = None) -> Source:
+    def _save_source(self, source: Source, db: Session | None = None, user_id: str | None = None) -> Source:
+        uid = user_id or ADMIN_USER_ID
         if db is not None:
             row = db.get(DataSource, source.id)
             if row is None:
-                row = DataSource(id=source.id)
+                row = DataSource(id=source.id, user_id=uid)
+                db.add(row)
+            elif getattr(row, "user_id", ADMIN_USER_ID) != uid:
+                row = DataSource(id=f"{source.id}-{uid.replace('-', '')[:8]}", user_id=uid)
+                source.id = row.id
                 db.add(row)
             _apply_source_row(row, source)
+            row.user_id = uid
         else:
-            runtime_store.sources[source.id] = source
+            runtime_store.sources[source_store_key(uid, source.id)] = source
         return self._attach_connection(source, db)
 
-    def patch_source(self, source_id: str, payload: SourcePatchRequest, db: Session | None = None) -> Source | None:
-        source = self.get_source(source_id, db=db)
+    def patch_source(
+        self, source_id: str, payload: SourcePatchRequest, db: Session | None = None, user_id: str | None = None
+    ) -> Source | None:
+        source = self.get_source(source_id, db=db, user_id=user_id)
         if not source:
             return None
         data = source.model_dump(by_alias=True)
         data.update(payload.model_dump(exclude_unset=True, by_alias=True))
-        return self._save_source(Source.model_validate(data), db=db)
+        return self._save_source(Source.model_validate(data), db=db, user_id=user_id)
 
     def _mark_connection(
         self,
@@ -223,11 +237,15 @@ class SourceService:
             failures.append(f"Tool registry cleanup failed: {exc}")
         return " ".join(failures) or None
 
-    async def disconnect_source(self, source_id: str, db: Session | None = None) -> Source | None:
+    async def disconnect_source(
+        self, source_id: str, db: Session | None = None, user_id: str | None = None
+    ) -> Source | None:
+        uid = user_id or ADMIN_USER_ID
         source = self.patch_source(
             source_id,
             SourcePatchRequest(aiEnabled=False, status="Revoked", statusType="revoked"),
             db=db,
+            user_id=uid,
         )
         if not source:
             return None
@@ -246,9 +264,10 @@ class SourceService:
             if failure
             else "Future AI use of this source is blocked",
             route="import-data",
+            user_id=uid,
             db=db,
         )
-        return self._save_source(source, db=db)
+        return self._save_source(source, db=db, user_id=uid)
 
     def _reconnect_response(self, source: Source, **extra) -> SourceReconnectResponse:
         return SourceReconnectResponse.model_validate({**source.model_dump(by_alias=True), **extra})
@@ -274,6 +293,7 @@ class SourceService:
                 statusType="attention",
             ),
             db=db,
+            user_id=user_id,
         )
         pending.last_sync = "Waiting for re-authorization"
         pending.used_by = "Blocked until access is granted again"
@@ -281,10 +301,11 @@ class SourceService:
             f"{source.name} needs re-authorization",
             "Revoking removed the provider grant, so access must be granted again",
             route="import-data",
+            user_id=user_id,
             db=db,
         )
         return self._reconnect_response(
-            self._save_source(pending, db=db),
+            self._save_source(pending, db=db, user_id=user_id),
             authorizationUrl=started.authorization_url,
             state=started.state,
             reauthorizationRequired=True,
@@ -297,7 +318,7 @@ class SourceService:
         redirect_uri: str | None = None,
         db: Session | None = None,
     ) -> SourceReconnectResponse | None:
-        source = self.get_source(source_id, db=db)
+        source = self.get_source(source_id, db=db, user_id=user_id)
         if not source:
             return None
 
@@ -324,6 +345,7 @@ class SourceService:
             source_id,
             SourcePatchRequest(aiEnabled=True, status="Connected", statusType="connected"),
             db=db,
+            user_id=user_id,
         )
         source.last_sync = "Reconnected now"
         source.used_by = "Available for future authorized AI tasks"
@@ -331,9 +353,10 @@ class SourceService:
             f"{source.name} reconnected",
             "Source is available for authorized AI tasks",
             route="import-data",
+            user_id=user_id,
             db=db,
         )
-        return self._reconnect_response(self._save_source(source, db=db))
+        return self._reconnect_response(self._save_source(source, db=db, user_id=user_id))
 
     async def _refresh_upstream(self, connection_id: str) -> str | None:
         """Re-validate a grant that is still live. Returns a failure message."""
@@ -356,11 +379,12 @@ class SourceService:
             source.id,
             SourcePatchRequest(aiEnabled=False, status="Needs attention", statusType="attention"),
             db=db,
+            user_id=ADMIN_USER_ID,
         )
         blocked.last_sync = "Reconnect failed"
         blocked.used_by = "Blocked until the connection is restored"
         activity_service.record(f"{source.name} reconnect failed", failure, route="import-data", db=db)
-        return self._save_source(blocked, db=db)
+        return self._save_source(blocked, db=db, user_id=ADMIN_USER_ID)
 
     def integration_catalog(
         self,
@@ -505,6 +529,7 @@ class SourceService:
         source_id = CATALOG_SOURCE_IDS.get(catalog_key, catalog_key)
         connection = {
             "id": connection_id,
+            "user_id": user_id,
             "catalog_key": catalog_key,
             "auth_provider": provider if provider != "mcp_url" else "manual",
             "external_connection_id": external_connection_id or f"ext-{state[:12]}",
@@ -529,7 +554,7 @@ class SourceService:
         else:
             runtime_store.connections[connection_id] = connection
 
-        source = self.get_source(source_id, db=db) or Source(
+        source = self.get_source(source_id, db=db, user_id=user_id) or Source(
             id=source_id,
             name=item.name,
             category=item.category,
@@ -544,7 +569,7 @@ class SourceService:
         source.last_sync = "Just now"
         source.used_by = "Available for authorized AI tasks"
         source.connection_id = connection_id
-        source = self._save_source(source, db=db)
+        source = self._save_source(source, db=db, user_id=user_id)
 
         try:
             await mcp_service.register_connection(connection_id)
@@ -564,6 +589,7 @@ class SourceService:
             f"{source.name} connected",
             "Source is available in Import Data",
             route="import-data",
+            user_id=user_id,
             db=db,
         )
         return source

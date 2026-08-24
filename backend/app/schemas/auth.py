@@ -44,6 +44,7 @@ class RegisterRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str = Field(alias="accessToken")
     token_type: str = Field(default="bearer", alias="tokenType")
+    is_new_user: bool = Field(default=False, alias="isNewUser")
 
     model_config = {"populate_by_name": True, "ser_json_by_alias": True}
 

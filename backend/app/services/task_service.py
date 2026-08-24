@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.models.goal import ExecutionTask as TaskRow
 from app.schemas.tasks import ExecutionTask, TaskCreateRequest, TaskListResponse, TaskUpdateRequest
 from app.services.runtime_store import runtime_store
+from app.services.seed_data import ADMIN_USER_ID
 
 
 def _task_from_row(row: TaskRow) -> ExecutionTask:
@@ -21,9 +22,9 @@ def _task_from_row(row: TaskRow) -> ExecutionTask:
 
 
 class TaskService:
-    def create_task(self, payload: TaskCreateRequest, db: Session | None = None) -> ExecutionTask:
-        owner = payload.owner if payload.owner in {"human", "ai"} else "human"
-        task_id = f"task-{'ai' if owner == 'ai' else 'human'}-{uuid4().hex[:10]}"
+    def create_task(self, payload: TaskCreateRequest, db: Session | None = None, user_id: str | None = None) -> ExecutionTask:
+        task_owner = payload.owner if payload.owner in {"human", "ai"} else "human"
+        task_id = f"task-{'ai' if task_owner == 'ai' else 'human'}-{uuid4().hex[:10]}"
         task = ExecutionTask(
             id=task_id,
             goalId=payload.goal_id,
@@ -31,12 +32,14 @@ class TaskService:
             state=payload.state or "Pending",
             dueAt=payload.due_at,
             subgoalName=payload.subgoal_name,
-            owner=owner,
+            owner=task_owner,
         )
+        workspace_user = user_id or ADMIN_USER_ID
         if db is not None:
             db.add(
                 TaskRow(
                     id=task.id,
+                    user_id=workspace_user,
                     goal_id=task.goal_id,
                     name=task.name,
                     state=task.state,
@@ -47,6 +50,7 @@ class TaskService:
             db.flush()
         else:
             runtime_store.tasks.insert(0, task.model_copy(deep=True))
+            runtime_store.task_owners[task.id] = workspace_user
 
         from app.services.activity_service import activity_service
 
@@ -55,29 +59,36 @@ class TaskService:
             f"“{task.name}” was added to the calendar",
             route="overview",
             related_goal_id=task.goal_id,
+            user_id=workspace_user,
             db=db,
         )
         return task.model_copy(deep=True)
 
-    def list_tasks(self, goal_id: str | None = None, db: Session | None = None) -> TaskListResponse:
+    def list_tasks(self, goal_id: str | None = None, db: Session | None = None, user_id: str | None = None) -> TaskListResponse:
+        uid = user_id or ADMIN_USER_ID
         if db is not None:
-            query = db.query(TaskRow)
+            query = db.query(TaskRow).filter(TaskRow.user_id == uid)
             if goal_id:
                 query = query.filter(TaskRow.goal_id == goal_id)
             tasks = [_task_from_row(row) for row in query.order_by(TaskRow.created_at, TaskRow.id).all()]
         else:
-            tasks = list(runtime_store.tasks)
+            tasks = [
+                task
+                for task in runtime_store.tasks
+                if runtime_store.task_owners.get(task.id, ADMIN_USER_ID) == uid
+            ]
             if goal_id:
                 tasks = [task for task in tasks if task.goal_id == goal_id]
         return TaskListResponse(tasks=tasks, total=len(tasks))
 
     def update_task(
-        self, task_id: str, payload: TaskUpdateRequest, db: Session | None = None
+        self, task_id: str, payload: TaskUpdateRequest, db: Session | None = None, user_id: str | None = None
     ) -> ExecutionTask | None:
         patch = payload.model_dump(exclude_unset=True)
+        uid = user_id or ADMIN_USER_ID
         if db is not None:
             row = db.get(TaskRow, task_id)
-            if not row:
+            if not row or getattr(row, "user_id", ADMIN_USER_ID) != uid:
                 return None
             if "name" in patch:
                 row.name = patch["name"]
@@ -89,6 +100,8 @@ class TaskService:
                 row.subgoal_name = patch["subgoal_name"]
             updated = _task_from_row(row)
         else:
+            if runtime_store.task_owners.get(task_id, ADMIN_USER_ID) != uid:
+                return None
             updated = None
             for index, task in enumerate(runtime_store.tasks):
                 if task.id != task_id:
@@ -110,6 +123,7 @@ class TaskService:
                 f"“{updated.name}” was confirmed from the calendar",
                 route="overview",
                 related_goal_id=updated.goal_id,
+                user_id=uid,
                 db=db,
             )
         return updated

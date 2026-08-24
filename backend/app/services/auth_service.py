@@ -82,8 +82,12 @@ def verify_password(password: str, password_hash: str | None) -> bool:
     return stored == password
 
 
-def _token_for(user_id: str, username: str) -> TokenResponse:
-    return TokenResponse(access_token=create_access_token(user_id, username), token_type="bearer")
+def _token_for(user_id: str, username: str, *, is_new_user: bool = False) -> TokenResponse:
+    return TokenResponse(
+        access_token=create_access_token(user_id, username),
+        token_type="bearer",
+        is_new_user=is_new_user,
+    )
 
 
 def _find_runtime_user(username: str) -> dict | None:
@@ -153,7 +157,7 @@ def register_user(payload: RegisterRequest, db: Session | None = None) -> TokenR
             )
         )
         db.flush()
-        return _token_for(user_id, username)
+        return _token_for(user_id, username, is_new_user=True)
 
     if _find_runtime_user(username):
         raise HTTPException(
@@ -169,7 +173,7 @@ def register_user(payload: RegisterRequest, db: Session | None = None) -> TokenR
             "display_name": display_name,
         }
     )
-    return _token_for(user_id, username)
+    return _token_for(user_id, username, is_new_user=True)
 
 
 def get_profile(user_id: str, db: Session | None = None) -> UserProfile:

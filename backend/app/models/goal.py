@@ -8,6 +8,7 @@ class Goal(TimestampMixin, Base):
     __tablename__ = "goals"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(36), default="dev-user", index=True)
     title: Mapped[str] = mapped_column(String(255))
     short: Mapped[str | None] = mapped_column(String(128), nullable=True)
     status: Mapped[str] = mapped_column(String(64), default="On track")
@@ -40,6 +41,7 @@ class ExecutionTask(TimestampMixin, Base):
     __tablename__ = "execution_tasks"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(36), default="dev-user", index=True)
     goal_id: Mapped[str | None] = mapped_column(String(64), ForeignKey("goals.id"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(255))
     state: Mapped[str] = mapped_column(String(64), default="Pending")

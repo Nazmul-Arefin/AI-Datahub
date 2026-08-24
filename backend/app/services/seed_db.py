@@ -57,6 +57,7 @@ def seed_database(db: Session) -> None:
             db.add(
                 Goal(
                     id=goal.id,
+                    user_id=ADMIN_USER_ID,
                     title=goal.title,
                     short=goal.short,
                     status=goal.status,
@@ -94,6 +95,7 @@ def seed_database(db: Session) -> None:
                 db.add(
                     ExecutionTask(
                         id=task.id,
+                        user_id=ADMIN_USER_ID,
                         goal_id=task.goal_id,
                         name=task.name,
                         state=task.state,
@@ -109,7 +111,7 @@ def seed_database(db: Session) -> None:
                 row.subgoal_name = task.subgoal_name
                 row.goal_id = task.goal_id
 
-    if db.query(DataSource).count() == 0:
+    if settings.use_mock_data and db.query(DataSource).count() == 0:
         for source in SEED_SOURCES:
             connection_id = source.connection_id
             catalog_key = SOURCE_CATALOG_KEYS.get(source.id)
@@ -134,6 +136,7 @@ def seed_database(db: Session) -> None:
             db.add(
                 DataSource(
                     id=source.id,
+                    user_id=ADMIN_USER_ID,
                     connection_id=connection_id,
                     name=source.name,
                     category=source.category,
@@ -180,12 +183,13 @@ def seed_database(db: Session) -> None:
         gmail_catalog.nango_provider_key = "google-mail"
         gmail_catalog.enabled = True
 
-    if db.get(DataSource, "gmail") is None:
+    if settings.use_mock_data and db.get(DataSource, "gmail") is None:
         gmail_seed = next((s for s in SEED_SOURCES if s.id == "gmail"), None)
         if gmail_seed is not None:
             db.add(
                 DataSource(
                     id=gmail_seed.id,
+                    user_id=ADMIN_USER_ID,
                     connection_id=None,
                     name=gmail_seed.name,
                     category=gmail_seed.category,

@@ -2668,6 +2668,9 @@ function __install() {
         if (span) span.textContent = label;
       }
     }
+    queueMicrotask(() => {
+      try { syncFirstRunPanel(); } catch (_error) { /* panel mounts with overview */ }
+    });
   }
 
   void hydratePlatformFromApi();
@@ -5340,9 +5343,9 @@ function __install() {
     `;
     }).join('') : `
       <div class="source-grid-empty">
-        <strong>No connectors pinned yet</strong>
-        <p>Add MCP cards from the Weeple catalog to build your Import Data workspace.</p>
-        <button type="button" data-open-catalog-picker>Add MCP</button>
+        <strong>No connected sources yet</strong>
+        <p>Browse the catalog and connect only the data that helps a goal.</p>
+        <button type="button" data-open-catalog-picker>Browse catalog</button>
       </div>
     `;
     sourceGrid.querySelectorAll('.source-card').forEach(card => {
@@ -10028,6 +10031,47 @@ closeDataWorkspace();
     renderActivityFeed(activity);
     return true;
   }
+
+  function firstRunStorageKey() {
+    const name = currentUserProfile?.username || currentUserProfile?.id || 'guest';
+    return `weeple-first-run-dismissed:${name}`;
+  }
+
+  function firstRunWasDismissed() {
+    try { return window.localStorage.getItem(firstRunStorageKey()) === '1'; } catch (_error) { return false; }
+  }
+
+  function dismissFirstRunPanel() {
+    try { window.localStorage.setItem(firstRunStorageKey(), '1'); } catch (_error) { /* storage optional */ }
+    const panel = document.getElementById('firstRunPanel');
+    if (panel) {
+      panel.hidden = true;
+      panel.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  function syncFirstRunPanel() {
+    const panel = document.getElementById('firstRunPanel');
+    if (!panel) return;
+    const connected = (dataSources || []).filter((source) => !source.isCatalogOnly && String(source.statusType || '').toLowerCase() === 'connected');
+    const empty = !goalProfiles.length && connected.length === 0;
+    const show = empty && !firstRunWasDismissed();
+    panel.hidden = !show;
+    panel.setAttribute('aria-hidden', show ? 'false' : 'true');
+  }
+
+  document.getElementById('firstRunCreateGoal')?.addEventListener('click', () => {
+    dismissFirstRunPanel();
+    try { __navigate('goals', { params: new URLSearchParams({ sheet: 'create' }) }); } catch (_error) {
+      openRoutedView('goals', true, { sheet: 'create' });
+    }
+  });
+  document.getElementById('firstRunConnectData')?.addEventListener('click', () => {
+    dismissFirstRunPanel();
+    try { __navigate('import-data'); } catch (_error) { openRoutedView('data'); }
+  });
+  document.getElementById('firstRunDismiss')?.addEventListener('click', dismissFirstRunPanel);
+
   const deviceClock = document.querySelector('.device-clock');
   const deviceTime = document.getElementById('deviceTime');
   const deviceDate = document.getElementById('deviceDate');
@@ -11412,6 +11456,7 @@ closeDataWorkspace();
           startTopologyLoop();
           renderCalendar('left', false);
         } catch (_error) { /* overview canvas may still be mounting */ }
+        syncFirstRunPanel();
       });
     }
 

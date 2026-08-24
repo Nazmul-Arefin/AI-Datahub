@@ -30,13 +30,13 @@
 
 .brand { display: flex; align-items: center; gap: 12px; width: max-content; padding: 0; border: 0; background: none; cursor: pointer; text-align: left; }
 
-.brand-mark { display: grid; place-items: center; width: 43px; height: 43px; border-radius: 13px; overflow: hidden; box-shadow: 0 7px 18px rgba(255, 94, 0, .22); }
+.brand-mark { display: grid; place-items: center; width: auto; height: 36px; border-radius: 0; overflow: visible; background: transparent; box-shadow: none; }
 
-.brand-mark img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.brand-mark img { display: block; width: auto; height: 26px; object-fit: contain; }
 
 .brand-copy { display: flex; flex-direction: column; gap: 2px; }
 
-.brand-copy strong { font-size: 15px; letter-spacing: -.02em; }
+.brand-copy strong { display: none; font-size: 15px; letter-spacing: -.02em; }
 
 .brand-copy small { font-size: 9px; font-weight: 650; letter-spacing: .02em; color: var(--muted); text-transform: none; }
 
@@ -1693,7 +1693,7 @@ button.carousel-agenda-status.is-confirm:disabled {
 @media (max-width: 780px), (max-height: 620px) {
   body { overflow: auto; touch-action: pan-y; }
   .os-shell { min-height: 620px; }
-  .topbar { height: 68px; column-gap: 7px; padding-inline: 12px; }.brand-copy { display: none; }.brand-mark { width: 36px; height: 36px; border-radius: 11px; }
+  .topbar { height: 68px; column-gap: 7px; padding-inline: 12px; }.brand-copy { display: none; }.brand-mark { width: auto; height: 28px; border-radius: 0; }.brand-mark img { height: 22px; }
   .primary-nav { height: 50px; gap: 1px; padding: 3px; border-radius: 15px; }.nav-item { min-width: 58px; height: 42px; padding-inline: 7px; font-size: 9px; border-radius: 11px; }.nav-item[data-view="data"] { min-width: 76px; }.nav-item::after { bottom: 3px; }
   #searchButton, #voiceButton { display: none; }.online-pill { display: none; }
   .device-clock { min-width: 60px; margin: 0; padding-right: 7px; }

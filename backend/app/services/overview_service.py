@@ -124,15 +124,18 @@ def _calendar_from_goal(goal) -> CalendarTask | None:
 
 
 class OverviewService:
-    def get_overview(self, db: Session | None = None) -> OverviewResponse:
-        goals = goal_service.list_goals(db=db).goals
+    def get_overview(self, db: Session | None = None, user_id: str | None = None) -> OverviewResponse:
+        from app.services.seed_data import ADMIN_USER_ID
+
+        uid = user_id or ADMIN_USER_ID
+        goals = goal_service.list_goals(db=db, user_id=uid).goals
         memory_count = sum(int(goal.memories or 0) for goal in goals)
         if db is not None:
-            goal_count = db.query(GoalRow).count()
-            source_count = db.query(DataSource).count()
+            goal_count = db.query(GoalRow).filter(GoalRow.user_id == uid).count()
+            source_count = db.query(DataSource).filter(DataSource.user_id == uid).count()
         else:
-            goal_count = len(runtime_store.goals)
-            source_count = len(runtime_store.sources)
+            goal_count = len(goal_service.list_goals(db=None, user_id=uid).goals)
+            source_count = len(source_service.list_sources(db=None, user_id=uid).sources)
 
         clusters = [
             OverviewCluster(key="goals", title="Goal Management", count=goal_count),
@@ -147,7 +150,7 @@ class OverviewService:
             if mapped:
                 by_id[mapped.id] = mapped
 
-        for task in task_service.list_tasks(db=db).tasks:
+        for task in task_service.list_tasks(db=db, user_id=uid).tasks:
             mapped = _calendar_from_task(task)
             by_id[mapped.id] = mapped
 
@@ -158,7 +161,7 @@ class OverviewService:
         return OverviewResponse(
             clusters=clusters,
             calendarTasks=calendar_tasks,
-            activity=activity_service.list_recent(db=db),
+            activity=activity_service.list_recent(db=db, user_id=uid),
         )
 
 

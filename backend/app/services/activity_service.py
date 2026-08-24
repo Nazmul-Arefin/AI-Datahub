@@ -41,13 +41,15 @@ class ActivityService:
                 )
             )
         else:
-            runtime_store.prepend_activity(item)
+            runtime_store.prepend_activity(item, user_id or ADMIN_USER_ID)
         return item
 
-    def list_recent(self, db: Session | None = None, limit: int = 20) -> list[ActivityItem]:
+    def list_recent(self, db: Session | None = None, limit: int = 20, user_id: str | None = None) -> list[ActivityItem]:
+        uid = user_id or ADMIN_USER_ID
         if db is not None:
             rows = (
                 db.query(ActivityEvent)
+                .filter(ActivityEvent.user_id == uid)
                 .order_by(ActivityEvent.created_at.desc(), ActivityEvent.id)
                 .limit(limit)
                 .all()
@@ -62,7 +64,8 @@ class ActivityService:
                 )
                 for row in rows
             ]
-        return runtime_store.activity[:limit]
+        paired = list(zip(runtime_store.activity_owners, runtime_store.activity))
+        return [item for owner, item in paired if owner == uid][:limit]
 
 
 activity_service = ActivityService()

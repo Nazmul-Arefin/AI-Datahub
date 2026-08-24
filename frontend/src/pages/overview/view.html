@@ -84,6 +84,27 @@
     <div class="focus-actions" id="focusActions"></div>
   </section>
 
+  <section class="first-run-panel" id="firstRunPanel" hidden aria-label="Start your workspace">
+    <div class="first-run-glass">
+      <span class="first-run-kicker"><i></i>READY</span>
+      <h2>Your space is ready</h2>
+      <p>Start with an outcome, then connect only the data that helps.</p>
+      <div class="first-run-cards">
+        <button type="button" id="firstRunCreateGoal">
+          <small>01</small>
+          <strong>Create a goal</strong>
+          <span>Name the outcome you want Weeple to protect.</span>
+        </button>
+        <button type="button" id="firstRunConnectData">
+          <small>02</small>
+          <strong>Connect data</strong>
+          <span>Browse the catalog and link only what this goal needs.</span>
+        </button>
+      </div>
+      <button class="first-run-dismiss" type="button" id="firstRunDismiss">I’ll look around</button>
+    </div>
+  </section>
+
   <aside class="node-tooltip" id="nodeTooltip" aria-live="polite">
     <div class="tooltip-orb"></div>
     <div class="tooltip-copy"><small id="tooltipType">CONNECTED DATA</small><strong id="tooltipTitle">Apple Fitness</strong><p id="tooltipDetail">Current evidence connected to this goal.</p><dl><div><dt>Source</dt><dd id="tooltipSource">Connected source</dd></div><div><dt>Why connected</dt><dd id="tooltipReason">Supports the selected subgoal.</dd></div></dl></div>

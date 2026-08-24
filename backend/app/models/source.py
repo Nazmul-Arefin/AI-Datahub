@@ -50,6 +50,7 @@ class DataSource(TimestampMixin, Base):
     __tablename__ = "data_sources"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(36), default="dev-user", index=True)
     connection_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("integration_connections.id"), nullable=True, index=True
     )
