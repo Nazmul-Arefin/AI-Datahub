@@ -36,6 +36,7 @@ import { loadSettingsFromApi, saveSettingsOnApi } from './repositories/settingsR
 import { searchPlatformFromApi } from './repositories/searchRepository.js';
 import { launchAuthorization } from './nangoConnect.js';
 import { openAstrBotSetup } from './astrbotSetup.js';
+import { extractSnapshotInfographic, isAuthorizedLiveSource } from './use-data-harness.js';
 
 let __navigate = (id) => { window.location.hash = '#/' + id; };
 let __showToastExternal = null;
@@ -376,6 +377,7 @@ function __install() {
     useMissionAutoAdvance: true,
     useMissionGoalIndex: 0,
     useMissionGoalStringHidden: false,
+    useMissionBusy: false,
     useMissionExecutionPhase: 0,
     useMissionStatusText: '',
     useMissionToolsUsed: [],
@@ -387,6 +389,7 @@ function __install() {
     useMissionHeadline: '',
     useMissionRecommendation: '',
     useMissionReportHtml: '',
+    useExpertsCollapsed: true,
     currentGoalIndex: 0,
     currentGoalProgress: 72,
     selectedSourceId: 'iphone',
@@ -404,6 +407,7 @@ function __install() {
   };
 
   try { state.useMissionGoalStringHidden = localStorage.getItem('weeple-use-goal-string-hidden') === '1'; } catch (error) { /* storage is optional */ }
+  try { state.useExpertsCollapsed = localStorage.getItem('weeple-use-experts-collapsed') !== '0'; } catch (error) { /* storage is optional */ }
 
   const DEFAULT_IMPORT_PINNED_CATALOG_IDS = ['notion', 'google-calendar', 'gmail', 'feishu', 'wechat'];
   const IMPORT_PINNED_STORAGE_KEY = 'weeple-import-pinned-connectors';
@@ -4319,6 +4323,8 @@ function __install() {
     const events = Array.isArray(run.events) ? run.events : [];
     for (let index = events.length - 1; index >= 0; index -= 1) {
       const event = events[index];
+      const typ = String(event?.type || '').toLowerCase();
+      if (typ === 'stage' || typ.startsWith('user')) continue;
       const text = event?.text || event?.detail || event?.message || event?.label || '';
       if (text) return String(text).trim();
     }
@@ -6606,14 +6612,20 @@ function __install() {
     </section>`;
   }
 
+  function renderUseSendButton() {
+    const busy = Boolean(state.useMissionBusy);
+    return `<button class="use-command-icon send${busy ? ' is-busy' : ''}" id="missionPromptSend" type="submit" aria-busy="${busy}" aria-label="${busy ? 'Working on your request' : 'Send request'}" title="${busy ? 'Working on your request' : 'Send request'}">${busy ? '<i class="use-send-spinner" aria-hidden="true"></i>' : missionIcon('send')}</button>`;
+  }
+
   function renderUseComposer(compact = false) {
     const draft = escapeMissionText(state.useMissionDraft || '');
     const listening = state.useMissionListening;
-    return `<form class="use-command-bar${compact ? ' compact' : ''}${listening ? ' listening' : ''}" id="missionPromptForm" data-od-id="use-data-command-bar">
+    const busy = Boolean(state.useMissionBusy);
+    return `<form class="use-command-bar${compact ? ' compact' : ''}${listening ? ' listening' : ''}${busy ? ' is-busy' : ''}" id="missionPromptForm" data-od-id="use-data-command-bar">
       <button class="use-command-icon mic${listening ? ' active' : ''}" id="missionVoiceStart" type="button" aria-label="${listening ? 'Listening' : 'Start voice input'}" title="${listening ? 'Listening' : 'Start voice input'}">${missionIcon('mic')}</button>
       <label for="missionPromptInput"><span class="sr-only">Request</span><input id="missionPromptInput" type="text" maxlength="500" autocomplete="off" value="${draft}" placeholder="${listening ? 'Listening… speak naturally' : 'Ask anything or give a command…'}"></label>
       ${listening ? `<span class="use-listening-status"><i></i><b>Listening</b><time id="missionVoiceElapsed">${formatMissionTime(state.useMissionElapsed)}</time></span><button class="use-command-icon confirm" id="missionVoiceConfirm" type="button" aria-label="Finish voice input" title="Finish voice input">✓</button>` : ''}
-      <button class="use-command-icon send" id="missionPromptSend" type="submit" aria-label="Send request" title="Send request">${missionIcon('send')}</button>
+      ${renderUseSendButton()}
     </form>`;
   }
 
@@ -6624,7 +6636,7 @@ function __install() {
       ${renderMissionGoalString()}
       <div class="use-persistent-panels use-dashboard-working" aria-hidden="${!working}"${working ? '' : ' inert'} data-od-id="use-data-side-panels">
         <aside class="use-left-stack" data-od-id="use-data-left-stack">${renderSourcePanel(goal)}${renderTaskPanel(goal)}</aside>
-        <aside class="use-right-stack" data-od-id="use-data-right-stack">${renderGuidelinePanel(goal)}${renderExpertPanel()}${renderResultPanel(goal)}</aside>
+        <aside class="use-right-stack" data-od-id="use-data-right-stack">${renderGuidelinePanel(goal)}${renderResultPanel(goal)}</aside>
       </div>
       <div class="use-idle-focus" data-od-id="use-data-fixed-center">
         <div class="use-speech-bubble" data-od-id="use-data-greeting"><i>✦</i><h1>What can I do for you?</h1></div>
@@ -6684,45 +6696,28 @@ function __install() {
     const usedHints = (Array.isArray(state.useMissionSourcesUsed) ? state.useMissionSourcesUsed : [])
       .map((item) => String(item || '').toLowerCase())
       .filter(Boolean);
-    const rows = Array.isArray(dataSources) ? dataSources : [];
-    const mapped = rows
-      .filter((source) => source && !source.isCatalogOnly)
-      .filter((source) => {
-        const statusType = String(source.statusType || '').toLowerCase();
-        if (!(statusType === 'connected' || statusType === 'attention' || statusType === 'processing')) {
-          return false;
-        }
-        const connection = source.connection || null;
+    const rows = (Array.isArray(dataSources) ? dataSources : []).filter(isAuthorizedLiveSource);
+    const filtered = preferUsed && usedHints.length
+      ? rows.filter((source) => {
         const id = String(source.id || '').toLowerCase();
         const name = String(source.name || '').toLowerCase();
-        const hinted = usedHints.some((hint) => id.includes(hint) || name.includes(hint) || hint.includes(id));
-        if (preferUsed && usedHints.length) return hinted;
-        if (connection?.externalConnectionId) return true;
-        if (connection?.authProvider === 'astrbot' && connection?.status === 'connected') return true;
-        if (Number(source.syncedCount || source.assetCount || 0) > 0) return true;
-        // Keep mission-relevant hinted sources even without Nango id.
-        if (hinted) return true;
-        return false;
+        return usedHints.some((hint) => id.includes(hint) || name.includes(hint) || hint.includes(id) || hint.includes(name));
       })
-      .map((source) => {
-        const statusType = String(source.statusType || '').toLowerCase();
-        let status = source.status || 'Connected';
-        if (statusType === 'processing' || statusType === 'attention') status = 'Syncing';
-        else if (statusType === 'connected') {
-          status = /live/i.test(source.method || '') || /live/i.test(source.lastSync || '') ? 'Live' : 'Connected';
-        }
-        return [
-          source.name || source.id || 'Source',
-          useSourceLogoPath(source),
-          status,
-          source.id || 'source',
-          source.assets || source.lastSync || '',
-        ];
-      });
-    if (preferUsed && usedHints.length && !mapped.length) {
-      return liveUseSources({ preferUsed: false });
-    }
-    return mapped;
+      : rows;
+    const chosen = filtered.length ? filtered : rows;
+    return chosen.map((source) => {
+      const statusType = String(source.statusType || '').toLowerCase();
+      let status = 'Connected';
+      if (statusType === 'processing' || statusType === 'attention') status = 'Syncing';
+      else if (/live/i.test(source.method || '') || /live/i.test(source.lastSync || '')) status = 'Live';
+      return [
+        source.name || source.id || 'Source',
+        useSourceLogoPath(source),
+        status,
+        source.id || 'source',
+        source.assets || source.lastSync || '',
+      ];
+    });
   }
 
   function normalizeMissionPlanSteps(items) {
@@ -6844,11 +6839,11 @@ function __install() {
   }
 
   function renderSourcePanel(goal) {
-    const sources = liveUseSources();
+    const sources = liveUseSources({ preferUsed: true });
     if (!sources.length) {
       return `<section class="use-panel use-sources" data-od-id="use-data-sources-panel"><header><span><small>DATA SOURCES</small><b>MCP connections</b></span><em>0</em></header>
         <div class="use-panel-empty" role="status">
-          <p>No connected sources yet.</p>
+          <p>No authorized MCP connections yet.</p>
           <button class="use-panel-link" id="useOpenImportData" type="button">Connect in Import Data <span>→</span></button>
         </div>
         <div class="use-skeleton-list" aria-hidden="true">${renderUseSkeletonRows(3)}</div>
@@ -6903,40 +6898,65 @@ function __install() {
       }).join('')}</div></section>`;
   }
 
+  function renderResultSnapshotInfographic() {
+    const report = getUseResultReport();
+    const snapshot = extractSnapshotInfographic({
+      summary: report.summary,
+      findings: report.findings,
+      metrics: report.metrics,
+      headline: report.headline,
+    });
+    const metrics = snapshot.metrics.length ? snapshot.metrics : [['Ready', '1']];
+    return `<div class="use-result-infographic" data-od-id="use-data-result-infographic">
+      <h3>${escapeMissionText(snapshot.headline)}</h3>
+      <div class="use-result-snap-metrics" aria-label="Result numbers">${metrics.map(([label, value], index) => `<span data-od-id="use-snap-metric-${index + 1}"><b>${escapeMissionText(value)}</b><small>${escapeMissionText(label)}</small></span>`).join('')}</div>
+      ${snapshot.bullets.length ? `<ul class="use-result-snap-bullets">${snapshot.bullets.map((item) => `<li>${escapeMissionText(item)}</li>`).join('')}</ul>` : ''}
+    </div>`;
+  }
+
   function renderResultPanel(goal) {
     const summary = String(state.useMissionSummary || '').trim();
     const working = state.useMissionState === 'working';
     if (!summary && working) {
       return `<section class="use-panel use-results composition-${state.useMissionGoalIndex}" data-od-id="use-data-results-panel"><header><span><small>LIVE OUTCOME</small><b>Results snapshot</b></span></header>
-        <div class="use-panel-empty" role="status"><p>DeepSeek is preparing your answer…</p></div>
-        <div class="use-skeleton-list is-pulse" aria-hidden="true">${renderUseSkeletonRows(3, 'metric')}</div>
+        <div class="use-result-scroll-body">
+          <div class="use-panel-empty" role="status"><p>${escapeMissionText(state.useMissionStatusText || 'DeepSeek is preparing your answer…')}</p></div>
+          <div class="use-skeleton-list is-pulse" aria-hidden="true">${renderUseSkeletonRows(3, 'metric')}</div>
+        </div>
       </section>`;
     }
     if (!summary) {
       return `<section class="use-panel use-results composition-${state.useMissionGoalIndex}" data-od-id="use-data-results-panel"><header><span><small>LIVE OUTCOME</small><b>Results snapshot</b></span></header>
-        <div class="use-panel-empty" role="status"><p>No result yet. Ask a question to run DeepSeek Harness.</p></div>
-        <div class="use-skeleton-list" aria-hidden="true">${renderUseSkeletonRows(3, 'metric')}</div>
+        <div class="use-result-scroll-body">
+          <div class="use-panel-empty" role="status"><p>No result yet. Ask a question to run DeepSeek Harness.</p></div>
+          <div class="use-skeleton-list" aria-hidden="true">${renderUseSkeletonRows(3, 'metric')}</div>
+        </div>
       </section>`;
     }
     return `<section class="use-panel use-results composition-${state.useMissionGoalIndex}" data-od-id="use-data-results-panel"><header><span><small>LIVE OUTCOME</small><b>Results snapshot</b></span><div class="use-result-header-actions"><button class="use-result-details-button" id="useResultViewDetails" type="button" aria-expanded="false" aria-controls="missionDetailDrawer">View details <i>›</i></button></div></header>
-      <p class="use-result-agent-summary">${escapeMissionText(summary.slice(0, 520))}${summary.length > 520 ? '…' : ''}</p>
-      ${state.useMissionStatusText ? `<small class="use-result-status">${escapeMissionText(state.useMissionStatusText)}</small>` : ''}
+      <div class="use-result-scroll-body">
+        ${renderResultSnapshotInfographic()}
+        ${state.useMissionStatusText ? `<small class="use-result-status">${escapeMissionText(state.useMissionStatusText)}</small>` : ''}
+      </div>
     </section>`;
   }
 
   function renderExpertPanel() {
     const working = state.useMissionState === 'working' || Boolean(String(state.useMissionSummary || '').trim());
+    const collapsed = Boolean(state.useExpertsCollapsed);
     if (!working) {
-      return `<section class="use-panel use-experts" data-od-id="use-data-experts-panel"><header><span><small>ACTIVE TEAM</small><b>AI experts</b></span><em>0</em></header>
+      return `<section class="use-panel use-experts${collapsed ? ' is-collapsed' : ''}" data-od-id="use-data-experts-panel"><header><span><small>ACTIVE TEAM</small><b>AI experts</b></span><em>0</em><button class="use-experts-toggle" id="useExpertsCollapse" type="button" aria-expanded="${!collapsed}" aria-controls="useExpertsBody">${collapsed ? 'Show' : 'Hide'}</button></header>
         <div class="use-panel-empty" role="status"><p>Experts activate when a mission starts.</p></div>
         <div class="use-skeleton-experts" aria-hidden="true">${renderUseSkeletonRows(4, 'chip')}</div>
       </section>`;
     }
     const phase = Math.max(1, Number(state.useMissionExecutionPhase) || 1);
     const activeCount = Math.min(useAgentDefinitions.length, Math.max(1, Math.ceil(phase / 2)));
-    return `<section class="use-panel use-experts" data-od-id="use-data-experts-panel"><header><span><small>ACTIVE TEAM</small><b>AI experts</b></span><em>${activeCount}/${useAgentDefinitions.length}</em></header>
-      <p>${activeCount} specialist${activeCount === 1 ? '' : 's'} active on this mission</p>
-      <div class="use-expert-grid">${useAgentDefinitions.map((agent, index) => `<figure class="use-expert tone-${agent[2]} stage-item${index < activeCount ? ' is-active' : ''}" style="--delay:${index * 70}ms" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" aria-controls="useAgentDetailPopover" aria-label="View ${agent[0]} Agent profile" title="View ${agent[0]} Agent profile" data-use-agent-detail="${index}" data-od-id="use-expert-${index + 1}"><span><img src="${agent[1]}" alt=""><i></i></span><figcaption>${agent[0]}</figcaption></figure>`).join('')}</div>
+    return `<section class="use-panel use-experts${collapsed ? ' is-collapsed' : ''}" data-od-id="use-data-experts-panel"><header><span><small>ACTIVE TEAM</small><b>AI experts</b></span><em>${activeCount}/${useAgentDefinitions.length}</em><button class="use-experts-toggle" id="useExpertsCollapse" type="button" aria-expanded="${!collapsed}" aria-controls="useExpertsBody">${collapsed ? 'Show' : 'Hide'}</button></header>
+      <div id="useExpertsBody" class="use-experts-body">
+        <p>${activeCount} specialist${activeCount === 1 ? '' : 's'} active on this mission</p>
+        <div class="use-expert-grid">${useAgentDefinitions.map((agent, index) => `<figure class="use-expert tone-${agent[2]} stage-item${index < activeCount ? ' is-active' : ''}" style="--delay:${index * 70}ms" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" aria-controls="useAgentDetailPopover" aria-label="View ${agent[0]} Agent profile" title="View ${agent[0]} Agent profile" data-use-agent-detail="${index}" data-od-id="use-expert-${index + 1}"><span><img src="${agent[1]}" alt=""><i></i></span><figcaption>${agent[0]}</figcaption></figure>`).join('')}</div>
+      </div>
     </section>`;
   }
 
@@ -7651,13 +7671,20 @@ function __install() {
           <div class="use-skeleton-list" aria-hidden="true">${renderUseSkeletonRows(3, 'chip')}</div>
         </section>`;
 
+    const snapshot = extractSnapshotInfographic({
+      summary: report.summary,
+      findings: report.findings,
+      metrics: report.metrics,
+      headline: report.headline,
+    });
     return `<section class="use-report-hero" style="--report-progress:${report.progress}">
         <div class="use-report-progress-ring"><strong>${report.progress}<small>%</small></strong></div>
         <span><small>CURRENT OUTCOME</small><h3>${escapeMissionText(report.headline)}</h3><p>${escapeMissionText(report.interpretation)} · ${sources.length} connected source${sources.length === 1 ? '' : 's'}</p></span>
       </section>
-      <section class="use-report-metric-grid" aria-label="Result metrics">${metrics.map((result, index) => `<span data-od-id="use-report-metric-${index + 1}"><b>${escapeMissionText(result[1])}</b><small>${escapeMissionText(result[0])}</small></span>`).join('')}</section>
+      <section class="use-report-metric-grid" aria-label="Result metrics">${(snapshot.metrics.length ? snapshot.metrics : metrics).map((result, index) => `<span data-od-id="use-report-metric-${index + 1}"><b>${escapeMissionText(result[1])}</b><small>${escapeMissionText(result[0])}</small></span>`).join('')}</section>
+      ${snapshot.bullets.length ? `<section class="use-report-snapshot-bullets"><header><span><small>KEY POINTS</small><b>Infographic summary</b></span></header><ul>${snapshot.bullets.map((item) => `<li>${escapeMissionText(item)}</li>`).join('')}</ul></section>` : ''}
       <article class="use-report-narrative">
-        <small>EXECUTIVE SUMMARY</small>
+        <small>FULL MARKDOWN REPORT</small>
         <div class="use-report-markdown">${report.summaryHtml || `<p>${escapeMissionText(report.summary)}</p>`}</div>
       </article>
       ${findingsBlock}
@@ -7843,18 +7870,42 @@ function __install() {
     closeUseAgentDetail(false);
     closeUseTaskDetail(false);
     closeUseGuidelineDetail(false);
-    closeUseResultReport(false);
+    const reportOpen = Boolean(missionDetailDrawer?.classList.contains('visible'));
     const goal = getUseDashboardGoal();
     const leftStack = dashboard.querySelector('.use-left-stack');
     const rightStack = dashboard.querySelector('.use-right-stack');
     if (leftStack) leftStack.innerHTML = `${renderSourcePanel(goal)}${renderTaskPanel(goal)}`;
-    if (rightStack) rightStack.innerHTML = `${renderGuidelinePanel(goal)}${renderExpertPanel()}${renderResultPanel(goal)}`;
+    if (rightStack) {
+      rightStack.classList.remove('experts-collapsed');
+      rightStack.innerHTML = `${renderGuidelinePanel(goal)}${renderResultPanel(goal)}`;
+    }
     document.getElementById('useOpenImportData')?.addEventListener('click', () => openRoutedView('data'));
     bindUseSourceDetailEvents();
     bindUseAgentDetailEvents();
     bindUseTaskDetailEvents();
     bindUseGuidelineDetailEvents();
     bindUseResultDetailsButton();
+    if (reportOpen && useResultReportContent) {
+      useResultReportContent.innerHTML = renderUseResultReport();
+      document.getElementById('useResultViewDetails')?.setAttribute('aria-expanded', 'true');
+    }
+  }
+
+  function bindUseExpertsCollapse() {
+    const toggle = document.getElementById('useExpertsCollapse');
+    const panel = useMissionStage?.querySelector('.use-experts');
+    const rightStack = useMissionStage?.querySelector('.use-right-stack');
+    toggle?.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      state.useExpertsCollapsed = !state.useExpertsCollapsed;
+      try { localStorage.setItem('weeple-use-experts-collapsed', state.useExpertsCollapsed ? '1' : '0'); } catch (_error) { /* storage is optional */ }
+      panel?.classList.toggle('is-collapsed', state.useExpertsCollapsed);
+      rightStack?.classList.toggle('experts-collapsed', state.useExpertsCollapsed);
+      toggle.textContent = state.useExpertsCollapsed ? 'Show' : 'Hide';
+      toggle.setAttribute('aria-expanded', String(!state.useExpertsCollapsed));
+      haptic(5);
+    });
   }
 
   function syncUsePersistentDashboard(options = {}) {
@@ -7878,8 +7929,39 @@ function __install() {
     if (options.refreshPanels) refreshUseSidePanels();
   }
 
+  function setUseGoalStringHidden(hidden) {
+    state.useMissionGoalStringHidden = Boolean(hidden);
+    const goalMap = useMissionStage?.querySelector('.use-goal-map');
+    const button = document.getElementById('useGoalStringToggle');
+    const goalString = goalMap?.querySelector('.use-goal-string-band');
+    goalMap?.classList.toggle('goal-string-hidden', state.useMissionGoalStringHidden);
+    goalString?.setAttribute('aria-hidden', String(state.useMissionGoalStringHidden));
+    if (button) {
+      const label = `${state.useMissionGoalStringHidden ? 'Show' : 'Hide'} goal string`;
+      button.setAttribute('aria-expanded', String(!state.useMissionGoalStringHidden));
+      button.setAttribute('aria-label', label);
+      button.setAttribute('title', label);
+    }
+    try { localStorage.setItem('weeple-use-goal-string-hidden', state.useMissionGoalStringHidden ? '1' : '0'); } catch (error) { /* storage is optional */ }
+  }
+
+  function setUseMissionBusy(busy) {
+    state.useMissionBusy = Boolean(busy);
+    const composer = useMissionStage?.querySelector('.use-command-bar');
+    const send = document.getElementById('missionPromptSend');
+    composer?.classList.toggle('is-busy', state.useMissionBusy);
+    if (!send) return;
+    send.classList.toggle('is-busy', state.useMissionBusy);
+    send.setAttribute('aria-busy', String(state.useMissionBusy));
+    send.setAttribute('aria-label', state.useMissionBusy ? 'Working on your request' : 'Send request');
+    send.setAttribute('title', state.useMissionBusy ? 'Working on your request' : 'Send request');
+    send.innerHTML = state.useMissionBusy ? '<i class="use-send-spinner" aria-hidden="true"></i>' : missionIcon('send');
+  }
+
   function refreshUseComposer(options = {}) {
     const currentComposer = useMissionStage?.querySelector('.use-command-bar');
+    const typed = document.getElementById('missionPromptInput')?.value;
+    if (typeof typed === 'string') state.useMissionDraft = typed;
     if (!currentComposer) return;
     currentComposer.outerHTML = renderUseComposer(false);
     bindUseComposerEvents();
@@ -7972,8 +8054,11 @@ function __install() {
         .filter(Boolean);
       if (tools.length) state.useMissionToolsUsed = [...new Set(tools)].slice(-6);
     }
-    const summary = extractAgentRunSummary(run);
-    if (summary) {
+    const complete = isAgentRunSuccess(run.status || run.stage);
+    const summary = complete
+      ? String(extractAgentRunSummary(run) || '').replace(/```(?:weeple-plan|json)[\s\S]*?```/gi, '').trim()
+      : '';
+    if (summary && !summary.startsWith('{')) {
       state.useMissionSummary = summary;
       const extracted = extractAgentHtmlReport(summary);
       if (extracted.html) state.useMissionReportHtml = extracted.html;
@@ -7996,6 +8081,7 @@ function __install() {
   function finalizeUseMissionRun(run) {
     applyAgentRunProgress(run);
     state.useMissionExecutionPhase = 8;
+    setUseMissionBusy(false);
     refreshUseSidePanels();
     syncUsePersistentDashboard({ refreshPanels: true });
   }
@@ -8009,12 +8095,13 @@ function __install() {
       attempts += 1;
       const run = await getAgentRunOnApi(runId);
       if (run) applyAgentRunProgress(run);
-      const status = String(run?.status || '').toLowerCase();
+      const status = String(run?.status || run?.stage || '').toLowerCase();
       if (['completed', 'complete', 'succeeded', 'success', 'failed', 'error', 'cancelled'].includes(status) || attempts >= maxAttempts) {
         clearUseMissionRunPoll();
         if (status === 'failed' || status === 'error' || status === 'cancelled' || (!run && attempts >= maxAttempts)) {
           state.useMissionState = 'idle';
           state.useMissionExecutionPhase = 1;
+          setUseMissionBusy(false);
           __showToast('Agent runtime unavailable');
           try { hydrateOverviewFromApi(); } catch (_error) { /* optional */ }
           syncUsePersistentDashboard({ refreshPanels: true });
@@ -8034,6 +8121,8 @@ function __install() {
     state.useMissionToolsUsed = [];
     state.useMissionSummary = '';
     clearUseMissionPlanState();
+    setUseGoalStringHidden(true);
+    setUseMissionBusy(true);
     setUseMissionState('working', { announce: false });
     refreshUseSidePanels();
     syncUsePersistentDashboard({ refreshPanels: true });
@@ -8045,6 +8134,7 @@ function __install() {
     if (!run?.runId) {
       state.useMissionState = 'idle';
       state.useMissionExecutionPhase = 1;
+      setUseMissionBusy(false);
       __showToast('Agent runtime unavailable');
       syncUsePersistentDashboard({ refreshPanels: true });
       return;
@@ -8059,6 +8149,7 @@ function __install() {
     if (['failed', 'error', 'cancelled'].includes(status)) {
       state.useMissionState = 'idle';
       state.useMissionExecutionPhase = 1;
+      setUseMissionBusy(false);
       __showToast('Agent runtime unavailable');
       syncUsePersistentDashboard({ refreshPanels: true });
       return;
@@ -8104,7 +8195,7 @@ function __install() {
     const input = composer.querySelector('#missionPromptInput');
     const submitPrompt = event => {
       event.preventDefault();
-      if (state.useMissionListening) return;
+      if (state.useMissionListening || state.useMissionBusy) return;
       const prompt = input?.value.trim();
       if (!prompt) { __showToast('Add a request before sending'); input?.focus(); return; }
       void startUseMissionFromPrompt(prompt);
@@ -8124,18 +8215,8 @@ function __install() {
     bindUseGuidelineDetailEvents();
     bindUseResultDetailsButton();
     useMissionStage?.querySelectorAll('[data-use-goal]').forEach(button => button.addEventListener('click', () => switchUseDashboardGoal(button.dataset.useGoal)));
-    document.getElementById('useGoalStringToggle')?.addEventListener('click', event => {
-      state.useMissionGoalStringHidden = !state.useMissionGoalStringHidden;
-      const hidden = state.useMissionGoalStringHidden;
-      const button = event.currentTarget;
-      const goalMap = button.closest('.use-goal-map');
-      const goalString = goalMap?.querySelector('.use-goal-string-band');
-      goalMap?.classList.toggle('goal-string-hidden', hidden);
-      goalString?.setAttribute('aria-hidden', String(hidden));
-      button.setAttribute('aria-expanded', String(!hidden));
-      button.setAttribute('aria-label', `${hidden ? 'Show' : 'Hide'} goal string`);
-      button.setAttribute('title', `${hidden ? 'Show' : 'Hide'} goal string`);
-      try { localStorage.setItem('weeple-use-goal-string-hidden', hidden ? '1' : '0'); } catch (error) { /* storage is optional */ }
+    document.getElementById('useGoalStringToggle')?.addEventListener('click', () => {
+      setUseGoalStringHidden(!state.useMissionGoalStringHidden);
       haptic(5);
     });
     document.getElementById('useOpenImportData')?.addEventListener('click', () => openRoutedView('data'));

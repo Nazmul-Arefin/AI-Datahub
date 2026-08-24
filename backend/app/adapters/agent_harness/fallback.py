@@ -17,8 +17,9 @@ class FallbackLoopAdapter:
         mission: str,
         goal_id: str | None = None,
         context: dict | None = None,
+        role: str | None = None,
     ) -> dict:
-        reply = await self._llm.chat([{"role": "user", "content": mission}], max_tokens=2048)
+        reply = await self._llm.chat([{"role": "user", "content": mission}])
         text = str(reply.get("content") or "")
         run_id = f"run-fb-{uuid4().hex[:10]}"
         record = {
@@ -33,9 +34,9 @@ class FallbackLoopAdapter:
                 {"type": "user/message", "seq": 0, "text": mission[:400]},
                 {"type": "assistant/message", "seq": 1, "text": text[:800]},
             ],
-            "summary": text[:2000],
             "context": context or {},
             "mode": "fallback",
+            "role": role,
         }
         self._runs[run_id] = record
         return dict(record)
