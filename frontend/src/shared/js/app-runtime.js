@@ -2458,6 +2458,7 @@ function __install() {
     try { if (__store) __store.emit('goals:changed', { goals: goalProfiles }); } catch (_e) { /* optional */ }
     const goal = goalProfiles[state.currentGoalIndex];
     persistGoalProgressOnApi(goal);
+    try { rebuildUseDashboardGoals({ preserveSelection: true }); } catch (_error) { /* use-data may not be ready */ }
   }
 
   const goalProgressSync = new Map();
@@ -6197,79 +6198,6 @@ function __install() {
     </section>`;
   }
 
-  const USE_DASHBOARD_GOAL_FALLBACK = [
-    {
-      title: 'Current goal mission', short: 'Current goal', progress: 78, state: 'On track', icon: '◎', tone: 'orange',
-      sources: [
-        ['LinkedIn', 'assets/logos/linkedin.svg', 'Live', 'linkedin'],
-        ['Gmail', '', 'Connected', 'gmail'],
-        ['Notion', 'assets/logos/notion.webp', 'Live', 'notion'],
-        ['Google Drive', '', 'Connected', 'drive'],
-        ['Crunchbase', '', 'Connected', 'crunchbase'],
-        ['Calendar', 'assets/logos/Google_Calendar.webp', 'Connected', 'calendar']
-      ],
-      tasks: [
-        ['Find relevant contacts', 'Existing network', 100], ['Analyze relationship strength', 'Warm paths first', 72],
-        ['Select top 20 potential contacts', 'Best-fit candidates', 60], ['Prepare outreach plan', 'Personalized drafts', 38], ['Track responses', 'Monitor replies', 12]
-      ],
-      guidelines: [
-        ['Identify suitable investors', 'Industry and stage match', 100], ['Use my existing network', 'Prioritize trusted introductions', 72],
-        ['Reach out to high-potential investors', 'Personal messages only', 30], ['Track responses and manage pipeline', 'Follow up without noise', 0]
-      ],
-      results: [['Contacts Found', 128], ['Conversations Started', 32], ['Positive Responses', 8], ['Meetings Scheduled', 3]]
-    },
-    {
-      title: 'Build my startup', short: 'Build startup', progress: 52, state: 'In progress', icon: '↗', tone: 'blue',
-      sources: [
-        ['Notion', 'assets/logos/notion.webp', 'Live'], ['GitHub', 'assets/logos/github.svg', 'Live'],
-        ['Linear', 'assets/logos/linear.svg', 'Syncing'], ['Figma', 'assets/logos/figma.svg', 'Connected'],
-        ['Calendar', 'assets/logos/Google_Calendar.webp', 'Connected'], ['OneDrive', 'assets/logos/one_drive.svg', 'Connected']
-      ],
-      tasks: [
-        ['Review product scope', 'Current roadmap', 100], ['Group customer signals', 'Research themes', 68],
-        ['Prioritize next release', 'Impact and effort', 52], ['Prepare launch plan', 'Owners and dates', 24], ['Track delivery risk', 'Daily monitoring', 10]
-      ],
-      guidelines: [
-        ['Confirm the customer problem', 'Use recorded evidence', 100], ['Reduce roadmap risk', 'Remove weak assumptions', 68],
-        ['Ship the highest-value slice', 'Keep scope deliberate', 42], ['Measure adoption', 'Watch real behavior', 8]
-      ],
-      results: [['Signals grouped', 46], ['Decisions ready', 12], ['Risks flagged', 5], ['Owners aligned', 9]]
-    },
-    {
-      title: 'Learn Chinese (HSK 4)', short: 'Learn Chinese', progress: 31, state: 'On track', icon: '文', tone: 'green',
-      sources: [
-        ['Notion', 'assets/logos/notion.webp', 'Live'], ['Calendar', 'assets/logos/Google_Calendar.webp', 'Live'],
-        ['YouTube', 'assets/logos/googlemeet.svg', 'Syncing'], ['PDF notes', 'assets/logos/pdf.png', 'Connected'],
-        ['Telegram', 'assets/logos/telegram.webp', 'Connected'], ['Google Tasks', 'assets/logos/googletasks.svg', 'Connected']
-      ],
-      tasks: [
-        ['Review weak vocabulary', 'Last seven sessions', 100], ['Build today’s practice', 'Thirty focused minutes', 74],
-        ['Schedule speaking drill', 'Two short sessions', 45], ['Prepare recall cards', 'High-error terms', 28], ['Track weekly consistency', 'Five-day target', 20]
-      ],
-      guidelines: [
-        ['Start with recall gaps', 'Use recent mistakes', 100], ['Balance reading and speaking', 'Alternate every session', 70],
-        ['Repeat at useful intervals', 'Avoid passive review', 42], ['Adjust next week', 'Respond to accuracy', 12]
-      ],
-      results: [['Words reviewed', 84], ['Recall accuracy', '76%'], ['Sessions', 4], ['Day streak', 6]]
-    },
-    {
-      title: 'Improve health & fitness', short: 'Health & fitness', progress: 22, state: 'Needs attention', icon: '♥', tone: 'coral',
-      sources: [
-        ['Calendar', 'assets/logos/Google_Calendar.webp', 'Live'], ['Notion', 'assets/logos/notion.webp', 'Connected'],
-        ['Google Maps', 'assets/logos/google_maps.svg', 'Syncing'], ['WhatsApp', 'assets/logos/whatsapp.svg', 'Connected'],
-        ['PDF plan', 'assets/logos/pdf.png', 'Connected'], ['Google Tasks', 'assets/logos/googletasks.svg', 'Connected']
-      ],
-      tasks: [
-        ['Review weekly routine', 'Available time', 100], ['Find consistency gaps', 'Missed sessions', 64],
-        ['Plan three workouts', 'Low-friction schedule', 46], ['Protect recovery time', 'Sleep and rest', 24], ['Monitor adherence', 'Weekly check-in', 8]
-      ],
-      guidelines: [
-        ['Fit activity into real life', 'Use open calendar windows', 100], ['Increase load gradually', 'Avoid sharp changes', 62],
-        ['Protect recovery', 'Rest before intensity', 34], ['Review each Sunday', 'Adapt the next week', 6]
-      ],
-      results: [['Workouts planned', 3], ['Minutes protected', 135], ['Recovery days', 2], ['Week target', '60%']]
-    }
-  ];
   let useDashboardGoals = [];
   const EMPTY_USE_DASHBOARD_GOAL = {
     title: 'No goals yet', short: 'No goals', progress: 0, state: 'Idle', icon: '◎', tone: 'orange',
@@ -6476,6 +6404,11 @@ function __install() {
     return useDashboardGoals[state.useMissionGoalIndex] || useDashboardGoals[0] || EMPTY_USE_DASHBOARD_GOAL;
   }
 
+  function useGoalProgressPrompt(goal) {
+    const title = String(goal?.title || '').trim();
+    return title ? `Help me make progress on: ${title}` : '';
+  }
+
   function useSourceLogoPath(source) {
     const key = `${source?.id || ''} ${source?.name || ''}`.toLowerCase();
     if (/notion/.test(key)) return 'assets/logos/notion.webp';
@@ -6637,14 +6570,24 @@ function __install() {
     };
   }
 
+  function refreshUseGoalString() {
+    const current = useMissionStage?.querySelector('.use-goal-map');
+    if (!current) return;
+    current.outerHTML = renderMissionGoalString();
+    useMissionStage?.querySelectorAll('[data-use-goal]').forEach((button) => {
+      button.addEventListener('click', () => switchUseDashboardGoal(button.dataset.useGoal));
+    });
+    document.getElementById('useGoalStringToggle')?.addEventListener('click', () => {
+      setUseGoalStringHidden(!state.useMissionGoalStringHidden);
+      haptic(5);
+    });
+  }
+
   function rebuildUseDashboardGoals({ preserveSelection = true } = {}) {
     const previousId = preserveSelection ? useDashboardGoals[state.useMissionGoalIndex]?.linkedGoalId : null;
     const previousTitle = preserveSelection ? useDashboardGoals[state.useMissionGoalIndex]?.title : null;
-    if (Array.isArray(goalProfiles) && goalProfiles.length) {
-      useDashboardGoals = goalProfiles.map((goal, index) => profileToUseDashboardGoal(goal, index));
-    } else {
-      useDashboardGoals = [];
-    }
+    const visibleProfiles = (goalProfiles || []).filter((goal) => !goal.archived);
+    useDashboardGoals = visibleProfiles.map((goal, index) => profileToUseDashboardGoal(goal, index));
     let nextIndex = 0;
     if (previousId) {
       nextIndex = useDashboardGoals.findIndex((entry) => entry.linkedGoalId === previousId);
@@ -6656,6 +6599,7 @@ function __install() {
       nextIndex = Math.min(state.useMissionGoalIndex || 0, Math.max(0, useDashboardGoals.length - 1));
     }
     state.useMissionGoalIndex = useDashboardGoals.length ? Math.max(0, nextIndex) : 0;
+    refreshUseGoalString();
     if (state.useWorkspaceActive && useMissionStage) {
       useMissionStage.innerHTML = '';
       try { renderUseMission({ refreshPanels: true }); } catch (_error) { /* stage may remount */ }
@@ -6693,7 +6637,7 @@ function __install() {
     }
     const useIndex = syncUseDashboardGoalFromProfile(goal);
     state.useMissionGoalIndex = useIndex;
-    state.useMissionDraft = `Help me make progress on: ${goal.title}`;
+    state.useMissionDraft = useGoalProgressPrompt(goal);
     state.useMissionRequest = state.useMissionDraft;
     state.useMissionState = 'idle';
     if (useMissionStage) useMissionStage.innerHTML = '';
@@ -6753,7 +6697,7 @@ function __install() {
           </g>
         </svg>
         <div class="use-goal-list">${useDashboardGoals.length
-          ? useDashboardGoals.map((goal, index) => `<button class="use-goal-node tone-${goal.tone}${index === activeIndex ? ' active' : ''}" type="button" data-use-goal="${index}" aria-pressed="${index === activeIndex}" data-od-id="use-goal-${index + 1}"><span class="use-goal-anchor"><i class="use-goal-pin"></i><i class="use-goal-icon">${goalGlyphs[index % goalGlyphs.length]}</i></span><span class="use-goal-card"><b>${goal.title}</b><strong>${goal.progress}%</strong><span class="use-goal-progress"><i style="--value:${goal.progress}%"></i></span><small><i></i>${goal.state}</small></span></button>`).join('')
+          ? useDashboardGoals.map((goal, index) => `<button class="use-goal-node tone-${goal.tone}${index === activeIndex ? ' active' : ''}" type="button" data-use-goal="${index}" aria-pressed="${index === activeIndex}" data-od-id="use-goal-${index + 1}"><span class="use-goal-anchor"><i class="use-goal-pin"></i><i class="use-goal-icon">${goalGlyphs[index % goalGlyphs.length]}</i></span><span class="use-goal-card"><b>${escapeMissionText(goal.title)}</b><strong>${goal.progress}%</strong><span class="use-goal-progress"><i style="--value:${goal.progress}%"></i></span><small><i></i>${escapeMissionText(goal.state)}</small></span></button>`).join('')
           : '<p class="use-goal-empty">No goals yet. Open Goals to create one, then return here to run missions.</p>'}</div>
       </div>
     </section>`;
@@ -7871,20 +7815,23 @@ function __install() {
 
   function switchUseDashboardGoal(nextIndex) {
     const goalIndex = Number(nextIndex);
-    if (!Number.isInteger(goalIndex) || !useDashboardGoals[goalIndex] || goalIndex === state.useMissionGoalIndex) return;
-
+    if (!Number.isInteger(goalIndex) || !useDashboardGoals[goalIndex]) return;
+    const goal = useDashboardGoals[goalIndex];
+    const same = goalIndex === state.useMissionGoalIndex;
     state.useMissionGoalIndex = goalIndex;
-    const linkedIndex = useDashboardGoals[goalIndex]?.linkedGoalIndex;
+    const linkedIndex = goal.linkedGoalIndex;
     if (Number.isInteger(linkedIndex) && linkedIndex >= 0) state.currentGoalIndex = linkedIndex;
-    if (state.useMissionState === 'idle') state.useMissionDraft = useDashboardGoals[goalIndex].title;
-    useMissionStage?.querySelectorAll('[data-use-goal]').forEach(button => {
+    if (state.useMissionState === 'idle') {
+      state.useMissionDraft = useGoalProgressPrompt(goal);
+      const promptInput = document.getElementById('missionPromptInput');
+      if (promptInput) promptInput.value = state.useMissionDraft;
+    }
+    useMissionStage?.querySelectorAll('[data-use-goal]').forEach((button) => {
       const active = Number(button.dataset.useGoal) === goalIndex;
       button.classList.toggle('active', active);
       button.setAttribute('aria-pressed', String(active));
     });
-    const promptInput = document.getElementById('missionPromptInput');
-    if (promptInput && state.useMissionState === 'idle') promptInput.value = state.useMissionDraft;
-    refreshUseSidePanels();
+    if (!same) refreshUseSidePanels();
     if (state.useMissionState === 'working') window.requestAnimationFrame(() => {
       useMissionStage?.querySelector(`[data-use-goal="${goalIndex}"]`)?.focus({ preventScroll: true });
     });
@@ -8084,8 +8031,9 @@ function __install() {
   }
   function closeDataWorkspace() { state.dataWorkspaceActive = false; dataWorkspace.classList.remove('visible'); dataWorkspace.setAttribute('aria-hidden', 'true'); osShell.classList.remove('data-page'); closeSourceInspector(false); closeConnectionWizard(); closeCatalogPicker(); }
   function openUseWorkspace(announce = true) {
-    try { rebuildUseDashboardGoals({ preserveSelection: true }); } catch (_error) { /* keep fallback goals */ }
-    state.useWorkspaceActive = true; stopTopologyLoop(); useWorkspace.classList.add('visible'); useWorkspace.setAttribute('aria-hidden', 'false'); osShell.classList.add('use-page'); focusCluster('memory', false); renderUseMission(); if (announce) __showToast('Use Data mission workspace opened');
+    state.useWorkspaceActive = true; stopTopologyLoop(); useWorkspace.classList.add('visible'); useWorkspace.setAttribute('aria-hidden', 'false'); osShell.classList.add('use-page'); focusCluster('memory', false);
+    try { rebuildUseDashboardGoals({ preserveSelection: true }); } catch (_error) { /* cards may still be empty */ }
+    renderUseMission(); if (announce) __showToast('Use Data mission workspace opened');
   }
   function closeUseWorkspace() { clearUseMissionTimers(); closeUseMcpDetail(false); closeUseAgentDetail(false); closeUseTaskDetail(false); closeUseGuidelineDetail(false); closeUseResultReport(false); state.useWorkspaceActive = false; useWorkspace.classList.remove('visible'); useWorkspace.setAttribute('aria-hidden', 'true'); osShell.classList.remove('use-page'); closeMemoryDrawer(); closeMemoryProposal(); }
 
