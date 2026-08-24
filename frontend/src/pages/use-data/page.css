@@ -395,6 +395,8 @@
 
 .use-goal-list { position:absolute;inset:4px 0 0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:stretch;gap:clamp(18px,2vw,28px); }
 
+.use-goal-empty { grid-column:1 / -1;align-self:center;justify-self:center;margin:0;max-width:28rem;text-align:center;color:#6b7480;font-size:13px;line-height:1.45; }
+
 .use-goal-node { --goal-color:#b64a12;position:relative;min-width:0;height:100%;display:flex;flex-direction:column;align-items:center;padding:0;border:0;color:#596476;background:transparent;font:inherit;cursor:pointer;transition:transform .24s; }
 
 .use-goal-node::before,.use-goal-node::after { display:none; }
