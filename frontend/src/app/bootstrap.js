@@ -4,7 +4,6 @@ import { createRouter } from './router.js';
 import { createStore } from '../shared/js/store.js';
 import { createToastController } from '../shared/js/ui.js';
 import { initShell } from '../shared/js/shell.js';
-import * as runtime from '../shared/js/app-runtime.js';
 
 // Wire the visible gate before the heavy runtime module finishes work.
 initAuthGateUi();
@@ -22,21 +21,20 @@ const shell = initShell({
   store,
 });
 
-const router = createRouter({
-  outlet: document.getElementById('page-outlet'),
-  store,
-  showToast,
-  runtime,
-  onRouteChange(route, params) {
-    shell.onRouteChange(route, params);
-  },
-});
-
-navigate = router.navigate;
-
 async function startApp() {
   try {
     await ensureAuthenticated();
+    const runtime = await import('../shared/js/app-runtime.js');
+    const router = createRouter({
+      outlet: document.getElementById('page-outlet'),
+      store,
+      showToast,
+      runtime,
+      onRouteChange(route, params) {
+        shell.onRouteChange(route, params);
+      },
+    });
+    navigate = router.navigate;
     await router.start();
   } catch (error) {
     console.error('Failed to start Weeple app', error);

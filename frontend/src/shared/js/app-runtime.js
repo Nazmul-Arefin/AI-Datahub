@@ -431,28 +431,6 @@ function __install() {
 
   importPinnedCatalogIds = loadImportPinnedCatalogIds();
 
-  const DEFAULT_IMPORT_PINNED_CATALOG_IDS = ['notion', 'google-calendar', 'gmail', 'feishu', 'wechat'];
-  const IMPORT_PINNED_STORAGE_KEY = 'weeple-import-pinned-connectors';
-  let importPinnedCatalogIds = [];
-  let catalogPickerSearch = '';
-
-  function loadImportPinnedCatalogIds() {
-    try {
-      const raw = localStorage.getItem(IMPORT_PINNED_STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length) return parsed.map(String);
-      }
-    } catch (_error) { /* storage is optional */ }
-    return [...DEFAULT_IMPORT_PINNED_CATALOG_IDS];
-  }
-
-  function saveImportPinnedCatalogIds() {
-    try { localStorage.setItem(IMPORT_PINNED_STORAGE_KEY, JSON.stringify(importPinnedCatalogIds)); } catch (_error) { /* storage is optional */ }
-  }
-
-  importPinnedCatalogIds = loadImportPinnedCatalogIds();
-
   let topologyAnimationFrame = 0;
   let topologyDirty = false;
 

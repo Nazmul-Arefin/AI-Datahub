@@ -96,13 +96,15 @@ export function hideAuthGate() {
 
 async function runLogin(username, password, errorEl, submit) {
   setError(errorEl, '');
-  if (!handlers?.onLogin) {
-    setError(errorEl, 'Still connecting to Weeple… try again in a moment');
-    return;
-  }
   setSubmitBusy(submit, true);
   try {
-    await handlers.onLogin(username, password);
+    if (handlers?.onLogin) {
+      await handlers.onLogin(username, password);
+    } else {
+      const { loginAndStore, fetchMe } = await import('./repositories/authRepository.js');
+      await loginAndStore(username, password);
+      await fetchMe();
+    }
     markAuthSuccessAtmosphere();
     if (gateResolve) {
       const resolve = gateResolve;
@@ -125,13 +127,15 @@ async function runLogin(username, password, errorEl, submit) {
 
 async function runRegister(payload, errorEl, submit) {
   setError(errorEl, '');
-  if (!handlers?.onRegister) {
-    setError(errorEl, 'Still connecting to Weeple… try again in a moment');
-    return;
-  }
   setSubmitBusy(submit, true);
   try {
-    await handlers.onRegister(payload);
+    if (handlers?.onRegister) {
+      await handlers.onRegister(payload);
+    } else {
+      const { registerAndStore, fetchMe } = await import('./repositories/authRepository.js');
+      await registerAndStore(payload);
+      await fetchMe();
+    }
     markAuthSuccessAtmosphere();
     if (gateResolve) {
       const resolve = gateResolve;

@@ -53,7 +53,7 @@
           <button type="button" class="auth-tab" id="authTabCreate" role="tab" aria-selected="false" aria-controls="authFormCreate" data-auth-mode="create">Create account</button>
         </div>
 
-        <form class="auth-form is-active" id="authFormSignIn" role="tabpanel" aria-labelledby="authTabSignIn" autocomplete="on">
+        <form class="auth-form is-active" id="authFormSignIn" role="tabpanel" aria-labelledby="authTabSignIn" autocomplete="on" method="post" action="#">
           <label class="auth-field">
             <span>Username</span>
             <input id="authSignInUsername" name="username" type="text" autocomplete="username" required minlength="3" maxlength="64" spellcheck="false">
@@ -69,7 +69,7 @@
           </button>
         </form>
 
-        <form class="auth-form" id="authFormCreate" role="tabpanel" aria-labelledby="authTabCreate" hidden autocomplete="on">
+        <form class="auth-form" id="authFormCreate" role="tabpanel" aria-labelledby="authTabCreate" hidden autocomplete="on" method="post" action="#">
           <label class="auth-field">
             <span>Username</span>
             <input id="authCreateUsername" name="username" type="text" autocomplete="username" required minlength="3" maxlength="64" spellcheck="false">
